@@ -1,2 +1,2 @@
 # ControlQuest
-A MPC based game.
+An MPC based game.
