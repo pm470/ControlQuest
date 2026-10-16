@@ -13,20 +13,37 @@ from config import (
 
 @dataclass
 class Ball:
-    x: float
-    y: float
+    x: int
+    y: int
 
-    def draw(self, surface: pygame.Surface) -> None:
-        pygame.draw.circle(surface, BALL_COLOR, (round(self.x), round(self.y)), BALL_RADIUS)
+    def draw(
+        self,
+        surface: pygame.Surface,
+        cell_width: float,
+        cell_height: float,
+    ) -> None:
+        center = (
+            round((self.x - 0.5) * cell_width),
+            round((self.y - 0.5) * cell_height),
+        )
+        pygame.draw.circle(surface, BALL_COLOR, center, BALL_RADIUS)
 
 
 @dataclass
 class Target:
-    x: float
-    y: float
+    x: int
+    y: int
 
-    def draw(self, surface: pygame.Surface) -> None:
-        center = (round(self.x), round(self.y))
+    def draw(
+        self,
+        surface: pygame.Surface,
+        cell_width: float,
+        cell_height: float,
+    ) -> None:
+        center = (
+            round((self.x - 0.5) * cell_width),
+            round((self.y - 0.5) * cell_height),
+        )
         pygame.draw.circle(surface, TARGET_COLOR, center, TARGET_RADIUS)
         pygame.draw.line(
             surface,
