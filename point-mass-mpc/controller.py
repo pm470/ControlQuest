@@ -43,6 +43,7 @@ class PointMassMPC:
         os.makedirs(os.path.dirname(self.ocp.code_gen_opts.json_file), exist_ok=True)
         # --- solver creation: code generation + C compilation (slow, once) ---
         self.solver = AcadosOcpSolver(self.ocp, verbose=verbose)
+        self.obstacles = cfg.obstacles  # ellipses compiled into the solver
         self.x_target = cfg.x_target.copy()
         self.set_target(self.x_target)
         self.reset()
@@ -54,7 +55,7 @@ class PointMassMPC:
 
     def set_target(self, x_target) -> None:
         """Set references on every stage 0..N-1 and on the terminal stage N."""
-        self.x_target = self.cfg.check_state(x_target, "x_target")
+        self.x_target = self.cfg.check_free(x_target, "x_target", self.obstacles)
         yref = np.concatenate([self.x_target, np.zeros(2)])  # [x_target; u_ref = 0]
         for k in range(self.N):
             self.solver.set(k, "yref", yref)
@@ -89,6 +90,10 @@ class PointMassMPC:
         vu = np.maximum(self.cfg.u_lb - U, U - self.cfg.u_ub).max()
         if vx > tol or vu > tol:
             return f"bound violation (state {vx:.2e}, control {vu:.2e}) above tol {tol:g}"
+        for j, ell in enumerate(self.obstacles):  # stages 1..N (x_0 is the measurement)
+            h_min = ell.h(X[1:]).min()
+            if h_min < 1.0 - tol:
+                return f"prediction enters obstacle {j} (min h = {h_min:.4f} < 1)"
         return ""
 
     def solve(self, x0) -> MPCSolution:

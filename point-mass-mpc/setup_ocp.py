@@ -1,7 +1,8 @@
 import os
 
+import casadi as ca
 import numpy as np
-from acados_template import AcadosOcp
+from acados_template import ACADOS_INFTY, AcadosOcp
 
 from config import PointMassConfig
 from point_mass_model import export_point_mass_model
@@ -19,6 +20,8 @@ def setup_ocp(cfg: PointMassConfig) -> AcadosOcp:
 
     Intended objective:
         J = sum_{k=0}^{N-1} dt * [ |x_k - x_ref|_Q^2 + |u_k|_R^2 ] + |x_N - x_ref|_P^2
+    Obstacle j (ellipse c_j, E_j), on stages 1..N:
+        h_j(x_k) = (p_k - c_j)^T E_j (p_k - c_j) >= 1
     """
     cfg.validate()
 
@@ -73,6 +76,21 @@ def setup_ocp(cfg: PointMassConfig) -> AcadosOcp:
     ocp.constraints.ubx_e = cfg.x_ub
     ocp.constraints.idxbx_e = np.arange(nx)
 
+    # Obstacles: nonlinear constraints 1 <= h_j(x) < inf on stages 1..N-1 and N
+    # (stage 0 needs none: x_0 is fixed to the measurement). Smooth quadratic
+    # in p, so the NLP is nonconvex but differentiable everywhere.
+    obstacles = cfg.obstacles
+    if obstacles:
+        p = ocp.model.x[:2]
+        d = [p - ca.DM(e.center) for e in obstacles]
+        h = ca.vertcat(*[dj.T @ ca.DM(e.E) @ dj for dj, e in zip(d, obstacles)])
+        ocp.model.con_h_expr = h
+        ocp.model.con_h_expr_e = h
+        ocp.constraints.lh = np.ones(len(obstacles))
+        ocp.constraints.uh = np.full(len(obstacles), ACADOS_INFTY)  # one-sided (HPIPM)
+        ocp.constraints.lh_e = np.ones(len(obstacles))
+        ocp.constraints.uh_e = np.full(len(obstacles), ACADOS_INFTY)
+
     # Initial-state constraint x_0 = x0_bar on all 4 components (this sets
     # lbx_0 = ubx_0 = x0, idxbx_0 = [0,1,2,3]). Will be changed in the closed loop.
     ocp.constraints.x0 = cfg.x_start.copy()
@@ -86,8 +104,16 @@ def setup_ocp(cfg: PointMassConfig) -> AcadosOcp:
     # additional ocp options
     ocp.solver_options.integrator_type = "DISCRETE"  # uses model.disc_dyn_expr
     ocp.solver_options.nlp_solver_type = "SQP"
-    ocp.solver_options.hessian_approx = "GAUSS_NEWTON"  # exact here: cost is LS, dynamics linear
+    # Gauss-Newton: exact for the LS cost + linear dynamics; it ignores the
+    # curvature of the obstacle constraints (keeps the QP Hessian convex).
+    ocp.solver_options.hessian_approx = "GAUSS_NEWTON"
     ocp.solver_options.qp_solver = "PARTIAL_CONDENSING_HPIPM"  # acados default, as in ex. 07
+    # Obstacles make the NLP nonconvex: plain full-step SQP can cycle near an
+    # ellipse (e.g. target straight behind it). A small Levenberg-Marquardt term
+    # (lm * I added to the QP Hessian) damps the steps; the converged solution is
+    # unchanged. 1e-2 was the best of 1e-3..1; merit backtracking was much worse.
+    ocp.solver_options.levenberg_marquardt = 1e-2
+    ocp.solver_options.nlp_solver_max_iter = 200  # hardest tested solve needs ~85
     ocp.solver_options.qp_tol = 1e-8
     ocp.solver_options.tol = 1e-6
     ocp.solver_options.print_level = 0

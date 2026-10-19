@@ -53,7 +53,11 @@ def main():
     plot_results(cfg, res, fig_filename=os.path.join(out, "closed_loop_results.png"), show_plot=args.show)
     np.savez(os.path.join(out, "closed_loop_log.npz"), t=res.t, X=res.X, U=res.U,
              pos_err=res.pos_err, speed=res.speed, status=res.status,
-             solve_time=res.solve_time, predictions=np.array(res.predictions), x_target=res.x_target)
+             solve_time=res.solve_time, sqp_iter=res.sqp_iter,
+             predictions=np.array(res.predictions), x_target=res.x_target,
+             obstacle_corners=np.array([e.corners for e in res.obstacles]).reshape(-1, 4, 2),
+             obstacle_centers=np.array([e.center for e in res.obstacles]).reshape(-1, 2),
+             obstacle_E=np.array([e.E for e in res.obstacles]).reshape(-1, 2, 2))
     print(f"stored log in {os.path.join(out, 'closed_loop_log.npz')}")
     return 0 if res.converged else 1
 

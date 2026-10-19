@@ -20,6 +20,13 @@ def plot_results(cfg: PointMassConfig, res: ClosedLoopResult, fig_filename=None,
     (x0, y0), (x1, y1) = cfg.p_min, cfg.p_max
     ax_xy.add_patch(plt.Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False, ls="--", color="k",
                                   alpha=0.4, label="workspace"))
+    # obstacles: true block (filled) and the ellipse the solver avoids (dashed)
+    for j, ell in enumerate(res.obstacles):
+        ax_xy.add_patch(plt.Polygon(ell.polygon(), closed=True, color="0.45", alpha=0.6,
+                                    label="obstacle (block)" if j == 0 else None))
+        b = ell.boundary()
+        ax_xy.plot(b[:, 0], b[:, 1], "--", color="0.3", lw=1,
+                   label="ellipse used by the solver" if j == 0 else None)
     ax_xy.plot(res.X[:, 0], res.X[:, 1], "-", color="C0", lw=4, alpha=0.5, label="executed")
     # predictions drawn on top: without model mismatch they lie close to the
     # executed path, but each one reaches T = N*dt ahead (end marker "x")
@@ -70,12 +77,16 @@ def plot_results(cfg: PointMassConfig, res: ClosedLoopResult, fig_filename=None,
     for ax in (ax_p, ax_v, ax_a):
         ax.grid(alpha=0.3)
 
-    # 5. solve time per MPC iteration
-    ax_t.plot(np.arange(len(res.solve_time)), res.solve_time * 1e3, ".-")
+    # 5. solve time and SQP iterations per MPC iteration
+    k = np.arange(len(res.solve_time))
+    ax_t.plot(k, res.solve_time * 1e3, ".-", color="C0", label="solve time")
     ax_t.set_xlabel("MPC iteration")
-    ax_t.set_ylabel("solve time [ms]")
-    ax_t.set_title("acados solve time (time_tot)")
+    ax_t.set_ylabel("solve time [ms]", color="C0")
+    ax_t.set_title("acados solve time (time_tot) and SQP iterations")
     ax_t.grid(alpha=0.3)
+    ax_it = ax_t.twinx()
+    ax_it.step(k, res.sqp_iter, where="mid", color="C1", alpha=0.7)
+    ax_it.set_ylabel("SQP iterations", color="C1")
 
     fig.suptitle("2D point-mass MPC: " + res.message)
     if fig_filename is not None:

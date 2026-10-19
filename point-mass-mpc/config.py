@@ -1,32 +1,31 @@
 """Single place for all tunable settings of the point-mass MPC example.
-
-Change the defaults here, or create a modified copy in code, e.g.
-
-    cfg = PointMassConfig(x_target=np.array([2.0, 9.0, 0.0, 0.0]), N=40)
-
-and pass it to the controller / simulation. Nothing in the controller
-implementation needs to be edited.
 """
 
 from dataclasses import dataclass, field, replace
 
 import numpy as np
 
+from obstacles import ellipse_from_corners
+
 
 def _arr(*values):
     return field(default_factory=lambda: np.array(values, dtype=float))
 
 
+def _corners(*blocks):
+    return field(default_factory=lambda: [np.array(b, dtype=float) for b in blocks])
+
+
 @dataclass
 class PointMassConfig:
     # --- timing -------------------------------------------------------------
-    dt: float = 0.1  # sampling interval [s] (kept fixed when N changes)
-    N: int = 30  # prediction horizon [intervals]; T = N * dt
-    t_sim_max: float = 20.0  # maximum closed-loop simulation duration [s]
+    dt: float = 0.1             # sampling interval [s]
+    N: int = 30                 # prediction horizon [intervals]; T = N * dt
+    t_sim_max: float = 60.0     # maximum closed-loop simulation duration [s]
 
     # --- scenario: state x = [px, py, vx, vy] -------------------------------
-    x_start: np.ndarray = _arr(1.0, 1.0, 0.0, 0.0)
-    x_target: np.ndarray = _arr(8.0, 7.0, 0.0, 0.0)  # zero velocity: stop there
+    x_start: np.ndarray = _arr(5.0, 5.0, 0.0, 0.0)
+    x_target: np.ndarray = _arr(40.0, 35.0, 0.0, 0.0)  # zero velocity: stop there
 
     # --- cost weights (the "true" objective, see setup_ocp.py) --------------
     Q: np.ndarray = field(default_factory=lambda: np.diag([10.0, 10.0, 1.0, 1.0]))
@@ -37,7 +36,15 @@ class PointMassConfig:
     a_max: float = 2.0  # |ax|, |ay| <= a_max [m/s^2]
     v_max: float = 2.0  # |vx|, |vy| <= v_max [m/s]
     p_min: np.ndarray = _arr(0.0, 0.0)  # workspace lower corner [m]
-    p_max: np.ndarray = _arr(10.0, 10.0)  # workspace upper corner [m]
+    p_max: np.ndarray = _arr(50.0, 50.0)  # workspace upper corner [m]
+
+    # --- obstacles: 4 corners (any order) per block -------------------------
+    # The solver avoids the smallest ellipse containing the corners; [] = none.
+    obstacle_corners: list = _corners(
+        [(12, 10), (17, 10), (10, 12), (10, 17)],
+        [(25, 20), (32, 20), (25, 32), (32, 32)],
+    )
+    obstacle_margin: float = 0.1  # extra clearance added to each semi-axis [m]
 
     # --- closed-loop termination & checks -----------------------------------
     pos_tol: float = 0.05  # ||p - p_target|| < pos_tol [m]
@@ -64,6 +71,11 @@ class PointMassConfig:
     @property
     def x_ub(self) -> np.ndarray:
         return np.concatenate([self.p_max, [self.v_max, self.v_max]])
+
+    @property
+    def obstacles(self) -> list:
+        """Ellipses used as constraints, one per block in obstacle_corners."""
+        return [ellipse_from_corners(c, self.obstacle_margin) for c in self.obstacle_corners]
 
     @property
     def u_lb(self) -> np.ndarray:
@@ -96,6 +108,15 @@ class PointMassConfig:
             raise ValueError(f"{name} violates the configured bounds: {details}.")
         return x
 
+    def check_free(self, x, name: str, obstacles=None) -> np.ndarray:
+        """check_state, plus: the position must lie outside every obstacle ellipse."""
+        x = self.check_state(x, name)
+        for j, ell in enumerate(self.obstacles if obstacles is None else obstacles):
+            if ell.h(x) < 1.0 - self.bound_tol:
+                raise ValueError(f"{name} position ({x[0]:g}, {x[1]:g}) lies inside obstacle {j} "
+                                 f"(ellipse around corners {ell.corners.tolist()}).")
+        return x
+
     def validate(self) -> None:
         """Reject invalid settings with a useful message."""
         if not (np.isfinite(self.dt) and self.dt > 0):
@@ -122,5 +143,14 @@ class PointMassConfig:
             raise ValueError(f"P_factor must be nonnegative, got {self.P_factor}.")
         if not (self.pos_tol > 0 and self.speed_tol > 0 and self.bound_tol >= 0):
             raise ValueError("pos_tol and speed_tol must be positive, bound_tol nonnegative.")
-        self.x_start = self.check_state(self.x_start, "x_start")
-        self.x_target = self.check_state(self.x_target, "x_target")
+        if not (np.isfinite(self.obstacle_margin) and self.obstacle_margin >= 0):
+            raise ValueError(f"obstacle_margin must be nonnegative, got {self.obstacle_margin}.")
+        for j, c in enumerate(self.obstacle_corners):
+            c = np.asarray(c, dtype=float)
+            if c.shape != (4, 2) or not np.all(np.isfinite(c)):
+                raise ValueError(f"obstacle {j} needs 4 finite corners (x, y), got {c.tolist()}.")
+            if np.linalg.matrix_rank(c[1:] - c[0], tol=1e-9) < 2:
+                raise ValueError(f"obstacle {j} corners are collinear (no area): {c.tolist()}.")
+        obstacles = self.obstacles
+        self.x_start = self.check_free(self.x_start, "x_start", obstacles)
+        self.x_target = self.check_free(self.x_target, "x_target", obstacles)
