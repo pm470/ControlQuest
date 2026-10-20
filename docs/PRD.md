@@ -1,11 +1,8 @@
 # ControlQuest: Product Requirements Document
 
-**Status:** draft v1, the base we build against
-**Team:** 2 people · **Time budget:** 2 weeks, part-time
 **Last updated:** 2026-10-19
 
-Change this document when we change our minds; it is the single source of truth
-for *what* we build. Numbers marked **(calibrate)** are first guesses that must be
+Numbers marked **(calibrate)** are first guesses that must be
 tuned with real runs before they are final.
 
 ---
@@ -22,9 +19,8 @@ controller fails in one specific way, and the fix is one MPC concept from the co
 The core of the game is the **live predicted plan**: at every step the game draws
 the trajectory the MPC is currently planning, so the receding horizon is visible.
 
-## 2. Goals and non-goals
+## 2. Goals 
 
-### Goals
 1. **Teach by failure:** each level shows one MPC property through a failure the
    player can understand and fix.
 2. **Make MPC visible:** show the plan, the constraints the solver sees, and why a
@@ -33,13 +29,13 @@ the trajectory the MPC is currently planning, so the receding horizon is visible
 4. **Be honest about the controller:** every number shown (cost, solve time,
    iterations, constraint margins) comes from the real acados solver.
 
-### Non-goals (explicitly out of scope)
+<!-- ### Non-goals (explicitly out of scope)
 - RL / learning-based tuning (a possible stretch goal only, see §13).
 - The player steering the ball directly (no keyboard driving mode).
 - A level editor (could-have, only if everything else is done).
 - Accounts, online leaderboards, multiplayer, sound, mobile layouts, 3D.
 - Exact polygon constraints (we keep the ellipse approximation; see §4.3).
-- Real-time streaming of the simulation (we compute first, then replay; §9.1).
+- Real-time streaming of the simulation (we compute first, then replay; §9.1). -->
 
 ## 3. Target players
 
@@ -50,20 +46,19 @@ Students who took the MPC course with us. We assume they know:
 - model mismatch and disturbances.
 
 Consequences for the design:
-- We use course notation (Q, R, P, N, x_k, u_k) in the UI, with a plain-language
-  name next to each symbol.
+- We use course notation (Q, R, P, N, x_k, u_k) in the UI
 - Explanations can be short and technical. We don't explain what an OCP is.
-- The challenge comes from trade-offs, not from hidden information. The player
-  should always be able to work out *why* something happened.
-- A full playthrough should take **20–40 minutes**.
+<!-- - The challenge comes from trade-offs, not from hidden information. The player
+  should always be able to work out *why* something happened. -->
+<!-- - A full playthrough should take **20–40 minutes**. -->
 
 ## 4. The world and its rules (same in every level)
 
 ### 4.1 The ball
 - Point mass in 2D. State `x = [px, py, vx, vy]`, input `u = [ax, ay]`.
-- Model used by the controller: double integrator with exact zero-order hold,
+- <span style="color: red">Model used by the controller: double integrator with exact zero-order hold,
   `p+ = p + dt·v + ½dt²·g·a`, `v+ = v + dt·g·a`. `g` is the *model actuator
-  gain* (1 except in Level 4).
+  gain* (1 except in Level 4).</span>
 - Sampling time `dt = 0.1 s` in every level (fixed, not a knob).
 - Box limits `|ax|, |ay| ≤ a_max` and `|vx|, |vy| ≤ v_max`, set per level.
 
@@ -98,7 +93,7 @@ A run stops as soon as one of these happens. The first one decides the outcome.
 | **Crash (wall)** | the real path leaves the workspace | red |
 | **Controller failure** | acados returns a non-zero status or an invalid plan, e.g. no feasible plan exists | orange, with the status and the reason |
 | **Time out** | `t > t_limit` of the level | grey |
-| **Budget exceeded** | a level budget is exceeded, e.g. energy or number of solves. Checked during the run. | grey, with which budget |
+<!-- | **Budget exceeded** | a level budget is exceeded, e.g. energy or number of solves. Checked during the run. | grey, with which budget | -->
 
 A controller failure **stops** the run. There is no fallback input. "No feasible
 plan existed" is one of the lessons (Level 2), so we show it, not hide it.
@@ -112,10 +107,10 @@ fails, which then ends the run as a controller failure.
 ### 5.1 Flow
 `Title → Level select → Level screen (briefing → tune → run → result) → next level`
 
-- Level 1 is unlocked at the start. Each passed level unlocks the next.
+- By default you start at Level 1. Each passed level unlocks the next.
 - A "Free mode" toggle in the level select unlocks all levels, for demos and the
   course presentation.
-- Best result per level (stars, best time) is saved locally in the browser.
+<!-- - Best result per level (stars, best time) is saved locally in the browser. -->
 
 ### 5.2 Level screen layout
 
@@ -403,20 +398,55 @@ This avoids real-time streaming and makes pause, scrub and replay trivial. The
 "compute budget" in Level 5 counts solves; it does not use wall-clock time.
 
 ### 9.2 Where it runs
-acados only runs in our Docker image (Linux). So:
-- the game backend (Python, the existing `point-mass-mpc` code) runs **in the container**;
-- the UI runs in the **browser on the host** and talks to the backend over a
-  mapped port;
-- starting it must be **one command** (documented in the README).
+acados only runs in our Docker image (Linux), and a GUI window cannot easily be
+shown from inside that container. So the game is split in two processes:
+
+```
+ Host (Windows / macOS / Linux)                Docker container
+┌──────────────────────────────┐   HTTP on    ┌──────────────────────────────┐
+│ UI: map, knobs, playback,    │  localhost   │ small Python server          │
+│ plots, result screen         │ ───────────▶ │  + point-mass-mpc (acados)   │
+│ (browser page or desktop app)│  run request │  computes the whole run      │
+│                              │ ◀─────────── │                              │
+│                              │  run result  │                              │
+└──────────────────────────────┘    (JSON)    └──────────────────────────────┘
+```
+
+- The **backend** (Python, the existing `point-mass-mpc` code plus a small HTTP
+  server) runs **in the container**, with its port mapped to the host (e.g.
+  `-p 8000:8000`).
+- The **UI** runs **natively on the host** and talks to the backend only through
+  the run request / run result formats of §9.4. Because of "compute first, then
+  replay" (§9.1), one Run is one request and one response; all animation is local.
+- The UI can be developed and tested **without Docker**, against saved run-result
+  JSON files.
+- Starting the game must be **one command or script** that starts the container
+  and the UI (documented in the README).
 
 **Decision needed on day 1:** the UI technology. Options:
-- (a) a small Python web server plus a hand-written HTML/JS canvas page. This
-  gives the most control over the map animation, but needs some JS.
-- (b) a Python UI framework (e.g. Dash/Plotly), which is Python-only. Custom map
-  interaction (clicking waypoints, smooth playback) is clunkier there.
 
-Pick the one that matches what we already know; the rest of this document doesn't
-depend on it.
+| Option | What it is | Good at | Weak at | Player setup |
+|---|---|---|---|---|
+| (a) Web page | small HTTP server + hand-written HTML/JS canvas page, opened in the browser | full control over map drawing and animation; nothing to install for players | needs JavaScript; plots and widgets via JS libraries | Docker + a browser |
+| (b) Dash / Plotly | Python-only web UI framework, opened in the browser | Python only; plots and standard widgets built in | custom map interaction (placing/dragging waypoints, smooth playback) is clunky | Docker + a browser |
+| (c) **PySide6** (+ `pyqtgraph`) | Qt desktop app in Python | Python only; sliders, dropdowns, toggles, text and layout built in; fast plots with a moving cursor (`pyqtgraph`); map with clickable/draggable items (`QGraphicsView`); smooth playback (`QTimer`) | "game feel" (effects, juice) is not natural; one more program to start | Docker + Python with `pip install PySide6 pyqtgraph` |
+| (d) **pygame** (`pygame-ce`) | game library in Python, drawing everything by hand | game loop, animation and drawing are simple and feel like a game; a first prototype already exists on branch `dev` (grid, click-to-place target, sliders) | no widgets or plots: sliders, dropdowns, toggles, text panels, result tables and plots must be written by hand (or with `pygame_gui`, which is more limited) | Docker + Python with `pip install pygame-ce` |
+
+Notes for the decision:
+- About 80% of the UI in this document is application UI (knob panel, plots,
+  result panel, hints, level select). Only the map is "game" graphics. This
+  favours (c). With (d), budget extra days for hand-made widgets and plots, or
+  cut plots to one simple hand-drawn speed plot.
+- Prefer the maintained community edition `pygame-ce` over the original `pygame`
+  if we choose (d). Check that it installs on both laptops' Python versions first.
+- The `dev` prototype is small (~250 lines). Switching it to (c) costs about half
+  a day, so the existing code shouldn't be the deciding factor.
+- Whatever we choose, the UI must use **world coordinates** (continuous, metres,
+  y pointing up) and convert to pixels with the **same scale in x and y**, so
+  ellipses and plans look right.
+
+Pick the option that matches what we already know; the rest of this document
+doesn't depend on it, as long as the UI talks to the backend only through §9.4.
 
 ### 9.3 Solver must not recompile during play
 - Code generation and compilation take seconds, so it must not happen on Run.
@@ -457,7 +487,8 @@ The existing `ClosedLoopResult` already holds most of this.
 - One Run, including the response, takes < 2 s for every level.
 - Startup with all precompiled solvers takes < 1 min (measure).
 - Runs are **deterministic**: same knobs → same result (fixed seeds).
-- Works in a current Chrome/Firefox at 1366×768 and up.
+- Works at a window size of 1366×768 and up (in a current Chrome/Firefox for
+  options (a)/(b); on Windows and macOS for options (c)/(d)).
 
 ## 10. Changes needed in the existing code (`point-mass-mpc/`)
 
@@ -541,7 +572,7 @@ live plan display or the "What happened" messages: they are the point of the gam
 | A level's default doesn't fail the intended way, or no setting passes | level is meaningless | calibrate with headless scripts **before** building UI for it; the level check (§11) catches regressions |
 | Solver behaves unexpectedly (non-convexity; we already saw SQP cycling, fixed with Levenberg–Marquardt damping) | random failures | failures end the run gracefully with a message; level checks run every level |
 | Ellipse approximations close gaps or look wrong | confusing maps | design with ellipses visible (§4.3); split long walls into several blocks |
-| Docker + browser setup trouble on a teammate's machine | lost days | test the one-command start on both laptops on day 2 |
+| Docker + UI setup trouble on a teammate's machine (container port, Python/UI library install) | lost days | test the one-command start on both laptops on day 2 |
 | Runtime parameters in acados take longer than expected | blocks Levels 1, 4, 5 | fallback: recompile per *Run* for weights (slower, but works) while fixing it |
 | Scope creep | not finishing | non-goals (§2) and the cut order (§12) |
 
