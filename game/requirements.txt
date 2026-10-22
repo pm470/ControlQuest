@@ -1,0 +1,2 @@
+# UI (runs on the host). The MPC engine runs in Docker and needs nothing from here.
+PySide6-Essentials>=6.6
