@@ -173,7 +173,8 @@ class StarRow(QWidget):
 class StatusPill(QFrame):
     """Rounded pill with a coloured dot and a short text, e.g. the engine status."""
 
-    COLORS = {"online": theme.SUCCESS, "warning": theme.WARNING, "offline": theme.NEUTRAL,
+    COLORS = {"online": theme.SUCCESS, "warning": theme.WARNING, "outdated": theme.WARNING,
+              "offline": theme.NEUTRAL,
               "checking": theme.STAR, "error": theme.DANGER}
 
     def __init__(self, text: str = "", state: str = "checking", parent: QWidget | None = None):
@@ -270,6 +271,10 @@ class ColorDot(QWidget):
         super().__init__(parent)
         self._color = color
         self.setFixedSize(size, size)
+
+    def set_color(self, color: str) -> None:
+        self._color = color
+        self.update()
 
     def paintEvent(self, _event) -> None:
         p = QPainter(self)

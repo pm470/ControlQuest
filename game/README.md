@@ -3,133 +3,155 @@
 A PySide6 desktop app (runs on your computer) plus a small **MPC engine** server
 (runs acados inside Docker). The design is in [`docs/PRD.md`](../docs/PRD.md).
 
-**Status:** the menus are done: title screen, level select (stars, locks,
-Free mode), how to play, settings, and a level screen with a "coming soon" card.
-The engine server answers health checks; running levels is not implemented yet.
+**Status:** menus done; **Level 1 ("The Price of Speed") is playable** end to end
+(tune weights → Run → MPC computes the run in Docker → replay with the live plan
+→ result card, stars, unlock). Levels 2–5 show a "coming soon" card.
 
 ## Run it
 
-You need Python 3.10+ on your computer.
+You need Docker Desktop (for the engine) and Python 3.10+ (for the window).
 
-```powershell
-cd game
-python -m venv .venv
-.venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
-python run_game.py
-```
-
-The menus work without the engine; the title screen shows "MPC engine offline".
-
-### Start the MPC engine (Docker)
-
-Docker Desktop must be running. From the repository root:
+**1. Start the MPC engine** (from the repository root, Docker Desktop running):
 
 ```powershell
 .\game\engine_server\start_engine.ps1     # Windows PowerShell
 ./game/engine_server/start_engine.sh      # macOS / Linux / Git Bash
 ```
 
-The scripts start the course image (override with `CONTROLQUEST_IMAGE`), mount
-the repository at `/workspace` and map the engine to `http://127.0.0.1:8000`.
-The title screen then shows "MPC engine online". If you run `server.py` with
-normal Python (no Docker), the game shows "online (acados missing)": fine for UI
-work, but levels will need the real engine.
+It compiles the acados solver (a few seconds), then prints `listening on ...`.
+Leave this terminal open; every run prints one line there.
+
+**2. Start the game** (second terminal):
+
+```powershell
+cd game
+python -m venv .venv                # first time only
+.venv\Scripts\activate              # macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt     # first time only
+python run_game.py
+```
+
+The title screen shows "MPC engine online" once the engine is up.
+**After changing engine code, stop the engine (Ctrl+C) and start it again**; the
+game can stay open.
 
 ### Options (environment variables)
 
 | Variable | Effect |
 |---|---|
-| `CONTROLQUEST_DEV=1` | developer helpers, e.g. "pretend I finished with ★★" buttons on the level screen (to test unlocking) |
-| `CONTROLQUEST_ENGINE_URL` | engine address (default `http://127.0.0.1:8000`; can also be changed in Settings) |
+| `CONTROLQUEST_DEV=1` | developer helpers, e.g. "pretend I finished with ★★" on unplayable levels |
+| `CONTROLQUEST_ENGINE_URL` | engine address (default `http://127.0.0.1:8000`; also in Settings) |
 | `CONTROLQUEST_IMAGE`, `CONTROLQUEST_PORT` | Docker image / host port used by the start scripts |
-
-PowerShell: `$env:CONTROLQUEST_DEV = "1"; python run_game.py`
 
 ## How the code is organised
 
-Every concern has its own file, so two people rarely edit the same file.
-
 ```
 game/
-├── run_game.py                  entry point
-├── requirements.txt
-├── controlquest/
-│   ├── app.py                   creates QApplication, services, main window
-│   ├── main_window.py           stack of screens + navigation (Esc = back)
-│   ├── core/                    no visuals
-│   │   ├── config.py            constants (window size, engine URL, timings)
-│   │   ├── navigation.py        ScreenId: the names of all screens
-│   │   ├── game_state.py        stars per level, unlocking, free mode, settings
-│   │   └── context.py           AppContext = state + engine + levels, given to every screen
-│   ├── ui/                      look and feel
-│   │   ├── theme.py             colours, fonts, the global stylesheet
-│   │   ├── painting.py          drawings: ball mascot, stars, blocks, plan line, lock
-│   │   ├── widgets.py           shared widgets: Button, Card, ToggleSwitch, StarRow, ...
-│   │   ├── level_card.py        the card of one level in the level select
-│   │   └── title_scene.py       the animation on the title screen
-│   ├── screens/                 one file per full-window screen
-│   │   ├── base_screen.py       BaseScreen: on_enter/on_leave, go(...), go_back()
-│   │   ├── registry.py          ScreenId -> screen class (one line per screen)
-│   │   ├── title_screen.py
-│   │   ├── level_select_screen.py
-│   │   ├── how_to_play_screen.py
-│   │   ├── settings_screen.py
-│   │   └── level_screen.py      hosts a level (briefing / later: the gameplay)
-│   ├── levels/                  one file per level, found automatically
-│   │   ├── base.py              LevelInfo: what a level file provides
-│   │   ├── level_1_price_of_speed.py
-│   │   ├── level_2_brake_check.py
-│   │   ├── level_3_dead_end.py
-│   │   ├── level_4_heavy_ball.py
-│   │   └── level_5_crosswind.py
-│   └── engine/                  talking to the MPC engine
-│       ├── protocol.py          the messages (PRD 9.4): EngineStatus, RunRequest, RunResult
-│       └── client.py            EngineClient: async HTTP (health polling, request_run)
-└── engine_server/               runs INSIDE Docker
-    ├── server.py                HTTP server: GET /health, POST /run (501 for now)
-    ├── start_engine.ps1
-    └── start_engine.sh
+├── level_data/                  ONE JSON PER LEVEL, read by BOTH game and engine
+│   └── price_of_speed.json          start, target, limits, time limit, battery, pars, knobs, checks
+│
+├── controlquest/                THE GAME WINDOW (host, no acados)
+│   ├── app.py, main_window.py       start-up, screen switching (Esc = back)
+│   ├── core/                        config, ScreenId, GameState (stars/unlocks), AppContext
+│   ├── ui/                          theme (colours, stylesheet), painting (ball, stars...), widgets,
+│   │                                math_render (LaTeX-style formulas via matplotlib mathtext)
+│   ├── screens/                     title, level select, how to play, settings, level screen
+│   ├── levels/                      one file per level: LevelInfo (+ play_screen when playable)
+│   │   └── level_1_price_of_speed.py    Level 1's goal text, battery bar, result rows
+│   ├── gameplay/                    reusable parts of a playable level
+│   │   ├── level_play_widget.py         layout + the Run → engine → replay → result flow
+│   │   ├── map_view.py                  the field in metres: ball, trail, dashed plan, accel arrow
+│   │   ├── knob_panel.py                log sliders built from the level file
+│   │   ├── playback.py                  replay clock + play/pause/scrub/speed bar
+│   │   ├── result_panel.py              outcome, stars, metrics, "what happened"
+│   │   ├── ocp_card.py                  "The OCP your MPC solves" card (typeset math)
+│   │   ├── run_info_card.py             "Solver info": J*, solve time, iterations, run statistics
+│   │   ├── solve_selector.py            "MPC solve ‹ k › of n": inspect one solve's plan
+│   │   ├── budget_bar.py                battery-style budget bar
+│   │   └── level_data.py                reads level_data/<id>.json
+│   └── engine/                      talking to the engine
+│       ├── protocol.py                  RunRequest / RunResult / Trajectory (the contract)
+│       └── client.py                    async HTTP: health polling, request_run -> ticket
+│
+└── engine_server/               THE MPC ENGINE (runs in Docker, has acados)
+    ├── server.py                    HTTP only: GET /health, POST /run
+    ├── runner.py                    run_level(id, knobs): level id -> rules; solver cache
+    ├── calibrate.py                 check / tune a level from the command line
+    ├── level_rules/                 game rules per level (stop rules, stars, explanations)
+    │   ├── common.py                    load level file, knobs -> weights, result JSON
+    │   └── price_of_speed.py            Level 1: battery, stars, "what happened"
+    ├── mpc/                         pure MPC, knows nothing about the game
+    │   ├── model.py                     double integrator (CasADi), model gain g as parameter
+    │   ├── ocp.py                       the acados OCP recipe for one problem shape (N, dt)
+    │   ├── controller.py                MPCController (runtime weights/bounds/target, solve)
+    │   │                                + SolverCache (compile once per shape)
+    │   └── closed_loop.py               simulate: real ball (plant) + MPC, step by step
+    └── build/                       generated C code (gitignored, created automatically)
 ```
 
-Rules that keep it tidy:
-- **Screens never talk to each other.** They call `self.go(ScreenId.X, payload)`;
-  `main_window.py` does the switching. Shared data lives in `ctx.state`.
-- **No colours or sizes inside screens.** Use `ui/theme.py` constants and the
-  stylesheet roles: `label(text, "heading")`, `Button(text, variant="primary")`.
-- **UI and engine meet only in `engine/protocol.py`** (and `engine_server/server.py`
-  on the other side). Change both together, and keep the PRD 9.4 formats in sync.
-- **Numerical / MPC code goes into the engine**, never into the UI.
+### What happens when you press Run (Level 1)
 
-## Adding things
+1. `gameplay/level_play_widget.py` sends `RunRequest("price_of_speed", {q_p, q_v, r})`
+   through `engine/client.py` (HTTP POST to the engine).
+2. `engine_server/server.py` → `runner.run_level` → `level_rules/price_of_speed.run`:
+   loads `level_data/price_of_speed.json`, turns knobs into Q, R, P
+   (`common.weights`), loads them into the cached solver (`common.configured_controller`).
+3. `mpc/closed_loop.simulate` runs the loop: solve OCP → apply first input → move the
+   real ball → repeat, until success / time out / failure / the level's stop rule
+   (battery empty).
+4. The rules file computes metrics, stars and explanation sentences; the server
+   returns everything as JSON (`RunResult`, with every state and every plan).
+5. The game replays it: `playback.py` is the clock, `map_view.py` draws the ball and
+   the plan of that moment, `level_1_...py` drains the battery bar; at the end
+   `result_panel.py` shows the card and `GameState` saves the stars.
 
-**A new level:** copy a `levels/level_*.py` file, change `number`, `id`, texts.
-It shows up in the level select automatically; no other file changes.
+### Rules that keep it tidy
+- **Screens never talk to each other**; they call `self.go(ScreenId.X, payload)`.
+- **No colours or sizes in screens**: use `ui/theme.py` and the stylesheet roles.
+- **UI and engine meet only in `engine/protocol.py`** ↔ `level_rules/common.py` /
+  `server.py`. Change both sides together.
+- **Level numbers live only in `level_data/*.json`**, never in Python.
+- **MPC code (`mpc/`) never knows about levels**; game rules live in `level_rules/`.
 
-**Making a level playable:** in the level's file, write a function
-`build(ctx, level) -> QWidget` (or import it from a gameplay module) and set
-`play_screen=build` in its `LevelInfo`. The level screen then shows that widget
-instead of the "coming soon" card. Shared gameplay parts (map view, knob panel,
-playback, result panel) should become their own modules, e.g.
-`controlquest/gameplay/map_view.py`, `knob_panel.py`, `playback.py`, `result_panel.py`.
+## Changing things
 
-**A new screen:** add an id in `core/navigation.py`, write
-`screens/<name>_screen.py` (subclass `BaseScreen`, set `back_target`), and add
-one line to `screens/registry.py`.
+| I want to... | Edit | Then |
+|---|---|---|
+| change Level 1's numbers (time limit, battery, pars, start/target, slider ranges) | `level_data/price_of_speed.json` | restart engine + game; run `calibrate.py` |
+| change stars or explanation texts of Level 1 | `engine_server/level_rules/price_of_speed.py` | restart engine |
+| change the MPC (cost, constraints, solver options) | `engine_server/mpc/ocp.py`, `controller.py` | restart engine (it recompiles) |
+| change the simulated real ball | `engine_server/mpc/closed_loop.py` (`plant_step`) | restart engine |
+| change what the player sees in Level 1 | `controlquest/levels/level_1_price_of_speed.py` | restart game |
+| change the shared level layout / map / replay | `controlquest/gameplay/*` | restart game |
 
-**A new engine endpoint:** add the handler in `engine_server/server.py`, the
-message dataclass in `engine/protocol.py`, and a method in `engine/client.py`.
+**Check a level without the game** (inside the engine container, or with
+`docker run ... python calibrate.py ...` like the start script):
+
+```bash
+python calibrate.py price_of_speed              # default fails? reference passes?
+python calibrate.py price_of_speed --sweep      # time/energy table over the weights
+python calibrate.py price_of_speed q_p=0.3 r=1  # one run, prints the explanation
+```
+
+## Adding a playable level (e.g. Level 2)
+
+1. `level_data/<id>.json`: copy Level 1's file and change the numbers/knobs.
+2. Engine: `level_rules/<id>.py` with `run(level, knobs, cache)` (copy Level 1's),
+   then one line in `runner.py` `RULES`. New MPC features (e.g. horizon N per run,
+   terminal constraint, obstacles, model gain, wind) go into `mpc/` as options.
+3. Game: in `controlquest/levels/level_2_....py` subclass `LevelPlayWidget`
+   (goal text, `ocp_spec()` if the OCP differs from the standard one, extras, result
+   rows), add `build()` and set `play_screen=build`.
+   Knob ranges: `max ≤ max(50, 3 × reference value)` (team rule, see AGENTS.md).
+4. `python calibrate.py <id>` until the default fails the intended way and the
+   reference gets 3 stars; write both into the level file's `checks`.
 
 ## Working as a team
 
-- One feature branch per task (`git checkout -b feature/map-view`); merge into
-  the shared branch often, in small pieces.
-- Natural split (PRD 12): one person on `engine_server/` (+ the MPC code it will
-  import), the other on `controlquest/` (screens, gameplay widgets). The contract
-  between you is `engine/protocol.py`.
-- The only files both of you may need to touch are `screens/registry.py`,
-  `core/navigation.py` and `engine/protocol.py`; they are short on purpose, so
-  merge conflicts there are one-line fixes.
-- Before pushing: run the game once and click through the screens you changed,
-  at a small window size too (the window can be as small as 900×560 on laptops
-  with high display scaling).
+- One feature branch per task; merge often, in small pieces.
+- Natural split: one person on `engine_server/`, the other on `controlquest/`;
+  the contract is `engine/protocol.py` + the level JSON files.
+- Shared one-line registries: `screens/registry.py`, `core/navigation.py`,
+  `engine_server/runner.py` (`RULES`). Conflicts there are one-line fixes.
+- Before pushing: run the game and click through what you changed, also at a
+  small window size (900×560), and run `calibrate.py` for levels you touched.

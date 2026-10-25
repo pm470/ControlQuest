@@ -1,0 +1,35 @@
+{
+  "id": "price_of_speed",
+  "comment": "Level 1. Read by BOTH the game (controlquest/gameplay/level_data.py) and the engine (engine_server/level_rules/common.py). Calibrated with engine_server/calibrate.py.",
+
+  "dt": 0.1,
+  "N": 30,
+  "terminal_factor": 10.0,
+
+  "workspace": {"min": [0.0, 0.0], "max": [50.0, 50.0]},
+  "start": [5.0, 25.0],
+  "target": [45.0, 25.0],
+  "limits": {"a_max": 2.0, "v_max": 2.0},
+  "tolerance": {"position": 0.05, "speed": 0.05},
+
+  "t_limit": 40.0,
+  "budget": {"energy": 5.0},
+  "pars": {"time": 30.0, "energy": 4.75},
+
+  "knobs": [
+    {"name": "q_p", "label": "Position weight", "symbol": "q_p",
+     "help": "How much being away from the target costs. Q = diag(q_p, q_p, q_v, q_v).",
+     "default": 10.0, "min": 0.001, "max": 50.0, "scale": "log"},
+    {"name": "q_v", "label": "Velocity weight", "symbol": "q_v",
+     "help": "How much moving fast costs (the target velocity is 0).",
+     "default": 1.0, "min": 0.001, "max": 50.0, "scale": "log"},
+    {"name": "r", "label": "Input weight", "symbol": "r",
+     "help": "How much accelerating costs. R = r * I.",
+     "default": 0.1, "min": 0.001, "max": 50.0, "scale": "log"}
+  ],
+
+  "checks": {
+    "default_outcome": "battery_empty",
+    "reference": {"knobs": {"q_p": 0.1, "q_v": 1.0, "r": 1.0}, "stars": 3}
+  }
+}

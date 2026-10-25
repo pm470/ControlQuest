@@ -93,7 +93,7 @@ A run stops as soon as one of these happens. The first one decides the outcome.
 | **Crash (wall)** | the real path leaves the workspace | red |
 | **Controller failure** | acados returns a non-zero status or an invalid plan, e.g. no feasible plan exists | orange, with the status and the reason |
 | **Time out** | `t > t_limit` of the level | grey |
-<!-- | **Budget exceeded** | a level budget is exceeded, e.g. energy or number of solves. Checked during the run. | grey, with which budget | -->
+| **Budget exceeded** | a level budget is used up, e.g. the battery in Level 1 ("battery empty") or the solves in Level 5. Checked after every step; **the run stops immediately**. | red, with which budget |
 
 A controller failure **stops** the run. There is no fallback input. "No feasible
 plan existed" is one of the lessons (Level 2), so we show it, not hide it.
@@ -234,15 +234,15 @@ runs out, without using more energy than the battery holds."*
 |---|---|
 | Map | open field, no blocks. Start (5, 25), target (45, 25). |
 | Limits | a_max = 2, v_max = 2 |
-| Time limit | 30 s **(calibrate)** |
-| Budget | energy `E = Σ dt·‖u_k‖² ≤ 4` **(calibrate)** |
+| Time limit | 40 s (calibrated) |
+| Budget | battery: energy `E = Σ dt·‖u_k‖² ≤ 5`; the run stops when it is empty (calibrated) |
 | Unlocked knobs | `q_p` position weight (Q₁₁ = Q₂₂), `q_v` velocity weight (Q₃₃ = Q₄₄), `r` input weight (R = r·I); all log sliders 1e-3 … 1e3 |
 | Locked | N = 30, P = 10·Q, no obstacles |
 | Default | q_p = 10, q_v = 1, r = 0.1, close to time-optimal |
-| Why the default fails | it accelerates and brakes at full a_max: ≈ 2·a·v = 8 energy units > 4 |
-| Intended fixes | raise r (or lower q_p) until the acceleration is gentle; too gentle → time out |
-| ★★ time par | ≤ 24 s **(calibrate)** |
-| ★★★ secondary par | energy ≤ 3 **(calibrate)** |
+| Why the default fails | it accelerates and brakes at full a_max (≈ 7.4 energy for the whole trip): the battery is empty at t ≈ 20.3 s, 0.5 m before the target |
+| Intended fixes | lower q_p/r (and/or raise q_v) until braking is gentle; too gentle → time out (it creeps into the target too slowly). Calibration: far from the target the MPC always starts at full a_max, so ≈ 4 energy is spent on the first acceleration whatever the weights; the energy differences come from the braking/approach |
+| ★★ time par | ≤ 30 s (calibrated) |
+| ★★★ secondary par | energy ≤ 4.75 (calibrated). Reference: q_p = 0.1, q_v = 1, r = 1 → 26.8 s, 4.69. Check with `engine_server/calibrate.py price_of_speed` |
 | Extra plot | cumulative energy with the budget line |
 | Teaching note in the result | if the player scaled all weights by the same factor: "Nothing changed: multiplying Q, R and P by the same number does not change the optimal solution." |
 

@@ -147,6 +147,39 @@ def stylesheet() -> str:
         border-radius: 12px; padding: 8px 12px; selection-background-color: {BALL};
     }}
     QLineEdit:focus {{ border-color: {BALL}; }}
+    QLineEdit[role="knob_value"] {{
+        font-size: 17px; font-weight: 800; padding: 3px 8px; border-radius: 10px;
+    }}
+    QLineEdit[role="knob_value"]:disabled {{ color: {MUTED}; background: {SURFACE_ALT}; }}
+
+    QSlider {{ min-height: 26px; }}
+    QSlider::groove:horizontal {{ height: 8px; background: {LINE}; border-radius: 4px; }}
+    QSlider::sub-page:horizontal {{ background: {PRIMARY}; border-radius: 4px; }}
+    QSlider::handle:horizontal {{
+        background: {SURFACE}; border: 3px solid {PRIMARY};
+        width: 14px; height: 14px; margin: -6px 0; border-radius: 10px;
+    }}
+    QSlider::handle:horizontal:hover {{ border-color: {PRIMARY_PRESSED}; }}
+    QSlider::sub-page:horizontal:disabled {{ background: {LOCKED}; }}
+    QSlider::handle:horizontal:disabled {{ border-color: {LOCKED}; }}
+
+    QComboBox {{
+        font-size: 15px; font-weight: 700; background: {SURFACE}; border: 2px solid {LINE};
+        border-radius: 12px; padding: 6px 12px; min-width: 56px;
+    }}
+    QComboBox:hover {{ border-color: {PRIMARY}; }}
+    QComboBox::drop-down {{ border: none; width: 18px; }}
+    QComboBox QAbstractItemView {{
+        background: {SURFACE}; border: 2px solid {LINE}; selection-background-color: {SURFACE_ALT};
+        selection-color: {INK}; outline: none;
+    }}
+
+    QSpinBox {{
+        font-size: 15px; font-weight: 700; background: {SURFACE}; border: 2px solid {LINE};
+        border-radius: 10px; padding: 4px 8px; min-width: 64px;
+    }}
+    QSpinBox:focus {{ border-color: {BALL}; }}
+    QSpinBox::up-button, QSpinBox::down-button {{ width: 0; border: none; }}
 
     QScrollBar:vertical {{ background: transparent; width: 10px; margin: 4px; }}
     QScrollBar::handle:vertical {{ background: {LINE}; border-radius: 5px; min-height: 30px; }}

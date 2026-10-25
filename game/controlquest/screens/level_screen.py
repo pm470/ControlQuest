@@ -1,9 +1,9 @@
 """Level screen: hosts one level.
 
-Today it shows the level briefing and a "coming soon" card. When a level file
-provides `play_screen` (see levels/base.py), its gameplay widget is shown here
-instead, below the same header. The gameplay itself lives in the level's file
-(and in shared gameplay modules we add later), not in this screen.
+If the level file provides `play_screen` (see levels/base.py), its gameplay
+widget (usually a gameplay.LevelPlayWidget) is shown below the header; otherwise
+a "coming soon" card with the briefing. A body widget with a `navigate` signal
+(str, object) can ask for another screen, e.g. "Next level".
 """
 
 from __future__ import annotations
@@ -36,6 +36,11 @@ class LevelScreen(BaseScreen):
         self._body_host = QVBoxLayout()
         root.addLayout(self._body_host, 1)
         self._body: QWidget | None = None
+        ctx.state.changed.connect(self._refresh_stars)
+
+    def _refresh_stars(self) -> None:
+        if self.level is not None:
+            self.stars.set_stars(self.ctx.state.stars(self.level.id))
 
     def on_enter(self, payload: Any = None) -> None:
         if isinstance(payload, LevelInfo):
@@ -59,6 +64,8 @@ class LevelScreen(BaseScreen):
         self._body = widget
         if widget is not None:
             self._body_host.addWidget(widget)
+            if hasattr(widget, "navigate"):
+                widget.navigate.connect(self.navigate)
 
     # --- placeholder until the level is playable ---------------------------------------
     def _coming_soon(self, level: LevelInfo) -> QWidget:

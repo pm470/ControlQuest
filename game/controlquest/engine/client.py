@@ -2,8 +2,14 @@
 
 Uses Qt's asynchronous network manager, so the UI never freezes while waiting.
 Endpoints (see engine_server/server.py):
-    GET  /health -> {"status": "ok", "version": ..., "acados": bool}
-    POST /run    -> RunResult JSON (not implemented by the server yet)
+    GET  /health -> {"status": "ok", "version": ..., "acados": bool, "levels": [...]}
+    POST /run    -> RunResult JSON
+
+    ticket = ctx.engine.request_run(RunRequest(...), parent=self)
+    ticket.finished.connect(self.on_result)    # RunResult
+    ticket.failed.connect(self.on_error)       # str
+The ticket belongs to `parent`: if the parent widget is closed before the
+engine answers, the answer is simply dropped.
 """
 
 from __future__ import annotations
@@ -12,15 +18,21 @@ import json
 
 from PySide6.QtCore import QByteArray, QObject, QTimer, QUrl, Signal
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+from shiboken6 import isValid
 
 from ..core.config import ENGINE_POLL_INTERVAL_MS, ENGINE_RUN_TIMEOUT_MS, ENGINE_TIMEOUT_MS
 from .protocol import EngineStatus, RunRequest, RunResult
 
 
+class RunTicket(QObject):
+    """One pending run. Emits exactly one of finished(RunResult) / failed(str)."""
+
+    finished = Signal(object)
+    failed = Signal(str)
+
+
 class EngineClient(QObject):
     status_changed = Signal(object)  # EngineStatus
-    run_finished = Signal(object)  # RunResult
-    run_failed = Signal(str)  # human-readable reason
 
     def __init__(self, base_url: str, parent: QObject | None = None):
         super().__init__(parent)
@@ -89,30 +101,39 @@ class EngineClient(QObject):
         if status.state != "checking":
             self._announce = False
 
-    # --- runs (prepared for the levels) -------------------------------------------------
-    def request_run(self, run: RunRequest) -> None:
-        """Ask the engine to simulate one run; answers via run_finished / run_failed."""
+    # --- runs ---------------------------------------------------------------------------
+    def request_run(self, run: RunRequest, parent: QObject | None = None) -> RunTicket:
+        """Ask the engine to simulate one run; the answer arrives on the returned ticket."""
+        ticket = RunTicket(parent if parent is not None else self)
         request = QNetworkRequest(QUrl(f"{self._base_url}/run"))
         request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json")
         request.setTransferTimeout(ENGINE_RUN_TIMEOUT_MS)
         body = QByteArray(json.dumps(run.to_json()).encode("utf-8"))
         reply = self._nam.post(request, body)
-        reply.finished.connect(lambda: self._on_run(reply))
+        reply.finished.connect(lambda: self._on_run(reply, ticket))
+        return ticket
 
-    def _on_run(self, reply: QNetworkReply) -> None:
+    def _on_run(self, reply: QNetworkReply, ticket: RunTicket) -> None:
         try:
+            if not isValid(ticket):  # the screen that asked is gone
+                return
             raw = bytes(reply.readAll()).decode("utf-8", errors="replace")
             try:
                 payload = json.loads(raw) if raw else {}
             except ValueError:
                 payload = {}
             if reply.error() != QNetworkReply.NetworkError.NoError:
-                reason = payload.get("error") or reply.errorString()
-                self.run_failed.emit(str(reason))
+                reason = payload.get("error") if isinstance(payload, dict) else None
+                if not reason:
+                    reason = ("The MPC engine is not reachable. Start it with "
+                              "engine_server/start_engine (see game/README.md)."
+                              if reply.error() == QNetworkReply.NetworkError.ConnectionRefusedError
+                              else reply.errorString())
+                ticket.failed.emit(str(reason))
                 return
             try:
-                self.run_finished.emit(RunResult.from_json(payload))
+                ticket.finished.emit(RunResult.from_json(payload))
             except (KeyError, TypeError, ValueError) as exc:
-                self.run_failed.emit(f"Invalid run result from the engine: {exc}")
+                ticket.failed.emit(f"Invalid run result from the engine: {exc}")
         finally:
             reply.deleteLater()

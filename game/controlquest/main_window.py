@@ -51,7 +51,7 @@ class MainWindow(QMainWindow):
     def current_screen(self) -> BaseScreen | None:
         return self._current
 
-    def screen(self, screen_id: ScreenId) -> BaseScreen:
+    def get_screen(self, screen_id: ScreenId) -> BaseScreen:
         """The screen for an id, created on first use."""
         if screen_id not in self._screens:
             screen = SCREENS[screen_id](self.ctx)
@@ -61,7 +61,7 @@ class MainWindow(QMainWindow):
         return self._screens[screen_id]
 
     def show_screen(self, screen_id: ScreenId, payload: Any = None) -> None:
-        target = self.screen(screen_id)
+        target = self.get_screen(screen_id)
         if self._current is not None and self._current is not target:
             self._current.on_leave()
         self._current = target
