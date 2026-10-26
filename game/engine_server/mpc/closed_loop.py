@@ -5,6 +5,11 @@
 The plant (the real ball) is separate from the controller's model on purpose:
 later levels give it a different actuator gain or add wind, and the controller
 does not know. A level adds its own rules (e.g. a battery) through `stop_rule`.
+
+Waypoints (optional): the MPC reference is the next waypoint (position, velocity 0);
+once the ball is within `switch_radius` of it, the reference jumps to the next one,
+and after the last waypoint to the target. Success counts only at the target.
+Blocks (optional): the real path is checked against them -> outcome "crash_block".
 """
 
 from __future__ import annotations
@@ -15,6 +20,7 @@ from typing import Callable, Optional
 import numpy as np
 
 from .controller import MPCController
+from .obstacles import first_hit
 
 
 def plant_step(x: np.ndarray, u: np.ndarray, dt: float, gain: float = 1.0,
@@ -41,16 +47,19 @@ class Simulation:
     iterations: list = field(default_factory=list)  # SQP iterations
     costs: list = field(default_factory=list)  # optimal OCP cost J* (None if failed)
     status: list = field(default_factory=list)  # acados status (0 = success)
+    ref_index: list = field(default_factory=list)  # per solve: active waypoint (len(waypoints) = target)
+    crash_point: Optional[list] = None  # where the real path entered a block
+    crash_block: Optional[int] = None  # index of that block
     outcome: str = ""  # see END_REASONS
     detail: str = ""  # e.g. the acados status for a controller failure
 
 
-END_REASONS = ("success", "time_out", "controller_failure", "crash_wall")
+END_REASONS = ("success", "time_out", "controller_failure", "crash_wall", "crash_block")
 
 
 def simulate(mpc: MPCController, x0, target, *, dt: float, t_limit: float,
              p_min, p_max, pos_tol: float = 0.05, speed_tol: float = 0.05,
-             plant_gain: float = 1.0,
+             plant_gain: float = 1.0, waypoints=(), switch_radius: float = 2.0, blocks=(),
              stop_rule: Optional[Callable[[Simulation], Optional[str]]] = None) -> Simulation:
     """Run until success, time out, controller failure, leaving the workspace,
     or until stop_rule(sim) returns an outcome name (e.g. "battery_empty")."""
@@ -62,6 +71,9 @@ def simulate(mpc: MPCController, x0, target, *, dt: float, t_limit: float,
     sim.x.append(x)
     mpc.reset()
     n_max = int(round(t_limit / dt))
+    refs = [np.array([*w[:2], 0.0, 0.0], dtype=float) for w in waypoints] + [target]
+    i_ref = 0
+    mpc.set_target(refs[0])
 
     for k in range(n_max + 1):
         if np.linalg.norm(x[:2] - target[:2]) < pos_tol and np.linalg.norm(x[2:]) < speed_tol:
@@ -71,7 +83,11 @@ def simulate(mpc: MPCController, x0, target, *, dt: float, t_limit: float,
             sim.outcome = "time_out"
             break
 
+        while i_ref < len(refs) - 1 and np.linalg.norm(x[:2] - refs[i_ref][:2]) < switch_radius:
+            i_ref += 1
+            mpc.set_target(refs[i_ref])
         plan = mpc.solve(x)
+        sim.ref_index.append(i_ref)
         sim.plans.append(plan.X)  # kept even if it failed (shown in the replay)
         sim.solve_time.append(plan.solve_time)
         sim.iterations.append(plan.iterations)
@@ -82,7 +98,7 @@ def simulate(mpc: MPCController, x0, target, *, dt: float, t_limit: float,
             break
 
         u = plan.u0
-        x = plant_step(x, u, dt, gain=plant_gain)
+        x_prev, x = x, plant_step(x, u, dt, gain=plant_gain)
         sim.u.append(u)
         sim.t.append((k + 1) * dt)
         sim.x.append(x)
@@ -90,6 +106,12 @@ def simulate(mpc: MPCController, x0, target, *, dt: float, t_limit: float,
 
         if np.any(x[:2] < p_min - 1e-6) or np.any(x[:2] > p_max + 1e-6):
             sim.outcome = "crash_wall"
+            break
+        hit = first_hit(blocks, x_prev, x) if blocks else None
+        if hit is not None:
+            sim.crash_block, point = hit
+            sim.crash_point = [float(point[0]), float(point[1])]
+            sim.outcome = "crash_block"
             break
         if stop_rule is not None:
             reason = stop_rule(sim)

@@ -3,6 +3,7 @@
     python calibrate.py price_of_speed            # checks from the level file
     python calibrate.py price_of_speed --sweep    # table of time / energy over the weights
     python calibrate.py price_of_speed q_p=0.3 r=1   # one run with these knobs
+    python calibrate.py dead_end wp=24,42 wp=40,40   # one run with these waypoints (in order)
 
 Checks: the default knobs fail with checks.default_outcome, the reference knobs
 pass with checks.reference.stars, and every knob range follows the team rule
@@ -22,7 +23,8 @@ from level_rules.common import load_level
 def show(label: str, result: dict) -> None:
     m = result["metrics"]
     print(f"{label:<10} {result['outcome']:<18} {result['stars']} stars  t={m['time']:5.1f} s  "
-          f"E={m['energy']:5.2f}  max|a|={m['max_accel']:.2f}  knobs={result['knobs']}")
+          f"E={m['energy']:5.2f}  max|a|={m['max_accel']:.2f}  knobs={result['knobs']}"
+          + (f"  waypoints={result['waypoints']}" if result.get("waypoints") else ""))
     for msg in result["messages"]:
         print(f"{'':<10} - {msg}")
 
@@ -53,17 +55,22 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("level_id")
-    parser.add_argument("knobs", nargs="*", help="name=value pairs for a single run")
+    parser.add_argument("knobs", nargs="*", help="name=value pairs (wp=x,y for a waypoint) for one run")
     parser.add_argument("--sweep", action="store_true")
     args = parser.parse_args()
     level = load_level(args.level_id)
 
     if args.knobs:
-        knobs = {k: float(v) for k, v in (kv.split("=", 1) for kv in args.knobs)}
-        show("run", runner.run_level(args.level_id, knobs))
+        pairs = [kv.split("=", 1) for kv in args.knobs]
+        knobs = {k: float(v) for k, v in pairs if k != "wp"}
+        wps = [[float(c) for c in v.split(",")] for k, v in pairs if k == "wp"]
+        show("run", runner.run_level(args.level_id, knobs, wps or None))
         return 0
 
     if args.sweep:
+        if args.level_id != "price_of_speed":
+            print("--sweep is only written for price_of_speed")
+            return 1
         print("q_p / r rows, q_v columns: time [s] / energy (T/O = time out, BAT = battery empty)")
         qps, qvs = [10, 1, 0.3, 0.1, 0.03, 0.01], [0.01, 0.1, 1, 3, 10, 30]
         print(f"{'q_p':>8} " + "".join(f"{f'q_v={v:g}':>15}" for v in qvs))
@@ -87,7 +94,7 @@ def main() -> int:
         ok = False
     ref = checks.get("reference")
     if ref:
-        res = runner.run_level(args.level_id, ref["knobs"])
+        res = runner.run_level(args.level_id, ref["knobs"], ref.get("waypoints"))
         show("reference", res)
         if res["outcome"] != "success" or res["stars"] < ref.get("stars", 1):
             print(f"FAIL: reference should pass with {ref.get('stars', 1)} stars")

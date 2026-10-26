@@ -1,6 +1,6 @@
 # ControlQuest: Product Requirements Document
 
-**Last updated:** 2026-10-19
+**Last updated:** 2026-10-26
 
 Numbers marked **(calibrate)** are first guesses that must be
 tuned with real runs before they are final.
@@ -101,6 +101,9 @@ plan existed" is one of the lessons (Level 2), so we show it, not hide it.
 Entering an **ellipse** but not the block is not a crash. It shows a yellow
 "constraint violated" warning on the timeline. In practice the next solve usually
 fails, which then ends the run as a controller failure.
+*(2026-10-26: the ellipse constraints are soft with a large L1 penalty, so the solver
+keeps returning plans; a plan that enters an ellipse by more than ~2 cm is treated as
+invalid → controller failure. The timeline warning is not built yet.)*
 
 ## 5. Game structure and screens
 
@@ -289,19 +292,20 @@ to 3 waypoints."*
 
 | Item | Value |
 |---|---|
-| Map | U-shaped trap that opens towards the start: back wall x ∈ [30, 33], y ∈ [15, 35]; arms y ∈ [32, 35] and y ∈ [15, 18], x ∈ [20, 33]. Start (5, 25), target (45, 25). **(calibrate: check the ellipse sizes)** |
+| Map | U-shaped trap that opens towards the start: back wall x ∈ [30, 33], y ∈ [15, 35]; arms y ∈ [32, 35] and y ∈ [15, 18], x ∈ [20, 33]. Start (5, 25), target (45, 25). Calibrated: **each wall is split into 2 blocks (6 blocks)**; with 3 long blocks the overlapping ellipses formed notches where even good routes got stuck |
 | Limits | a_max = 2, v_max = 2 |
-| Time limit | 45 s **(calibrate)** |
+| Time limit | 45 s (calibrated) |
 | Unlocked knobs | place up to **3 waypoints** by clicking on the map (drag to move, right-click to delete) |
-| Locked | Q, R, P, N = 30, margin |
+| Locked | q_p = 1, q_v = 1, r = 0.1, P = 10·Q, N = 30, margin 0.2 m |
 | Default | no waypoints |
-| Why the default fails | the ball drives into the U and stops at the back wall: the cost gradient points straight into the obstacle, the 3 s horizon sees no way around → **time out** |
-| Intended fix | 1–2 waypoints outside the U (e.g. above the top arm), then the target |
-| Waypoint rule | the MPC reference is the next waypoint (position only, velocity reference = 0). Within the *switch radius* of 2 m **(calibrate)**, the reference jumps to the next waypoint, so the ball doesn't brake at each waypoint. Waypoints inside an ellipse are rejected when placed. |
-| ★★ time par | ≤ 32 s **(calibrate)** |
-| ★★★ secondary par | ≤ 1 waypoint |
+| Why the default fails | the ball drives into the U and stops 0.2 m before the back wall: the cost gradient points straight into the obstacle, the 3 s horizon sees no way around → **time out** (calibrated) |
+| Intended fix | 1 waypoint above/right of the U (x ≥ 30, y ≥ 36), then the target; waypoints left of x ≈ 25 lead back into the top of the U (time out again) |
+| Waypoint rule | the MPC reference is the next waypoint (position only, velocity reference = 0). Within the *switch radius* of 2 m, the reference jumps to the next waypoint, so the ball doesn't brake at each waypoint. Waypoints inside an ellipse are rejected when placed (game and engine). |
+| ★★ time par | ≤ 28 s (calibrated: single good waypoints take 23.6–34 s) |
+| ★★★ secondary par | ≤ 1 waypoint. Reference: one waypoint at (35, 40) → 25.2 s. Check with `engine_server/calibrate.py dead_end` |
 | Extra plot | distance to the current reference (shows switching) |
-| Teaching note | on time out near an obstacle: "The ball stopped 0.4 m from obstacle 1 with the target behind it: a local optimum. The horizon (3 s) cannot see around the obstacle." |
+| Teaching note | on time out near an obstacle: "The ball stopped 0.2 m from the block at (32, 20) with the target behind it: a local optimum. The horizon (3 s) cannot see around the obstacle…" |
+| Solver note | obstacle constraints are **soft** (exact L1 penalty) since 2026-10-26: hard ellipse constraints made the QP solver fail whenever braking at a_max to stop at an ellipse. Crashes are still checked against the real blocks. |
 
 **Cheaper fallback if we are short on time:** replace click-to-place with 2–3
 predefined waypoint candidates the player toggles on and off.

@@ -6,7 +6,8 @@ translates HTTP <-> Python; the work happens in runner.py (levels) and mpc/ (aca
 Endpoints (keep in sync with game/controlquest/engine/protocol.py):
     GET  /health  -> {"status": "ok", "version": ..., "protocol": 1, "acados": bool,
                       "levels": [playable level ids]}
-    POST /run     {"level_id": ..., "knobs": {...}} -> RunResult JSON
+    POST /run     {"level_id": ..., "knobs": {...}, "waypoints": [[x, y], ...] (optional)}
+                  -> RunResult JSON
 
 Run (inside the container):  python server.py --host 0.0.0.0 --port 8000
 """
@@ -19,7 +20,7 @@ import json
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.3.0"  # bump whenever the messages change (game: protocol.ENGINE_VERSION)
+VERSION = "0.4.0"  # bump whenever the messages change (game: protocol.ENGINE_VERSION)
 PROTOCOL_VERSION = 1
 MAX_BODY_BYTES = 1_000_000
 
@@ -67,7 +68,7 @@ class EngineHandler(BaseHTTPRequestHandler):
             return
         level_id = request.get("level_id")
         try:
-            result = runner.run_level(level_id, request.get("knobs", {}))
+            result = runner.run_level(level_id, request.get("knobs", {}), request.get("waypoints"))
         except ValueError as exc:  # bad request (unknown level/knob, ...)
             self._send_json(400, {"error": str(exc)})
             return
@@ -76,7 +77,8 @@ class EngineHandler(BaseHTTPRequestHandler):
             self._send_json(500, {"error": f"engine error: {exc}"})
             return
         m = result["metrics"]
-        print(f"[engine] run {level_id} {result['knobs']} -> {result['outcome']} "
+        wps = f" waypoints={result['waypoints']}" if result.get("waypoints") else ""
+        print(f"[engine] run {level_id} {result['knobs']}{wps} -> {result['outcome']} "
               f"({result['stars']} stars, t={m['time']:.1f} s, E={m['energy']:.2f}) "
               f"computed in {result['compute_time_s']:.2f} s", flush=True)
         self._send_json(200, result)

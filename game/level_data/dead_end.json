@@ -1,0 +1,35 @@
+{
+  "id": "dead_end",
+  "comment": "Level 3. Read by BOTH the game (controlquest/gameplay/level_data.py) and the engine (engine_server/level_rules/common.py). Calibrated with engine_server/calibrate.py.",
+
+  "dt": 0.1,
+  "N": 30,
+  "terminal_factor": 10.0,
+
+  "workspace": {"min": [0.0, 0.0], "max": [50.0, 50.0]},
+  "start": [5.0, 25.0],
+  "target": [45.0, 25.0],
+  "limits": {"a_max": 2.0, "v_max": 2.0},
+  "tolerance": {"position": 0.05, "speed": 0.05},
+
+  "blocks": [
+    {"corners": [[30.0, 15.0], [33.0, 15.0], [33.0, 25.0], [30.0, 25.0]]},
+    {"corners": [[30.0, 25.0], [33.0, 25.0], [33.0, 35.0], [30.0, 35.0]]},
+    {"corners": [[20.0, 32.0], [26.5, 32.0], [26.5, 35.0], [20.0, 35.0]]},
+    {"corners": [[26.5, 32.0], [33.0, 32.0], [33.0, 35.0], [26.5, 35.0]]},
+    {"corners": [[20.0, 15.0], [26.5, 15.0], [26.5, 18.0], [20.0, 18.0]]},
+    {"corners": [[26.5, 15.0], [33.0, 15.0], [33.0, 18.0], [26.5, 18.0]]}
+  ],
+
+  "t_limit": 45.0,
+  "pars": {"time": 28.0, "waypoints": 1},
+  "waypoints": {"max": 3, "switch_radius": 2.0},
+
+  "locked": {"q_p": 1.0, "q_v": 1.0, "r": 0.1, "margin": 0.2},
+  "knobs": [],
+
+  "checks": {
+    "default_outcome": "time_out",
+    "reference": {"knobs": {}, "waypoints": [[35.0, 40.0]], "stars": 3}
+  }
+}

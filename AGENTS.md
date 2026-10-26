@@ -120,17 +120,21 @@ without the engine; pressing Run then shows a clear "engine offline" message.
 Contract between the two sides: `controlquest/engine/protocol.py` ↔
 `engine_server/level_rules/common.py` + `server.py`, plus the level JSON files.
 
-## 6. Status (2026-10-25)
+## 6. Status (2026-10-26)
 
 - Done: menus (title with animation, level select with stars/locks/free mode, how
   to play, settings), engine server, MPC package, **Level 1 "The Price of Speed"
   fully playable** (calibrated; `calibrate.py price_of_speed` passes), OCP shown as
   typeset math, battery bar, result card, hints, MPC-solve selector, solver info card,
   responsive layout.
-- Not yet: levels 2–5 (show "coming soon"), speed/acceleration plots (PRD 5.6),
+- Done (2026-10-26, branch `level3to4`): **obstacles in the engine** (up to 6 blocks per
+  level, soft ellipse constraints, block crash check) and **Level 3 "Dead End"**
+  playable: click-to-place waypoints, blocks + ellipses + waypoints on the map
+  (`calibrate.py dead_end`).
+- Not yet: levels 2, 4, 5 (show "coming soon"), speed/acceleration plots (PRD 5.6),
   saving progress to disk (progress resets on restart, intentionally for now).
-- Next planned work: UI changes requested by the team, then the MPC side of levels 2–5
-  (horizon N per level, terminal constraint, obstacles, model gain, wind, re-plan interval).
+- Next planned work: the MPC side of levels 2, 4, 5 (horizon N per level, terminal
+  constraint, model gain, wind, re-plan interval); obstacles are already in place.
 
 ## 7. Rules for agents working in this repo
 
@@ -172,6 +176,10 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
   feasible): time limit 40 s, battery 5, ★★ ≤ 30 s, ★★★ also energy ≤ 4.75;
   reference q_p = 0.1, q_v = 1, r = 1. Far from the target the MPC always starts at
   full acceleration (~4 energy), so weights mainly change braking/approach.
+
+- (2026-10-25) Level 3 is built now, before the must-have Levels 2, 4, 5 (its obstacle
+  support is reused by Levels 4 and 5). Waypoints are **placed by clicking on the map**
+  (drag to move, right-click to delete), not the PRD's toggle fallback.
 
 **MPC**
 - (2026-10-19) Obstacles: a block is given by 4 corners; the solver avoids the
@@ -236,7 +244,7 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
 - Qt: don't name custom widget properties `size` (clashes with QWidget.size); the
   button style property is `scale`. `&` in button text is a mnemonic: write `&&`.
   Some symbols (e.g. ❚❚) are missing from the fonts; use words or painted icons.
-- acados: each compiled solver needs a unique name (`cq_N{N}`); solvers are not
+- acados: each compiled solver needs a unique name (`cq_N{N}_o{MAX_OBSTACLES}`); solvers are not
   thread-safe (the server serialises runs with a lock).
 - The engine does not reload code: restart it after changes. The game warns when the
   engine version does not match (bump both version numbers when the messages change).
@@ -254,6 +262,17 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
 - Don't override QWidget method names in subclasses (e.g. a `screen()` method on the main
   window broke Qt's `QWidget.screen()`; it is now `get_screen()`).
 - Generated code (`engine_server/build/`), `.venv/`, `__pycache__/` are gitignored.
+- Obstacles in acados (2026-10-26, Level 3 calibration): with **hard** ellipse constraints
+  HPIPM failed (MINSTEP) whenever an ellipse and the input bounds were active together
+  (braking at full a_max to stop at an ellipse). What made it robust: ellipse constraints
+  **soft** with an exact L1 penalty (`ocp.py`, `SLACK_L1`), `qp_tol` 1e-6 (not 1e-8),
+  NLP `tol` 1e-4, `hpipm_mode` ROBUST, a small upper bound on h (1e4, not 1e9), unused
+  obstacle slots as a small circle far away (well scaled), and LM 1e-2 only when the
+  level has obstacles. SQP can still cycle near ellipse tips: a solve that stops at the
+  iteration limit (status 2) is used if its plan is valid (finite, within bounds,
+  outside all ellipses), else it is a controller failure (`controller.solve`).
+- Long thin blocks: their ellipses stick out far and overlapping ellipses form notches
+  where the MPC gets stuck. Split walls into shorter blocks (Level 3 uses 6).
 
 ## 10. UI structure and content (what the player sees, as of 2026-10-25)
 
@@ -289,7 +308,10 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
    still being built" (+ dev buttons with `CONTROLQUEST_DEV=1`).
    **Playable level** (`gameplay/level_play_widget.py`), three columns on wide windows:
    - left: the **map** (50 m field, grid every 5 m, labels every 10 m, start ring, target
-     star, ball with trail, current plan, acceleration arrow, HUD "t = … |v| = …");
+     star, ball with trail, current plan, acceleration arrow, HUD "t = … |v| = …";
+     with obstacles: beige blocks, the solver's ellipses dashed, a red × where the ball
+     crashed; Level 3: lilac numbered waypoint diamonds with a dotted route, the active
+     one highlighted during the replay, reached ones grey);
      under it the level's extras (Level 1: **battery bar**, drains, star mark = ★★★
      limit), the **replay bar** (Play/Pause, scrubber, time, speed 1×/2×/4×/8×,
      default 2×) and the **"MPC solve ‹ k › of n"** selector;
@@ -298,7 +320,9 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
      solve: plan cost J*, solve time, SQP iterations, status; whole run: solves, solve
      time avg/max, total solve time, iterations, total cost, engine time);
    - right: **Goal** (one paragraph), **Tune the weights** (one row per knob: symbol +
-     name, a typeable value field, a log slider; Reset + Run ▶; a status line), and
+     name, a typeable value field, a log slider; Reset + Run ▶; a status line; Level 3:
+     **Place waypoints** instead: instructions, "n / 3 waypoints", Clear, the list of
+     waypoints), and
      **Stuck?** with hints revealed one at a time (3 per level, the last almost the
      answer).
    - At the end of a replay a **result card** appears over the map: outcome title with

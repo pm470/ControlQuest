@@ -30,6 +30,7 @@ STAR = "#FFC93C"
 STAR_DARK = "#E8A90C"
 BLOCK = "#C9BBA8"  # obstacles
 BLOCK_DARK = "#A8977F"
+WAYPOINT = "#A98BEB"  # lilac diamonds (Level 3)
 
 SUCCESS = "#4CBF6B"
 WARNING = "#FFA94D"

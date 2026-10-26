@@ -3,9 +3,10 @@
 A PySide6 desktop app (runs on your computer) plus a small **MPC engine** server
 (runs acados inside Docker). The design is in [`docs/PRD.md`](../docs/PRD.md).
 
-**Status:** menus done; **Level 1 ("The Price of Speed") is playable** end to end
-(tune weights → Run → MPC computes the run in Docker → replay with the live plan
-→ result card, stars, unlock). Levels 2–5 show a "coming soon" card.
+**Status:** menus done; **Level 1 ("The Price of Speed")** and **Level 3 ("Dead End")**
+are playable end to end (tune weights / place waypoints → Run → MPC computes the run
+in Docker → replay with the live plan → result card, stars, unlock). Levels 2, 4, 5
+show a "coming soon" card.
 
 ## Run it
 
@@ -48,7 +49,8 @@ game can stay open.
 ```
 game/
 ├── level_data/                  ONE JSON PER LEVEL, read by BOTH game and engine
-│   └── price_of_speed.json          start, target, limits, time limit, battery, pars, knobs, checks
+│   ├── price_of_speed.json          start, target, limits, time limit, battery, pars, knobs, checks
+│   └── dead_end.json                + blocks (4 corners each), locked weights/margin, waypoint rules
 │
 ├── controlquest/                THE GAME WINDOW (host, no acados)
 │   ├── app.py, main_window.py       start-up, screen switching (Esc = back)
@@ -57,10 +59,14 @@ game/
 │   │                                math_render (LaTeX-style formulas via matplotlib mathtext)
 │   ├── screens/                     title, level select, how to play, settings, level screen
 │   ├── levels/                      one file per level: LevelInfo (+ play_screen when playable)
-│   │   └── level_1_price_of_speed.py    Level 1's goal text, battery bar, result rows
+│   │   ├── level_1_price_of_speed.py    Level 1's goal text, battery bar, result rows
+│   │   └── level_3_dead_end.py          Level 3's waypoint card, OCP with obstacles, result rows
 │   ├── gameplay/                    reusable parts of a playable level
 │   │   ├── level_play_widget.py         layout + the Run → engine → replay → result flow
-│   │   ├── map_view.py                  the field in metres: ball, trail, dashed plan, accel arrow
+│   │   ├── map_view.py                  the field in metres: blocks + dashed ellipses, waypoints,
+│   │   │                                ball, trail, dashed plan, accel arrow, crash marker
+│   │   ├── waypoint_editor.py           click / drag / right-click waypoints on the map (Level 3)
+│   │   ├── obstacles.py                 block corners -> the solver's ellipse (drawing, clicks)
 │   │   ├── knob_panel.py                log sliders built from the level file
 │   │   ├── playback.py                  replay clock + play/pause/scrub/speed bar
 │   │   ├── result_panel.py              outcome, stars, metrics, "what happened"
@@ -79,13 +85,18 @@ game/
     ├── calibrate.py                 check / tune a level from the command line
     ├── level_rules/                 game rules per level (stop rules, stars, explanations)
     │   ├── common.py                    load level file, knobs -> weights, result JSON
-    │   └── price_of_speed.py            Level 1: battery, stars, "what happened"
+    │   ├── price_of_speed.py            Level 1: battery, stars, "what happened"
+    │   └── dead_end.py                  Level 3: waypoints, stars, local-optimum explanation
     ├── mpc/                         pure MPC, knows nothing about the game
-    │   ├── model.py                     double integrator (CasADi), model gain g as parameter
-    │   ├── ocp.py                       the acados OCP recipe for one problem shape (N, dt)
+    │   ├── model.py                     double integrator (CasADi); parameters: model gain g
+    │   │                                + 6 obstacle-ellipse slots (cx, cy, E11, E12, E22)
+    │   ├── ocp.py                       the acados OCP recipe for one problem shape (N, dt),
+    │   │                                incl. soft ellipse constraints (unused slots far away)
+    │   ├── obstacles.py                 block corners -> min-area ellipse; block crash check
     │   ├── controller.py                MPCController (runtime weights/bounds/target, solve)
     │   │                                + SolverCache (compile once per shape)
-    │   └── closed_loop.py               simulate: real ball (plant) + MPC, step by step
+    │   └── closed_loop.py               simulate: real ball (plant) + MPC, step by step;
+    │                                    waypoint switching, block crashes
     └── build/                       generated C code (gitignored, created automatically)
 ```
 
@@ -131,6 +142,7 @@ game/
 python calibrate.py price_of_speed              # default fails? reference passes?
 python calibrate.py price_of_speed --sweep      # time/energy table over the weights
 python calibrate.py price_of_speed q_p=0.3 r=1  # one run, prints the explanation
+python calibrate.py dead_end wp=36,42           # Level 3: one run with these waypoints
 ```
 
 ## Adding a playable level (e.g. Level 2)
@@ -143,6 +155,10 @@ python calibrate.py price_of_speed q_p=0.3 r=1  # one run, prints the explanatio
    (goal text, `ocp_spec()` if the OCP differs from the standard one, extras, result
    rows), add `build()` and set `play_screen=build`.
    Knob ranges: `max ≤ max(50, 3 × reference value)` (team rule, see AGENTS.md).
+   Obstacles: add `"blocks"` (4 corners each, at most 6) to the level file; the engine
+   and the map pick them up. Fixed values that are not knobs go into `"locked"`.
+   Controls other than sliders: override `controls_title()`, `add_controls()`,
+   `waypoints()`, `reset_controls()`, `set_controls_enabled()` (see `level_3_dead_end.py`).
 4. `python calibrate.py <id>` until the default fails the intended way and the
    reference gets 3 stars; write both into the level file's `checks`.
 

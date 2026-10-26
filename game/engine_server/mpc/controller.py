@@ -5,6 +5,8 @@
     mpc.set_weights(Q, R, P)               # runtime: no recompilation
     mpc.set_bounds(x_lb, x_ub, u_lb, u_ub)
     mpc.set_model_gain(1.0)
+    mpc.set_obstacles([(c, E), ...])       # ellipses (p-c)^T E (p-c) >= 1, up to MAX_OBSTACLES
+    mpc.set_damping(1e-2)                  # Levenberg-Marquardt (use with obstacles)
     mpc.set_target(x_ref)
     mpc.reset()                            # forget the warm start (new run)
     plan = mpc.solve(x)                    # plan.u0 is applied, plan.X is drawn
@@ -20,11 +22,13 @@ from pathlib import Path
 import numpy as np
 from acados_template import AcadosOcpSolver
 
-from .model import NU, NX
+from .model import MAX_OBSTACLES, NU, NX, OBSTACLE_PARAMS, UNUSED_SLOT
 from .ocp import build_ocp, shape_name
 
 ACADOS_STATUS = {0: "success", 1: "NaN detected", 2: "max iterations reached",
                  3: "minimum step size", 4: "QP solver failure", 5: "ready"}
+MAX_ITER = 2  # acados status: SQP stopped at the iteration limit (iterate may still be usable)
+H_TOL = 0.02  # a plan may dip this far into an ellipse (h >= 1 - H_TOL; ~2 cm, soft constraints)
 
 
 @dataclass
@@ -48,6 +52,8 @@ class MPCController:
         ocp = build_ocp(N, dt, build_dir)
         self.solver = AcadosOcpSolver(ocp, verbose=False)  # code generation + compilation
         self._x_lb = self._x_ub = self._u_lb = self._u_ub = None
+        self._gain = 1.0
+        self._slots = list(UNUSED_SLOT) * MAX_OBSTACLES
         self.reset()
 
     # --- runtime configuration (no recompilation) ------------------------------------
@@ -69,8 +75,28 @@ class MPCController:
             self.solver.constraints_set(k, "ubx", self._x_ub)
 
     def set_model_gain(self, g: float) -> None:
+        self._gain = float(g)
+        self._set_params()
+
+    def set_obstacles(self, ellipses) -> None:
+        """Obstacle ellipses as (center (2,), E (2, 2)); unused slots are moved off the map."""
+        ellipses = list(ellipses)
+        if len(ellipses) > MAX_OBSTACLES:
+            raise ValueError(f"at most {MAX_OBSTACLES} obstacles, got {len(ellipses)}")
+        slots = []
+        for c, E in ellipses:
+            slots += [float(c[0]), float(c[1]), float(E[0][0]), float(E[0][1]), float(E[1][1])]
+        self._slots = slots + list(UNUSED_SLOT) * (MAX_OBSTACLES - len(ellipses))
+        self._set_params()
+
+    def set_damping(self, lm: float) -> None:
+        """Levenberg-Marquardt term added to the SQP Hessian (0 = plain Gauss-Newton)."""
+        self.solver.options_set("levenberg_marquardt", float(lm))
+
+    def _set_params(self) -> None:
+        p = np.array([self._gain, *self._slots], dtype=float)
         for k in range(self.N + 1):
-            self.solver.set(k, "p", np.array([g], dtype=float))
+            self.solver.set(k, "p", p)
 
     def set_target(self, x_ref) -> None:
         x_ref = np.asarray(x_ref, dtype=float)
@@ -95,8 +121,13 @@ class MPCController:
         status = self.solver.solve()
         X = np.array([self.solver.get(k, "x") for k in range(N + 1)])
         U = np.array([self.solver.get(k, "u") for k in range(N)])
+        # With obstacles SQP sometimes cycles near an ellipse tip and stops at the iteration
+        # limit. The last iterate is still used if it is a valid plan (finite, within the
+        # bounds, outside every ellipse): suboptimal, but safe. The status stays visible.
         message = (f"acados status {status} ({ACADOS_STATUS.get(status, 'unknown')})"
-                   if status != 0 else self._check(x0, X, U))
+                   if status not in (0, MAX_ITER) else self._check(x0, X, U))
+        if status == MAX_ITER and message:
+            message = f"acados status {status} ({ACADOS_STATUS[MAX_ITER]}): {message}"
         ok = message == ""
         cost = float(self.solver.get_cost()) if ok else None
         if ok:
@@ -130,7 +161,20 @@ class MPCController:
             vu = np.maximum(self._u_lb - U, U - self._u_ub).max()
             if vx > tol or vu > tol:
                 return f"plan violates bounds (state {vx:.1e}, input {vu:.1e})"
+        h_min = self._min_obstacle_h(X[1:])
+        if h_min < 1.0 - H_TOL:
+            return f"plan enters an obstacle ellipse (h = {h_min:.3f} < 1)"
         return ""
+
+    def _min_obstacle_h(self, X) -> float:
+        """Smallest (p - c)^T E (p - c) over the plan's positions and the obstacle slots."""
+        h_min = np.inf
+        for j in range(MAX_OBSTACLES):
+            cx, cy, e11, e12, e22 = self._slots[j * OBSTACLE_PARAMS:(j + 1) * OBSTACLE_PARAMS]
+            d = X[:, :2] - [cx, cy]
+            h = e11 * d[:, 0] ** 2 + 2 * e12 * d[:, 0] * d[:, 1] + e22 * d[:, 1] ** 2
+            h_min = min(h_min, float(h.min()))
+        return h_min
 
 
 class SolverCache:

@@ -72,6 +72,30 @@ class LevelData:
         return dict(self.raw.get("pars", {}))
 
     @property
+    def blocks(self) -> list[list[tuple[float, float]]]:
+        """Obstacle blocks, 4 corners each (what crashes are checked against)."""
+        return [[tuple(c) for c in b["corners"]] for b in self.raw.get("blocks", [])]
+
+    @property
+    def margin(self) -> float:
+        """Obstacle margin added to each ellipse semi-axis (locked value; 0 if none)."""
+        return float(self.raw.get("locked", {}).get("margin", 0.0))
+
+    @property
+    def locked(self) -> dict[str, float]:
+        """Values that are fixed in this level (not knobs), e.g. weights."""
+        return dict(self.raw.get("locked", {}))
+
+    @property
+    def max_waypoints(self) -> int:
+        """How many waypoints the player may place (0 = level without waypoints)."""
+        return int(self.raw.get("waypoints", {}).get("max", 0))
+
+    @property
+    def switch_radius(self) -> float:
+        return float(self.raw.get("waypoints", {}).get("switch_radius", 0.0))
+
+    @property
     def knobs(self) -> list[KnobSpec]:
         fields = KnobSpec.__dataclass_fields__
         return [KnobSpec(**{k: v for k, v in spec.items() if k in fields}) for spec in self.raw["knobs"]]

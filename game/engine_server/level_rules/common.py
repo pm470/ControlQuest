@@ -11,6 +11,7 @@ import numpy as np
 
 from mpc.closed_loop import Simulation
 from mpc.controller import MPCController, SolverCache
+from mpc.obstacles import Ellipse, ellipse_from_corners
 
 LEVEL_DATA_DIR = Path(__file__).resolve().parents[2] / "level_data"  # game/level_data
 
@@ -42,7 +43,9 @@ def clean_knobs(level: dict, knobs: dict) -> dict:
 
 
 def weights(level: dict, knobs: dict):
-    """Q = diag(q_p, q_p, q_v, q_v), R = r*I, P = terminal_factor * Q."""
+    """Q = diag(q_p, q_p, q_v, q_v), R = r*I, P = terminal_factor * Q.
+    Weights that are not knobs of this level come from level["locked"]."""
+    knobs = {**level.get("locked", {}), **knobs}
     qp, qv, r = knobs["q_p"], knobs["q_v"], knobs["r"]
     Q = np.diag([qp, qp, qv, qv])
     return Q, r * np.eye(2), level["terminal_factor"] * Q
@@ -57,8 +60,48 @@ def configured_controller(cache: SolverCache, level: dict, knobs: dict,
     mpc.set_weights(*weights(level, knobs))
     mpc.set_bounds([*p_min, -v, -v], [*p_max, v, v], [-a, -a], [a, a])
     mpc.set_model_gain(model_gain)
+    ellipses = level_ellipses(level, knobs)
+    mpc.set_obstacles([(e.center, e.E) for e in ellipses])
+    mpc.set_damping(level.get("solver", {}).get("levenberg_marquardt", 1e-2) if ellipses else 0.0)
     mpc.set_target([*level["target"], 0.0, 0.0])
     return mpc
+
+
+def level_blocks(level: dict) -> list:
+    """The level's blocks, each a list of 4 corners [[x, y], ...] (what crashes are checked against)."""
+    return [b["corners"] for b in level.get("blocks", [])]
+
+
+def level_ellipses(level: dict, knobs: dict | None = None) -> list[Ellipse]:
+    """What the solver avoids: each block's enclosing ellipse, enlarged by the obstacle
+    margin (a knob in some levels, otherwise level["locked"]["margin"])."""
+    margin = float({**level.get("locked", {}), **(knobs or {})}.get("margin", 0.0))
+    return [ellipse_from_corners(c, margin) for c in level_blocks(level)]
+
+
+def clean_waypoints(level: dict, waypoints, knobs: dict | None = None) -> list[list[float]]:
+    """Waypoints from the request, checked against the level's rules (PRD 7, Level 3)."""
+    waypoints = list(waypoints or [])
+    rules = level.get("waypoints")
+    if not waypoints:
+        return []
+    if rules is None:
+        raise ValueError("this level does not take waypoints")
+    if len(waypoints) > rules["max"]:
+        raise ValueError(f"at most {rules['max']} waypoints, got {len(waypoints)}")
+    (x0, y0), (x1, y1) = level["workspace"]["min"], level["workspace"]["max"]
+    out = []
+    for i, w in enumerate(waypoints, 1):
+        try:
+            x, y = (float(v) for v in w)
+        except (TypeError, ValueError):
+            raise ValueError(f"waypoint {i} must be [x, y], got {w!r}") from None
+        if not (np.isfinite(x) and np.isfinite(y) and x0 <= x <= x1 and y0 <= y <= y1):
+            raise ValueError(f"waypoint {i} ({x}, {y}) is outside the field")
+        if any(e.h([x, y]) < 1.0 for e in level_ellipses(level, knobs)):
+            raise ValueError(f"waypoint {i} ({x:.1f}, {y:.1f}) is inside an obstacle ellipse")
+        out.append([x, y])
+    return out
 
 
 def trajectory_json(sim: Simulation, dt: float) -> dict:
@@ -74,6 +117,8 @@ def trajectory_json(sim: Simulation, dt: float) -> dict:
         "iterations": list(sim.iterations),
         "costs": [None if c is None else round(c, 4) for c in sim.costs],
         "status": list(sim.status),
+        "ref_index": list(sim.ref_index),
+        "crash_point": sim.crash_point,
     }
 
 
@@ -93,12 +138,13 @@ def solver_metrics(sim: Simulation) -> dict:
 
 def closed_loop_cost(sim: Simulation, Q, R, target, dt: float) -> float:
     """Cost of what actually happened, with the player's weights:
-    sum over applied steps of dt * ( |x_k - x_ref|_Q^2 + |u_k|_R^2 )."""
-    x_ref = np.concatenate([np.asarray(target, float), [0.0, 0.0]])
-    X = np.array(sim.x[:len(sim.u)]) - x_ref
+    sum over applied steps of dt * ( |x_k - x_ref|_Q^2 + |u_k|_R^2 ).
+    target: one position, or one per applied step (e.g. the active waypoint)."""
     U = np.array(sim.u).reshape(-1, 2)
     if not len(U):
         return 0.0
+    ref = np.broadcast_to(np.asarray(target, float).reshape(-1, 2), (len(U), 2))
+    X = np.array(sim.x[:len(U)]) - np.hstack([ref, np.zeros((len(U), 2))])
     return float(dt * (np.einsum("ki,ij,kj->", X, Q, X) + np.einsum("ki,ij,kj->", U, R, U)))
 
 

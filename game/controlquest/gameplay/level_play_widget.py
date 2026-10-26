@@ -6,7 +6,10 @@ Flow of one run:
         -> map + playback replay it -> at the end: result card, stars saved
 
 A level subclasses LevelPlayWidget and overrides the hooks at the bottom:
-goal_text(), ocp_spec(), add_extras(column), update_extras(t), result_rows(result).
+goal_text(), ocp_spec(), add_extras(column), update_extras(t), result_rows(result),
+and for levels with other controls than weights (e.g. waypoints): controls_title(),
+add_controls(layout), waypoints(), reset_controls(), set_controls_enabled(enabled);
+they call controls_changed() when the player edits something.
 """
 
 from __future__ import annotations
@@ -94,9 +97,11 @@ class LevelPlayWidget(QWidget):
         col.addWidget(goal)
 
         knobs_card = Card(padding=18, spacing=10, shadow=False)
-        knobs_card.body.addWidget(label("Tune the weights", "subheading"))
+        knobs_card.body.addWidget(label(self.controls_title(), "subheading"))
         self.knobs = KnobPanel(data.knobs)
         knobs_card.body.addWidget(self.knobs)
+        self.knobs.setVisible(bool(data.knobs))
+        self.add_controls(knobs_card.body)
         buttons = QHBoxLayout()
         self.reset_button = Button("Reset", variant="ghost")
         self.reset_button.setToolTip("Back to the level's default settings")
@@ -134,7 +139,7 @@ class LevelPlayWidget(QWidget):
 
         # --- wiring ---
         self.run_button.clicked.connect(self.start_run)
-        self.reset_button.clicked.connect(self.knobs.reset)
+        self.reset_button.clicked.connect(self.reset_controls)
         self.knobs.changed.connect(self._on_knobs_changed)
         self.playback.time_changed.connect(self._on_time)
         self.playback.finished.connect(self._on_replay_end)
@@ -173,7 +178,7 @@ class LevelPlayWidget(QWidget):
         self._set_busy(True)
         self.status.setText("The MPC is computing your run...")
         self._ticket = self.ctx.engine.request_run(
-            RunRequest(self.level.id, self.knobs.values()), parent=self)
+            RunRequest(self.level.id, self.knobs.values(), self.waypoints()), parent=self)
         self._ticket.finished.connect(self._on_result)
         self._ticket.failed.connect(self._on_failed)
 
@@ -200,6 +205,7 @@ class LevelPlayWidget(QWidget):
         self.run_button.setText("Computing..." if busy else "Run  ▶")
         self.knobs.setEnabled(not busy)
         self.reset_button.setEnabled(not busy)
+        self.set_controls_enabled(not busy)
 
     # --- replay ---------------------------------------------------------------------------
     def _on_time(self, t: float) -> None:
@@ -231,6 +237,10 @@ class LevelPlayWidget(QWidget):
     def _watch_again(self) -> None:
         self.result_panel.hide()
         self.playback.replay()
+
+    def controls_changed(self) -> None:
+        """Call when the player changed a control (hides the old result)."""
+        self._on_knobs_changed()
 
     def _on_knobs_changed(self) -> None:
         self.result_panel.hide()
@@ -287,6 +297,23 @@ class LevelPlayWidget(QWidget):
                    f"{n} steps ({n * d.dt:g} s) ahead; only u₀ is applied."),
             legend=["x = (p, v): position, velocity · u = a: acceleration · p★: target"],
         )
+
+    def controls_title(self) -> str:
+        return "Tune the weights"
+
+    def add_controls(self, layout: QVBoxLayout) -> None:
+        """Add level-specific controls to the knobs card (above Reset / Run)."""
+
+    def waypoints(self) -> list[tuple[float, float]]:
+        """Waypoints sent with the run (levels with waypoints override this)."""
+        return []
+
+    def reset_controls(self) -> None:
+        """Reset button: back to the level's defaults."""
+        self.knobs.reset()
+
+    def set_controls_enabled(self, enabled: bool) -> None:
+        """Lock level-specific controls while the engine computes."""
 
     def add_extras(self, column: QVBoxLayout) -> None:
         """Add level-specific widgets (e.g. a budget bar) under the map, above the replay bar.

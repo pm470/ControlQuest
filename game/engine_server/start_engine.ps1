@@ -6,7 +6,7 @@
 $ErrorActionPreference = "Stop"
 $image = $env:CONTROLQUEST_IMAGE
 if (-not $image) {
-    $image = "vsc-mpcrl26-exercises-94d9982245bae36f409cb410a37b514aafe63fa52604de9d9dc9f0c9c94c729a"
+    $image = "vsc-mpcrl26-exercises-570cc587851b7c4c296579abda9e2ed1f22a62772feeee307a76615826aa7aad"
 }
 $port = $env:CONTROLQUEST_PORT
 if (-not $port) { $port = "8000" }

@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 PROTOCOL_VERSION = 1
-ENGINE_VERSION = "0.3.0"  # the engine_server version this game expects (engine_server/server.py)
+ENGINE_VERSION = "0.4.0"  # the engine_server version this game expects (engine_server/server.py)
 
 # outcome name -> (label for the player, ui.theme colour name)
 OUTCOMES = {
@@ -85,6 +85,8 @@ class Trajectory:
     iterations: list[int] = field(default_factory=list)  # per solve (SQP iterations)
     costs: list[float | None] = field(default_factory=list)  # per solve: optimal OCP cost J*
     status: list[int] = field(default_factory=list)  # per solve: acados status (0 = ok)
+    ref_index: list[int] = field(default_factory=list)  # per solve: active waypoint (= #waypoints: target)
+    crash_point: list[float] | None = None  # where the ball hit a block, if it did
 
     @property
     def n_solves(self) -> int:
@@ -121,7 +123,8 @@ class Trajectory:
                    plans=list(d["plans"]), energy=list(d["energy"]),
                    solve_time_ms=list(d.get("solve_time_ms", [])),
                    iterations=list(d.get("iterations", [])),
-                   costs=list(d.get("costs", [])), status=list(d.get("status", [])))
+                   costs=list(d.get("costs", [])), status=list(d.get("status", [])),
+                   ref_index=list(d.get("ref_index", [])), crash_point=d.get("crash_point"))
 
 
 @dataclass
@@ -135,6 +138,7 @@ class RunResult:
     messages: list[str]  # "What happened" sentences
     knobs: dict[str, float]  # the values actually used (clamped to their range)
     trajectory: Trajectory
+    waypoints: list[list[float]] = field(default_factory=list)  # the waypoints used (Level 3)
 
     @property
     def success(self) -> bool:
@@ -150,4 +154,5 @@ class RunResult:
             messages=list(payload.get("messages", [])),
             knobs=dict(payload.get("knobs", {})),
             trajectory=Trajectory.from_json(payload["trajectory"]),
+            waypoints=list(payload.get("waypoints", [])),
         )
