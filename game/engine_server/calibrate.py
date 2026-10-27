@@ -3,7 +3,8 @@
     python calibrate.py price_of_speed            # checks from the level file
     python calibrate.py price_of_speed --sweep    # table of time / energy over the weights
     python calibrate.py price_of_speed q_p=0.3 r=1   # one run with these knobs
-    python calibrate.py dead_end wp=24,42 wp=40,40   # one run with these waypoints (in order)
+    python calibrate.py dead_end fix=waypoints wp=35,40   # one run with a fix and waypoints
+    python calibrate.py dead_end fix=horizon N=100
 
 Checks: the default knobs fail with checks.default_outcome, the reference knobs
 pass with checks.reference.stars, and every knob range follows the team rule
@@ -24,7 +25,8 @@ def show(label: str, result: dict) -> None:
     m = result["metrics"]
     print(f"{label:<10} {result['outcome']:<18} {result['stars']} stars  t={m['time']:5.1f} s  "
           f"E={m['energy']:5.2f}  max|a|={m['max_accel']:.2f}  knobs={result['knobs']}"
-          + (f"  waypoints={result['waypoints']}" if result.get("waypoints") else ""))
+          + (f"  waypoints={result['waypoints']}" if result.get("waypoints") else "")
+          + (f"  fix={result['fix']}  mean solve {m['mean_solve_ms']:.2f} ms" if result.get("fix") else ""))
     for msg in result["messages"]:
         print(f"{'':<10} - {msg}")
 
@@ -37,6 +39,8 @@ def check_knob_ranges(level: dict) -> bool:
     ok = True
     for spec in level["knobs"]:
         name = spec["name"]
+        if "choices" in spec or spec.get("scale") == "int":  # e.g. horizon N: not a weight, rule n/a
+            continue
         allowed = max(KNOB_MAX_FLOOR, KNOB_MAX_FACTOR * ref.get(name, 0.0))
         if spec["max"] > allowed + 1e-12:
             print(f"FAIL: knob {name} max {spec['max']:g} > allowed {allowed:g} "
@@ -62,9 +66,10 @@ def main() -> int:
 
     if args.knobs:
         pairs = [kv.split("=", 1) for kv in args.knobs]
-        knobs = {k: float(v) for k, v in pairs if k != "wp"}
+        knobs = {k: float(v) for k, v in pairs if k not in ("wp", "fix")}
         wps = [[float(c) for c in v.split(",")] for k, v in pairs if k == "wp"]
-        show("run", runner.run_level(args.level_id, knobs, wps or None))
+        fix = next((v for k, v in pairs if k == "fix"), None)
+        show("run", runner.run_level(args.level_id, knobs, wps or None, fix))
         return 0
 
     if args.sweep:
@@ -94,10 +99,16 @@ def main() -> int:
         ok = False
     ref = checks.get("reference")
     if ref:
-        res = runner.run_level(args.level_id, ref["knobs"], ref.get("waypoints"))
+        res = runner.run_level(args.level_id, ref["knobs"], ref.get("waypoints"), ref.get("fix"))
         show("reference", res)
         if res["outcome"] != "success" or res["stars"] < ref.get("stars", 1):
             print(f"FAIL: reference should pass with {ref.get('stars', 1)} stars")
+            ok = False
+    for fix, chk in checks.get("fixes", {}).items():  # expected outcome per fix (Level 3)
+        res = runner.run_level(args.level_id, chk.get("knobs", {}), chk.get("waypoints"), fix)
+        show(fix, res)
+        if res["outcome"] != chk["outcome"]:
+            print(f"FAIL: fix {fix} should end with '{chk['outcome']}'")
             ok = False
     print("all checks passed" if ok else "checks FAILED")
     return 0 if ok else 1

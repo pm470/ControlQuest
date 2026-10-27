@@ -19,7 +19,18 @@ class KnobSpec:
     default: float
     min: float
     max: float
-    scale: str = "log"  # "log" or "linear"
+    scale: str = "log"  # "log", "linear" or "choice" (dropdown of `choices`)
+    choices: tuple[float, ...] = ()  # allowed values of a "choice" knob, e.g. horizon N
+    fix: str = ""  # Level 3: the fix this knob belongs to ("" = always shown)
+
+
+@dataclass(frozen=True)
+class FixSpec:
+    """One fix the player can pick in a level with fixes (Level 3)."""
+
+    id: str  # sent to the engine, e.g. "horizon"
+    label: str  # "Longer horizon"
+    idea: str = ""  # one line: what this fix does
 
 
 @dataclass(frozen=True)
@@ -98,7 +109,19 @@ class LevelData:
     @property
     def knobs(self) -> list[KnobSpec]:
         fields = KnobSpec.__dataclass_fields__
-        return [KnobSpec(**{k: v for k, v in spec.items() if k in fields}) for spec in self.raw["knobs"]]
+        out = []
+        for spec in self.raw["knobs"]:
+            spec = {k: v for k, v in spec.items() if k in fields}
+            if "choices" in spec:
+                spec["choices"] = tuple(spec["choices"])
+            out.append(KnobSpec(**spec))
+        return out
+
+    @property
+    def fixes(self) -> list[FixSpec]:
+        """The fixes the player picks from (empty for levels without fixes)."""
+        fields = FixSpec.__dataclass_fields__
+        return [FixSpec(**{k: v for k, v in f.items() if k in fields}) for f in self.raw.get("fixes", [])]
 
 
 def load_level_data(level_id: str) -> LevelData:

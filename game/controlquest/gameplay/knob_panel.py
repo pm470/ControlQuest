@@ -1,6 +1,8 @@
 """Knobs a level unlocks (slider + typed value), built from the level file (PRD 5.4).
 
 Weights use logarithmic sliders: only ratios matter, and useful values span decades.
+Whole-number knobs ("scale": "int", e.g. the horizon N) use a linear slider and only
+take integers; "scale": "choice" knobs use a dropdown of allowed values.
 """
 
 from __future__ import annotations
@@ -8,7 +10,8 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QSlider, QToolTip, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLineEdit, QSlider, QToolTip, QVBoxLayout,
+                               QWidget)
 
 from ..ui.widgets import label
 from .level_data import KnobSpec
@@ -54,6 +57,8 @@ class KnobRow(QWidget):
         if spec.scale == "log":
             self._lo = math.log10(spec.min)
             self.slider.setRange(0, round((math.log10(spec.max) - self._lo) * STEPS_PER_DECADE))
+        elif spec.scale == "int":
+            self.slider.setRange(int(spec.min), int(spec.max))
         else:
             self.slider.setRange(0, 1000)
         col.addWidget(self.slider)
@@ -67,16 +72,21 @@ class KnobRow(QWidget):
     def _to_value(self, pos: int) -> float:
         if self.spec.scale == "log":
             return 10 ** (self._lo + pos / STEPS_PER_DECADE)
+        if self.spec.scale == "int":
+            return float(pos)
         return self.spec.min + (self.spec.max - self.spec.min) * pos / 1000
 
     def _to_pos(self, value: float) -> int:
         value = self._clamp(value)
         if self.spec.scale == "log":
             return round((math.log10(value) - self._lo) * STEPS_PER_DECADE)
+        if self.spec.scale == "int":
+            return round(value)
         return round(1000 * (value - self.spec.min) / (self.spec.max - self.spec.min))
 
     def _clamp(self, value: float) -> float:
-        return min(max(value, self.spec.min), self.spec.max)
+        value = min(max(value, self.spec.min), self.spec.max)
+        return float(round(value)) if self.spec.scale == "int" else value
 
     # --- public -------------------------------------------------------------------------
     def value(self) -> float:
@@ -98,7 +108,8 @@ class KnobRow(QWidget):
         v = self._to_value(pos)
         # round numbers from the slider (2 significant digits, e.g. 3.0, 0.098, 12);
         # exactly the default when the slider sits on it. Typed values keep full precision.
-        v = self.spec.default if pos == self._to_pos(self.spec.default) else float(f"{v:.2g}")
+        if self.spec.scale != "int":
+            v = self.spec.default if pos == self._to_pos(self.spec.default) else float(f"{v:.2g}")
         v = self._clamp(v)
         self._value = v
         self.edit.setText(format_value(v))
@@ -122,6 +133,38 @@ class KnobRow(QWidget):
         self.set_value(typed)
 
 
+class ChoiceRow(QWidget):
+    """A discrete knob: name and a dropdown of the allowed values (PRD 5.4)."""
+
+    changed = Signal()
+
+    def __init__(self, spec: KnobSpec, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.spec = spec
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        name = label(f"<b>{spec.symbol}</b>&nbsp;&nbsp;{spec.label}", "body")
+        name.setTextFormat(Qt.TextFormat.RichText)
+        name.setToolTip(spec.help)
+        self.combo = QComboBox()
+        self.combo.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.combo.setToolTip(spec.help)
+        for c in spec.choices:
+            self.combo.addItem(format_value(c), c)
+        row.addWidget(name, 1)
+        row.addWidget(self.combo)
+        self.combo.currentIndexChanged.connect(lambda _i: self.changed.emit())
+        self.set_value(spec.default)
+
+    def value(self) -> float:
+        return float(self.combo.currentData())
+
+    def set_value(self, value: float) -> None:
+        """Select the allowed value nearest to `value`; emits changed if it changed."""
+        i = min(range(len(self.spec.choices)), key=lambda k: abs(self.spec.choices[k] - value))
+        self.combo.setCurrentIndex(i)
+
+
 class KnobPanel(QWidget):
     """All knob rows of a level. Emits changed() when any value changes."""
 
@@ -132,7 +175,7 @@ class KnobPanel(QWidget):
         col = QVBoxLayout(self)
         col.setContentsMargins(0, 0, 0, 0)
         col.setSpacing(14)
-        self.rows = [KnobRow(spec) for spec in specs]
+        self.rows = [ChoiceRow(spec) if spec.scale == "choice" else KnobRow(spec) for spec in specs]
         for row in self.rows:
             row.changed.connect(self.changed)
             col.addWidget(row)
@@ -148,3 +191,8 @@ class KnobPanel(QWidget):
     def reset(self) -> None:
         for row in self.rows:
             row.set_value(row.spec.default)
+
+    def set_visible_knobs(self, names) -> None:
+        """Show only these knobs (e.g. the knobs of the chosen fix); values are kept."""
+        for row in self.rows:
+            row.setVisible(row.spec.name in names)

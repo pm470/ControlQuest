@@ -6,7 +6,8 @@ translates HTTP <-> Python; the work happens in runner.py (levels) and mpc/ (aca
 Endpoints (keep in sync with game/controlquest/engine/protocol.py):
     GET  /health  -> {"status": "ok", "version": ..., "protocol": 1, "acados": bool,
                       "levels": [playable level ids]}
-    POST /run     {"level_id": ..., "knobs": {...}, "waypoints": [[x, y], ...] (optional)}
+    POST /run     {"level_id": ..., "knobs": {...}, "waypoints": [[x, y], ...] (optional),
+                   "fix": "none" | "horizon" | "waypoints" (optional, Level 3)}
                   -> RunResult JSON
 
 Run (inside the container):  python server.py --host 0.0.0.0 --port 8000
@@ -20,7 +21,7 @@ import json
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.0"  # bump whenever the messages change (game: protocol.ENGINE_VERSION)
+VERSION = "0.6.0"  # bump whenever the messages change (game: protocol.ENGINE_VERSION)
 PROTOCOL_VERSION = 1
 MAX_BODY_BYTES = 1_000_000
 
@@ -68,7 +69,8 @@ class EngineHandler(BaseHTTPRequestHandler):
             return
         level_id = request.get("level_id")
         try:
-            result = runner.run_level(level_id, request.get("knobs", {}), request.get("waypoints"))
+            result = runner.run_level(level_id, request.get("knobs", {}), request.get("waypoints"),
+                                      request.get("fix"))
         except ValueError as exc:  # bad request (unknown level/knob, ...)
             self._send_json(400, {"error": str(exc)})
             return
@@ -78,6 +80,7 @@ class EngineHandler(BaseHTTPRequestHandler):
             return
         m = result["metrics"]
         wps = f" waypoints={result['waypoints']}" if result.get("waypoints") else ""
+        wps += f" fix={result['fix']}" if result.get("fix") else ""
         print(f"[engine] run {level_id} {result['knobs']}{wps} -> {result['outcome']} "
               f"({result['stars']} stars, t={m['time']:.1f} s, E={m['energy']:.2f}) "
               f"computed in {result['compute_time_s']:.2f} s", flush=True)

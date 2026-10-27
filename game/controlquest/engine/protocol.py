@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 PROTOCOL_VERSION = 1
-ENGINE_VERSION = "0.4.0"  # the engine_server version this game expects (engine_server/server.py)
+ENGINE_VERSION = "0.6.0"  # the engine_server version this game expects (engine_server/server.py)
 
 # outcome name -> (label for the player, ui.theme colour name)
 OUTCOMES = {
@@ -60,12 +60,15 @@ class RunRequest:
     level_id: str
     knobs: dict[str, Any]  # knob name -> value, e.g. {"q_p": 10, "q_v": 1, "r": 0.1}
     waypoints: list[tuple[float, float]] = field(default_factory=list)
+    fix: str | None = None  # the chosen fix (Level 3: "none" | "horizon" | "waypoints")
     protocol: int = PROTOCOL_VERSION
 
     def to_json(self) -> dict[str, Any]:
         data = asdict(self)
         if not data["waypoints"]:  # levels without waypoints don't expect the key
             data.pop("waypoints")
+        if data["fix"] is None:  # levels without fixes don't expect the key
+            data.pop("fix")
         data.pop("protocol")
         return data
 
@@ -139,6 +142,7 @@ class RunResult:
     knobs: dict[str, float]  # the values actually used (clamped to their range)
     trajectory: Trajectory
     waypoints: list[list[float]] = field(default_factory=list)  # the waypoints used (Level 3)
+    fix: str | None = None  # the fix used (Level 3)
 
     @property
     def success(self) -> bool:
@@ -155,4 +159,5 @@ class RunResult:
             knobs=dict(payload.get("knobs", {})),
             trajectory=Trajectory.from_json(payload["trajectory"]),
             waypoints=list(payload.get("waypoints", [])),
+            fix=payload.get("fix"),
         )

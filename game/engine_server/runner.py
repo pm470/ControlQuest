@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from level_rules import dead_end, price_of_speed
-from level_rules.common import load_level
+from level_rules.common import horizons, load_level
 from mpc.controller import SolverCache
 
 BUILD_DIR = Path(__file__).resolve().parent / "build"  # generated C code (gitignored)
@@ -26,7 +26,7 @@ cache = SolverCache(BUILD_DIR)
 _run_lock = threading.Lock()  # acados solvers are not thread-safe: one run at a time
 
 
-def run_level(level_id: str, knobs: dict, waypoints=None) -> dict:
+def run_level(level_id: str, knobs: dict, waypoints=None, fix=None) -> dict:
     if level_id not in RULES:
         raise ValueError(f"level '{level_id}' is not playable yet")
     if not isinstance(knobs, dict):
@@ -39,6 +39,10 @@ def run_level(level_id: str, knobs: dict, waypoints=None) -> dict:
         extra["waypoints"] = waypoints or []
     elif waypoints:
         raise ValueError(f"level '{level_id}' does not take waypoints")
+    if "fixes" in level:  # levels where the player picks one fix (Level 3)
+        extra["fix"] = fix or "none"
+    elif fix:
+        raise ValueError(f"level '{level_id}' does not take a fix")
     with _run_lock:
         t0 = time.time()
         result = RULES[level_id].run(level, knobs, cache, **extra)
@@ -48,7 +52,9 @@ def run_level(level_id: str, knobs: dict, waypoints=None) -> dict:
 
 
 def warm_up() -> None:
-    """Compile the solvers of all playable levels now, so the first Run is fast."""
+    """Compile the solvers of all playable levels now (every horizon N they can use),
+    so no Run has to wait for a compilation (PRD 9.3)."""
     for level_id in RULES:
         level = load_level(level_id)
-        cache.get(level["N"], level["dt"])
+        for N in horizons(level):
+            cache.get(N, level["dt"])

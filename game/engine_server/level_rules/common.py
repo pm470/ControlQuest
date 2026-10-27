@@ -25,7 +25,9 @@ def load_level(level_id: str) -> dict:
 
 
 def clean_knobs(level: dict, knobs: dict) -> dict:
-    """Knob values from the request, clamped to their range; missing ones use defaults."""
+    """Knob values from the request, clamped to their range; missing ones use defaults.
+    Knobs with "choices" snap to the nearest allowed value; "scale": "int" knobs
+    (e.g. horizon N) are rounded to a whole number."""
     out = {}
     for spec in level["knobs"]:
         value = knobs.get(spec["name"], spec["default"])
@@ -35,7 +37,12 @@ def clean_knobs(level: dict, knobs: dict) -> dict:
             raise ValueError(f"knob {spec['name']} must be a number, got {value!r}") from None
         if not np.isfinite(value):
             raise ValueError(f"knob {spec['name']} must be finite")
-        out[spec["name"]] = min(max(value, spec["min"]), spec["max"])
+        if "choices" in spec:
+            out[spec["name"]] = min(spec["choices"], key=lambda c: abs(c - value))
+        elif spec.get("scale") == "int":
+            out[spec["name"]] = int(min(max(round(value), spec["min"]), spec["max"]))
+        else:
+            out[spec["name"]] = min(max(value, spec["min"]), spec["max"])
     unknown = set(knobs) - set(out)
     if unknown:
         raise ValueError(f"unknown knob(s) for this level: {sorted(unknown)}")
@@ -52,9 +59,10 @@ def weights(level: dict, knobs: dict):
 
 
 def configured_controller(cache: SolverCache, level: dict, knobs: dict,
-                          model_gain: float = 1.0) -> MPCController:
-    """Get the (cached) solver for this level's shape and load this run's numbers into it."""
-    mpc = cache.get(level["N"], level["dt"])
+                          model_gain: float = 1.0, N: int | None = None) -> MPCController:
+    """Get the (cached) solver for this level's shape and load this run's numbers into it.
+    N overrides the level's horizon (a knob in some levels)."""
+    mpc = cache.get(int(N or level["N"]), level["dt"])
     a, v = level["limits"]["a_max"], level["limits"]["v_max"]
     p_min, p_max = level["workspace"]["min"], level["workspace"]["max"]
     mpc.set_weights(*weights(level, knobs))
@@ -65,6 +73,15 @@ def configured_controller(cache: SolverCache, level: dict, knobs: dict,
     mpc.set_damping(level.get("solver", {}).get("levenberg_marquardt", 1e-2) if ellipses else 0.0)
     mpc.set_target([*level["target"], 0.0, 0.0])
     return mpc
+
+
+def horizons(level: dict) -> list[int]:
+    """Every horizon N a level can use (its N plus the choices of an "N" knob)."""
+    ns = {int(level["N"])}
+    for spec in level.get("knobs", []):
+        if spec["name"] == "N":
+            ns.update(int(c) for c in spec.get("choices", []))
+    return sorted(ns)
 
 
 def level_blocks(level: dict) -> list:

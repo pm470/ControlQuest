@@ -185,6 +185,10 @@ class SolverCache:
         self._solvers: dict[tuple, MPCController] = {}
         self._lock = threading.Lock()
 
+    def has(self, N: int, dt: float) -> bool:
+        """True if the solver for this shape is already compiled (get() is then instant)."""
+        return (int(N), float(dt)) in self._solvers
+
     def get(self, N: int, dt: float) -> MPCController:
         key = (int(N), float(dt))
         with self._lock:

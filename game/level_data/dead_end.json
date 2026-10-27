@@ -26,10 +26,23 @@
   "waypoints": {"max": 3, "switch_radius": 2.0},
 
   "locked": {"q_p": 1.0, "q_v": 1.0, "r": 0.1, "margin": 0.2},
-  "knobs": [],
+
+  "fixes": [
+    {"id": "none", "label": "No fix", "idea": "The default MPC: N = 30 (3 s ahead), aiming straight at the star."},
+    {"id": "horizon", "label": "Longer horizon", "idea": "Let the MPC look further ahead: choose the horizon N."},
+    {"id": "waypoints", "label": "Waypoints", "idea": "Give it a rough route: click up to 3 waypoints on the map."}
+  ],
+  "knobs": [
+    {"name": "N", "label": "Horizon", "symbol": "N", "fix": "horizon",
+     "help": "Steps the MPC plans ahead (Δt = 0.1 s each). Type any whole number from 5 to 300; a new N builds its solver once (a few seconds), then it is cached.",
+     "default": 30, "min": 5, "max": 300, "scale": "int"}
+  ],
 
   "checks": {
     "default_outcome": "time_out",
-    "reference": {"knobs": {}, "waypoints": [[35.0, 40.0]], "stars": 3}
+    "reference": {"fix": "waypoints", "knobs": {}, "waypoints": [[35.0, 40.0]], "stars": 3},
+    "fixes": {
+      "horizon": {"knobs": {"N": 150}, "outcome": "time_out"}
+    }
   }
 }

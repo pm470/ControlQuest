@@ -141,6 +141,12 @@ def stylesheet() -> str:
         background: {SURFACE}; border: 2px solid {LINE}; border-radius: 15px;
     }}
     QFrame[role="divider"] {{ background: {LINE}; max-height: 2px; min-height: 2px; border: none; }}
+    QFrame[role="choice"] {{
+        background: {SURFACE}; border: 2px solid {LINE}; border-radius: 14px;
+    }}
+    QFrame[role="choice"]:hover {{ border-color: {PRIMARY_HOVER}; }}
+    QFrame[role="choice"][selected="true"] {{ background: {SURFACE_ALT}; border-color: {PRIMARY}; }}
+    QFrame[role="choice"] QLabel {{ background: transparent; }}
 
     /* inputs */
     QLineEdit {{

@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QGridLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QVBoxLayout, QWidget
 
 from ..ui.math_render import MathLabel
 from ..ui.widgets import Card, label
@@ -32,8 +32,23 @@ class OcpCard(Card):
                  parent: QWidget | None = None):
         super().__init__(parent, padding=18, spacing=8, shadow=False)
         self.body.addWidget(label(title, "subheading"))
+        self._content = QWidget()
+        self.body.addWidget(self._content)
+        self.set_spec(spec)
+
+    def set_spec(self, spec: OcpSpec) -> None:
+        """Show another OCP (e.g. after the player picked a different fix)."""
+        old = self._content
+        self._content = QWidget()
+        box = QVBoxLayout(self._content)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(8)
+        self.body.replaceWidget(old, self._content)
+        old.hide()  # hide and detach now: deleteLater only runs in the event loop
+        old.setParent(None)
+        old.deleteLater()
         if spec.notes:
-            self.body.addWidget(label(spec.notes, "caption", wrap=True))
+            box.addWidget(label(spec.notes, "caption", wrap=True))
 
         grid = QGridLayout()
         grid.setContentsMargins(0, 6, 0, 2)
@@ -50,7 +65,10 @@ class OcpCard(Card):
             grid.addWidget(MathLabel(tex, size_px=15), row, 1)
             row += 1
         grid.setColumnStretch(1, 1)
-        self.body.addLayout(grid)
+        box.addLayout(grid)
 
         for text in spec.legend:
-            self.body.addWidget(label(text, "caption", wrap=True))
+            box.addWidget(label(text, "caption", wrap=True))
+        self._content.adjustSize()  # re-layout now (formula sizes changed), not on the next resize
+        self.body.activate()
+        self.updateGeometry()

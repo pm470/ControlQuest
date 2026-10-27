@@ -284,25 +284,27 @@ Dropdown values for N are **precompiled solvers** (see §9.3), so switching N is
 ### Level 3: "Dead End" (nonconvexity and local optima)
 
 **Concept:** with obstacles the OCP is nonconvex. The MPC is a *local* planner with
-a short horizon, so it can get trapped in a local optimum. A higher-level plan
-(waypoints) fixes it; this is how MPC is used in practice.
+a short horizon, so it can get trapped in a local optimum. More foresight (a longer
+horizon) does not get it out; a higher-level plan (waypoints) does; this is how MPC is
+used in practice.
 
-**Briefing:** *"The direct route looks open… it isn't. Help the controller with up
-to 3 waypoints."*
+**Briefing:** *"The direct route looks open… it isn't. Two ideas to get the controller
+out: let it look further ahead, or give it a route. Find out which one works."*
 
 | Item | Value |
 |---|---|
 | Map | U-shaped trap that opens towards the start: back wall x ∈ [30, 33], y ∈ [15, 35]; arms y ∈ [32, 35] and y ∈ [15, 18], x ∈ [20, 33]. Start (5, 25), target (45, 25). Calibrated: **each wall is split into 2 blocks (6 blocks)**; with 3 long blocks the overlapping ellipses formed notches where even good routes got stuck |
 | Limits | a_max = 2, v_max = 2 |
 | Time limit | 45 s (calibrated) |
-| Unlocked knobs | place up to **3 waypoints** by clicking on the map (drag to move, right-click to delete) |
-| Locked | q_p = 1, q_v = 1, r = 0.1, P = 10·Q, N = 30, margin 0.2 m |
-| Default | no waypoints |
+| Mechanic (2026-10-26) | the player **picks one fix** and tunes only its control; "Your experiments" keeps the best run per fix (outcome, time, ms per solve, stars). Fixes: **no fix** (default); **① longer horizon**: N ∈ {30, 60, 100, 150} (dropdown, all solvers precompiled); **② waypoints**: up to **3 waypoints** by clicking on the map (drag to move, right-click to delete); **③ better terminal cost / cost-to-go**: planned, on hold (AGENTS.md section 6) |
+| Locked | q_p = 1, q_v = 1, r = 0.1, P = 10·Q, margin 0.2 m; N = 30 except with fix ① |
+| Default | no fix (N = 30, no waypoints) |
 | Why the default fails | the ball drives into the U and stops 0.2 m before the back wall: the cost gradient points straight into the obstacle, the 3 s horizon sees no way around → **time out** (calibrated) |
-| Intended fix | 1 waypoint above/right of the U (x ≥ 30, y ≥ 36), then the target; waypoints left of x ≈ 25 lead back into the top of the U (time out again) |
+| Fix ① result (calibrated) | **never escapes**: N = 30/60/100/150 all time out at (29.8, 25); mean solve time 0.86 → 2.5 ms. SQP warm-started from the previous plan stays on the same side of the wall |
+| Intended fix | ② 1 waypoint above/right of the U (x ≥ 30, y ≥ 36), then the target; waypoints left of x ≈ 25 lead back into the top of the U (time out again) |
 | Waypoint rule | the MPC reference is the next waypoint (position only, velocity reference = 0). Within the *switch radius* of 2 m, the reference jumps to the next waypoint, so the ball doesn't brake at each waypoint. Waypoints inside an ellipse are rejected when placed (game and engine). |
 | ★★ time par | ≤ 28 s (calibrated: single good waypoints take 23.6–34 s) |
-| ★★★ secondary par | ≤ 1 waypoint. Reference: one waypoint at (35, 40) → 25.2 s. Check with `engine_server/calibrate.py dead_end` |
+| ★★★ secondary par | ≤ 1 waypoint (so only fix ② reaches ★★★). Reference: fix ②, one waypoint at (35, 40) → 25.2 s. Check with `engine_server/calibrate.py dead_end` (also checks that fix ① with N = 150 times out) |
 | Extra plot | distance to the current reference (shows switching) |
 | Teaching note | on time out near an obstacle: "The ball stopped 0.2 m from the block at (32, 20) with the target behind it: a local optimum. The horizon (3 s) cannot see around the obstacle…" |
 | Solver note | obstacle constraints are **soft** (exact L1 penalty) since 2026-10-26: hard ellipse constraints made the QP solver fail whenever braking at a_max to stop at an ellipse. Crashes are still checked against the real blocks. |
@@ -588,3 +590,6 @@ live plan display or the "What happened" messages: they are the point of the gam
    warning only (§4.4).
 4. Level 3 mechanic: click-to-place waypoints or the toggle fallback?
 5. Is the terminal weight P a knob anywhere? Current answer: no, fixed at 10·Q.
+6. (2026-10-26, on hold) Level 3 with **three fixes to compare** (longer horizon,
+   waypoints, better terminal cost / cost-to-go). Spike results and the open
+   decision on fix ③ are in AGENTS.md section 6 (TODO).

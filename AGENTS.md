@@ -130,11 +130,38 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
 - Done (2026-10-26, branch `level3to4`): **obstacles in the engine** (up to 6 blocks per
   level, soft ellipse constraints, block crash check) and **Level 3 "Dead End"**
   playable: click-to-place waypoints, blocks + ellipses + waypoints on the map
-  (`calibrate.py dead_end`).
+  (`calibrate.py dead_end`). Since 2026-10-26 the player **picks a fix** (no fix /
+  ① longer horizon N ∈ {30, 60, 100, 150} / ② waypoints) and compares them in
+  "Your experiments"; fix ③ is still a TODO (below). Engine v0.5.0.
 - Not yet: levels 2, 4, 5 (show "coming soon"), speed/acceleration plots (PRD 5.6),
   saving progress to disk (progress resets on restart, intentionally for now).
 - Next planned work: the MPC side of levels 2, 4, 5 (horizon N per level, terminal
   constraint, model gain, wind, re-plan interval); obstacles are already in place.
+
+**TODO (on hold since 2026-10-26): fix ③ of Level 3 (a better terminal cost / cost-to-go).**
+The pick-a-fix mechanic is built with fixes ① and ② (fix selector, N dropdown, comparison
+table); ③ is missing. Adding it: one entry in `level_data/dead_end.json` "fixes", a branch
+in `level_rules/dead_end.py`, its controls in `levels/level_3_dead_end.py` (`_on_fix`).
+Plan: `~/.claude/plans/now-i-had-imagined-wondrous-spring.md` (on pm470's machine).
+Feasibility spike results (engine only, default map):
+- ① **Longer horizon N**: never escapes. N = 30/60/100/150 all time out at (29.8, 25);
+  mean solve time 0.95 → 2.67 ms (max 84 ms), run 1.0 → 2.9 s. Lesson: foresight
+  doesn't fix a local optimum; SQP with a warm start stays in its homotopy class.
+  Built as fix ① (it is the "doesn't work" lesson).
+- ② **Waypoints**: built as fix ②, 23.6–34 s with one good waypoint.
+- ③ **Better terminal cost**, as first planned (smooth RBF fit of the cost-to-go as a
+  NONLINEAR_LS terminal cost, runtime weights): **not viable**. 1 of ~40 settings
+  escaped (q_p = 1, no straight-line terminal pull, w_V = 1: 23.4 s), but 20–200 ms
+  per solve, QP failures, 5–90 s runs. Every smooth fit (11×11/σ4, 16×16/σ3,
+  21×21/σ2.5, also with "ridge" data inside the walls) has a false minimum at the trap:
+  the true cost-to-go jumps ~30 m across the 3 m wall (the RL-critic problem).
+- ③ **Alternative that works** (tested, not built): exact cost-to-go D(p) by Dijkstra
+  around the ellipses (0.03 s), MPC reference = point L metres ahead on the descent
+  path of D (no solver change). L = 1 m: time out (creeps); **L = 2–8 m: success,
+  23.3 s, 1.5 ms/solve**; L ≥ 12 m: time out (reference past the corner, trapped
+  at (30, 14)). Open decision: build ③ this way, or keep the terminal-cost version.
+- Code already in the repo for it: `engine_server/mpc/value_function.py` (Dijkstra
+  grid cost-to-go + RBF fit; **not used yet**).
 
 ## 7. Rules for agents working in this repo
 
@@ -180,6 +207,13 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
 - (2026-10-25) Level 3 is built now, before the must-have Levels 2, 4, 5 (its obstacle
   support is reused by Levels 4 and 5). Waypoints are **placed by clicking on the map**
   (drag to move, right-click to delete), not the PRD's toggle fallback.
+- (2026-10-26) Level 3 presents the trap with **fixes the player picks one at a time
+  and compares** in a table ("Your experiments"); stars + the comparison show "which
+  works better". Built now: ① longer horizon, ② waypoints. ③ (better terminal cost /
+  cost-to-go) is **on hold** (TODO in section 6); it must use runtime parameters only
+  (one OCP recipe, see below). ★★★ stays "≤ 1 waypoint" (only fix ② can succeed).
+- (2026-10-26) The knob-range rule (max ≤ max(50, 3 × reference)) is for weights only;
+  discrete knobs with `"choices"` (e.g. horizon N) are exempt (`calibrate.py`).
 
 **MPC**
 - (2026-10-19) Obstacles: a block is given by 4 corners; the solver avoids the
@@ -320,9 +354,12 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
      solve: plan cost J*, solve time, SQP iterations, status; whole run: solves, solve
      time avg/max, total solve time, iterations, total cost, engine time);
    - right: **Goal** (one paragraph), **Tune the weights** (one row per knob: symbol +
-     name, a typeable value field, a log slider; Reset + Run ▶; a status line; Level 3:
-     **Place waypoints** instead: instructions, "n / 3 waypoints", Clear, the list of
-     waypoints), and
+     name, a typeable value field, a log slider; discrete knobs as a dropdown; Reset +
+     Run ▶; a status line; Level 3: **Choose a fix** instead: selectable cards "No fix",
+     "1. Longer horizon" (N dropdown + "N steps = … s ahead" note), "2. Waypoints"
+     (map editing only then; instructions, "n / 3 waypoints", Clear, the list of
+     waypoints), then **Your experiments** (best run per fix: result with colour dot,
+     ms per solve, stars; this visit only); the OCP card follows the chosen fix; and
      **Stuck?** with hints revealed one at a time (3 per level, the last almost the
      answer).
    - At the end of a replay a **result card** appears over the map: outcome title with
