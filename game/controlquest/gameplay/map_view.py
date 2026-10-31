@@ -5,6 +5,9 @@ solver sees (dashed), waypoints, the ball, its trail, the current MPC plan
 
     view.set_level(data)            # world size, start, target, blocks
     view.set_waypoints(points)      # [(x, y), ...] in metres (Level 3)
+    view.set_margin(m)              # obstacle margin knob (Level 4): redraws the ellipses
+    view.show_ghost = True          # Level 4: where the plan from M samples ago expected the ball
+    view.show_wind = True           # Level 5: wind arrow (from the trajectory's disturbance)
     view.set_trajectory(traj)       # a RunResult.trajectory (or None to clear)
     view.set_time(t)                # replay position in seconds (interpolated)
     view.to_world(pos), view.to_screen(x, y)   # pixel <-> metre (e.g. for mouse editing)
@@ -39,12 +42,20 @@ class MapView(QWidget):
         self._waypoints: list[tuple[float, float]] = []
         self.show_plan = True
         self.show_ellipses = True
+        self.show_ghost = False
+        self.show_wind = False
 
     # --- data -------------------------------------------------------------------------
     def set_level(self, data: LevelData) -> None:
         self._data = data
         self._ellipses = level_ellipses(data.blocks, data.margin)
         self.update()
+
+    def set_margin(self, margin: float) -> None:
+        """Recompute the solver's ellipses for another obstacle margin (a knob in Level 4)."""
+        if self._data is not None:
+            self._ellipses = level_ellipses(self._data.blocks, margin)
+            self.update()
 
     @property
     def ellipses(self) -> list[Ellipse]:
@@ -174,12 +185,37 @@ class MapView(QWidget):
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawPath(trail)
 
-        # current plan (receding horizon): the plan computed at the current sample
+        # current plan (receding horizon): the plan being executed. Normally it was computed at
+        # this sample; with a re-plan interval > 1 it was computed earlier, and the ball runs
+        # open-loop along it until the next solve: that open-loop part is drawn solid (PRD 5.3).
         if self.show_plan and tr.plans:
-            plan = tr.plans[min(k, len(tr.plans) - 1)]
-            at_end = k >= len(tr.x) - 1 and len(tr.plans) < len(tr.x)
-            if not at_end:
-                painting.draw_plan(p, [to_px(q[0], q[1]) for q in plan], width=max(2.0, r_px * 0.22))
+            steps = tr.steps
+            s = tr.solve_at(self._t)
+            plan, m = tr.plans[s], k - steps[s]
+            nxt = steps[s + 1] if s + 1 < len(steps) else len(tr.x) - 1
+            at_end = k >= len(tr.x) - 1 and steps[s] != k
+            width = max(2.0, r_px * 0.22)
+            if not at_end and 0 <= m < len(plan):
+                painting.draw_plan(p, [to_px(q[0], q[1]) for q in plan[m:]], width=width)
+                if nxt - steps[s] > 1:  # open-loop stretch until the next re-plan
+                    seg = [to_px(q[0], q[1]) for q in plan[m:min(nxt - steps[s], len(plan) - 1) + 1]]
+                    if len(seg) > 1:
+                        p.setPen(QPen(QColor(theme.PRIMARY), width * 1.4, Qt.PenStyle.SolidLine,
+                                      Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+                        p.setBrush(Qt.BrushStyle.NoBrush)
+                        path = QPainterPath(seg[0])
+                        for q in seg[1:]:
+                            path.lineTo(q)
+                        p.drawPath(path)
+
+        # ghost ball: where the plan computed M samples ago expected the ball now (Level 4)
+        M = tr.prediction_lookahead
+        if self.show_ghost and M and not tr.solve_steps and M <= k and k - M < len(tr.plans) and M < len(tr.plans[k - M]):
+            q = tr.plans[k - M][M]
+            ghost = to_px(q[0], q[1])
+            p.setPen(QPen(theme.qcolor(theme.BALL_DARK, 170), 2, Qt.PenStyle.DashLine))
+            p.setBrush(theme.qcolor(theme.BALL, 45))
+            p.drawEllipse(ghost, r_px, r_px)
 
         # applied acceleration (arrow length ~ |a|)
         if k < len(tr.u):
@@ -209,6 +245,28 @@ class MapView(QWidget):
             d = r_px * 0.6
             p.drawLine(c + QPointF(-d, -d), c + QPointF(d, d))
             p.drawLine(c + QPointF(-d, d), c + QPointF(d, -d))
+
+        # wind arrow (top right), length ~ wind strength
+        if self.show_wind and tr.disturbance:
+            wx, wy = tr.disturbance[min(k, len(tr.disturbance) - 1)]
+            mag = math.hypot(wx, wy)
+            c = QPointF(field.right() - 44, field.top() + 44)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(theme.qcolor(theme.SURFACE_ALT, 230))
+            p.drawEllipse(c, 34, 34)
+            if mag > 1e-3:
+                d = QPointF(wx / mag, -wy / mag)
+                L = 8 + 22 * min(1.0, mag / 1.0)
+                a0, a1 = c - d * (L / 2), c + d * (L / 2)
+                p.setPen(QPen(QColor(theme.BALL_DARK), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+                p.drawLine(a0, a1)
+                n = QPointF(-d.y(), d.x())
+                p.drawLine(a1, a1 - d * 7 + n * 5)
+                p.drawLine(a1, a1 - d * 7 - n * 5)
+            p.setPen(QColor(theme.INK_SOFT))
+            p.setFont(theme.font(10, QFont.Weight.Bold))
+            p.drawText(QRectF(c.x() - 34, c.y() + 18, 68, 14), Qt.AlignmentFlag.AlignHCenter,
+                       f"wind {mag:.1f}")
 
         # HUD
         p.setPen(QColor(theme.INK_SOFT))

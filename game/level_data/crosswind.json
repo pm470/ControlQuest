@@ -1,0 +1,41 @@
+{
+  "id": "crosswind",
+  "comment": "Level 5. Read by BOTH the game (controlquest/gameplay/level_data.py) and the engine (engine_server/level_rules/common.py). Calibrated with engine_server/calibrate.py.",
+
+  "dt": 0.1,
+  "N": 30,
+  "terminal_factor": 10.0,
+
+  "workspace": {"min": [0.0, 0.0], "max": [50.0, 50.0]},
+  "start": [5.0, 25.0],
+  "target": [45.0, 25.0],
+  "limits": {"a_max": 2.0, "v_max": 2.0},
+  "tolerance": {"position": 0.05, "speed": 0.05},
+
+  "blocks": [
+    {"corners": [[22.0, 11.0], [28.0, 11.0], [28.0, 17.0], [22.0, 17.0]]},
+    {"corners": [[22.0, 23.0], [28.0, 23.0], [28.0, 29.0], [22.0, 29.0]]}
+  ],
+
+  "wind": {"constant": [0.0, 0.3], "gust_amplitude": [0.0, 0.6], "gust_period": 1.0, "seed": 7},
+
+  "t_limit": 35.0,
+  "budget": {"solves": 60},
+  "pars": {"time": 30.0, "solves": 35},
+
+  "locked": {"q_p": 2.0, "q_v": 0.5, "r": 0.05},
+  "solver": {"ellipse_entry_fails": false},
+  "knobs": [
+    {"name": "k", "label": "Re-plan interval", "symbol": "k",
+     "help": "Solve the OCP only every k samples (k·Δt seconds); in between, apply the next inputs of the last plan open-loop. Every solve costs one unit of the compute budget.",
+     "default": 1, "min": 1, "max": 20, "choices": [1, 2, 3, 5, 10, 20], "scale": "choice"},
+    {"name": "margin", "label": "Obstacle margin", "symbol": "m",
+     "help": "Added to every semi-axis of the obstacle ellipses [m]: room for the wind to push the ball off its plan.",
+     "default": 0.1, "min": 0.0, "max": 3.0, "scale": "linear"}
+  ],
+
+  "checks": {
+    "default_outcome": "solve_budget",
+    "reference": {"knobs": {"k": 10, "margin": 0.3}, "stars": 3}
+  }
+}

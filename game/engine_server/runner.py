@@ -10,7 +10,7 @@ import threading
 import time
 from pathlib import Path
 
-from level_rules import dead_end, price_of_speed
+from level_rules import crosswind, dead_end, heavy_ball, price_of_speed
 from level_rules.common import horizons, load_level
 from mpc.controller import SolverCache
 
@@ -20,6 +20,8 @@ BUILD_DIR = Path(__file__).resolve().parent / "build"  # generated C code (gitig
 RULES = {
     "price_of_speed": price_of_speed,
     "dead_end": dead_end,
+    "heavy_ball": heavy_ball,
+    "crosswind": crosswind,
 }
 
 cache = SolverCache(BUILD_DIR)
@@ -49,6 +51,16 @@ def run_level(level_id: str, knobs: dict, waypoints=None, fix=None) -> dict:
         result["compute_time_s"] = round(time.time() - t0, 3)
         result["metrics"]["compute_time_s"] = result["compute_time_s"]
     return result
+
+
+def test_drive(level_id: str, knobs: dict) -> dict:
+    """The level's test drive (Level 4): predicted vs measured distance, no MPC involved."""
+    rules = RULES.get(level_id)
+    if rules is None or not hasattr(rules, "test_drive"):
+        raise ValueError(f"level '{level_id}' has no test drive")
+    if not isinstance(knobs, dict):
+        raise ValueError("knobs must be an object {name: value}")
+    return rules.test_drive(load_level(level_id), knobs)
 
 
 def warm_up() -> None:

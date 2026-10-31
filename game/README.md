@@ -3,10 +3,10 @@
 A PySide6 desktop app (runs on your computer) plus a small **MPC engine** server
 (runs acados inside Docker). The design is in [`docs/PRD.md`](../docs/PRD.md).
 
-**Status:** menus done; **Level 1 ("The Price of Speed")** and **Level 3 ("Dead End")**
-are playable end to end (tune weights / place waypoints → Run → MPC computes the run
-in Docker → replay with the live plan → result card, stars, unlock). Levels 2, 4, 5
-show a "coming soon" card.
+**Status:** menus done; **Levels 1, 3, 4 and 5** ("The Price of Speed", "Dead End",
+"Heavy Ball", "Crosswind") are playable end to end (tune knobs / pick a fix / place
+waypoints → Run → MPC computes the run in Docker → replay with the live plan → result
+card, stars, unlock). Level 2 shows a "coming soon" card.
 
 ## Run it
 
@@ -50,7 +50,9 @@ game can stay open.
 game/
 ├── level_data/                  ONE JSON PER LEVEL, read by BOTH game and engine
 │   ├── price_of_speed.json          start, target, limits, time limit, battery, pars, knobs, checks
-│   └── dead_end.json                + blocks (4 corners each), locked weights/margin, waypoint rules
+│   ├── dead_end.json                + blocks (4 corners each), locked weights/margin, waypoint rules
+│   ├── heavy_ball.json              + plant (hidden real gain g_true), test drive, margin/g knobs
+│   └── crosswind.json               + wind (constant + seeded gusts), solve budget, k/margin knobs
 │
 ├── controlquest/                THE GAME WINDOW (host, no acados)
 │   ├── app.py, main_window.py       start-up, screen switching (Esc = back)
@@ -60,7 +62,9 @@ game/
 │   ├── screens/                     title, level select, how to play, settings, level screen
 │   ├── levels/                      one file per level: LevelInfo (+ play_screen when playable)
 │   │   ├── level_1_price_of_speed.py    Level 1's goal text, battery bar, result rows
-│   │   └── level_3_dead_end.py          Level 3: fix selector, N / waypoint controls, OCP per fix
+│   │   ├── level_3_dead_end.py          Level 3: fix selector, N / waypoint controls, OCP per fix
+│   │   ├── level_4_heavy_ball.py        Level 4: margin + g knobs, test drive, OCP with g
+│   │   └── level_5_crosswind.py         Level 5: re-plan interval k + margin, compute-budget bar
 │   ├── gameplay/                    reusable parts of a playable level
 │   │   ├── level_play_widget.py         layout + the Run → engine → replay → result flow
 │   │   ├── map_view.py                  the field in metres: blocks + dashed ellipses, waypoints,
@@ -82,14 +86,17 @@ game/
 │       └── client.py                    async HTTP: health polling, request_run -> ticket
 │
 └── engine_server/               THE MPC ENGINE (runs in Docker, has acados)
-    ├── server.py                    HTTP only: GET /health, POST /run
+    ├── server.py                    HTTP only: GET /health, POST /run, POST /test_drive (L4)
     ├── runner.py                    run_level(id, knobs): level id -> rules; solver cache
     ├── calibrate.py                 check / tune a level from the command line
     ├── level_rules/                 game rules per level (stop rules, stars, explanations)
     │   ├── common.py                    load level file, knobs -> weights, result JSON
     │   ├── price_of_speed.py            Level 1: battery, stars, "what happened"
-    │   └── dead_end.py                  Level 3: the chosen fix (none / horizon N / waypoints),
+    │   ├── dead_end.py                  Level 3: the chosen fix (none / horizon N / waypoints),
     │                                    stars, local-optimum explanations
+    │   ├── heavy_ball.py                Level 4: plant with g_true, test drive, 1 s-ahead
+    │                                    prediction error, stars, mismatch explanations
+    │   └── crosswind.py                 Level 5: seeded wind, solve budget, drift, stars
     ├── mpc/                         pure MPC, knows nothing about the game
     │   ├── model.py                     double integrator (CasADi); parameters: model gain g
     │   │                                + 6 obstacle-ellipse slots (cx, cy, E11, E12, E22)
@@ -99,7 +106,8 @@ game/
     │   ├── controller.py                MPCController (runtime weights/bounds/target, solve)
     │   │                                + SolverCache (compile once per shape)
     │   └── closed_loop.py               simulate: real ball (plant) + MPC, step by step;
-    │                                    waypoint switching, block crashes
+    │                                    waypoint switching, block crashes, re-plan interval
+    │                                    (open-loop between solves), disturbance (wind)
     └── build/                       generated C code (gitignored, created automatically)
 ```
 

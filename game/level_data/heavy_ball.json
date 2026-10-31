@@ -1,0 +1,42 @@
+{
+  "id": "heavy_ball",
+  "comment": "Level 4. Read by BOTH the game (controlquest/gameplay/level_data.py) and the engine (engine_server/level_rules/common.py). Calibrated with engine_server/calibrate.py.",
+
+  "dt": 0.1,
+  "N": 30,
+  "terminal_factor": 10.0,
+
+  "workspace": {"min": [0.0, 0.0], "max": [50.0, 50.0]},
+  "start": [5.0, 25.0],
+  "target": [40.0, 25.0],
+  "limits": {"a_max": 2.0, "v_max": 3.0},
+  "tolerance": {"position": 0.05, "speed": 0.05},
+
+  "blocks": [
+    {"corners": [[42.0, 20.0], [47.0, 20.0], [47.0, 30.0], [42.0, 30.0]]},
+    {"corners": [[30.0, 28.0], [40.0, 28.0], [40.0, 33.0], [30.0, 33.0]]},
+    {"corners": [[30.0, 17.0], [40.0, 17.0], [40.0, 22.0], [30.0, 22.0]]}
+  ],
+
+  "plant": {"g_true": 0.6},
+  "test_drive": {"accel": 1.0, "duration": 2.0},
+  "prediction_lookahead": 10,
+
+  "t_limit": 40.0,
+  "pars": {"time": 20.0, "time_best": 16.0},
+
+  "locked": {"q_p": 3.0, "q_v": 0.3, "r": 0.03},
+  "knobs": [
+    {"name": "margin", "label": "Obstacle margin", "symbol": "m",
+     "help": "Added to every semi-axis of the obstacle ellipses [m]: a safety buffer for what the model gets wrong.",
+     "default": 0.1, "min": 0.0, "max": 3.0, "scale": "linear"},
+    {"name": "g", "label": "Model actuator gain", "symbol": "g",
+     "help": "How strongly the controller's model thinks the ball responds to a command: x+ = f(x, u; g). 1 = exactly as commanded.",
+     "default": 1.0, "min": 0.3, "max": 1.0, "scale": "linear"}
+  ],
+
+  "checks": {
+    "default_outcome": "controller_failure",
+    "reference": {"knobs": {"margin": 0.1, "g": 0.6}, "stars": 3}
+  }
+}

@@ -7,11 +7,12 @@ is JSON-serialisable and uses plain lists (the UI does not need NumPy).
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
 PROTOCOL_VERSION = 1
-ENGINE_VERSION = "0.6.0"  # the engine_server version this game expects (engine_server/server.py)
+ENGINE_VERSION = "0.8.0"  # the engine_server version this game expects (engine_server/server.py)
 
 # outcome name -> (label for the player, ui.theme colour name)
 OUTCOMES = {
@@ -21,6 +22,7 @@ OUTCOMES = {
     "controller_failure": ("Controller failure", "WARNING"),
     "crash_wall": ("Crash", "DANGER"),
     "crash_block": ("Crash", "DANGER"),
+    "solve_budget": ("Compute budget used up", "DANGER"),
 }
 
 
@@ -90,18 +92,34 @@ class Trajectory:
     status: list[int] = field(default_factory=list)  # per solve: acados status (0 = ok)
     ref_index: list[int] = field(default_factory=list)  # per solve: active waypoint (= #waypoints: target)
     crash_point: list[float] | None = None  # where the ball hit a block, if it did
+    prediction_lookahead: int = 0  # Level 4: M; the ghost ball at t_k is stage M of plan k-M
+    prediction_error: list[float] = field(default_factory=list)  # Level 4: per sample [m]
+    solve_steps: list[int] = field(default_factory=list)  # sample of each solve ([] = every sample)
+    disturbance: list[list[float]] = field(default_factory=list)  # n applied wind accelerations
+    drift: list[float] = field(default_factory=list)  # Level 5: per sample, distance from the plan [m]
+    solve_budget: int = 0  # Level 5: max solves (0 = none)
 
     @property
     def n_solves(self) -> int:
         return len(self.plans)
 
+    @property
+    def steps(self) -> list[int]:
+        """Sample index of every solve (one per sample unless the level re-plans less often)."""
+        return self.solve_steps or list(range(self.n_solves))
+
     def solve_at(self, t: float) -> int:
-        """Index of the MPC solve whose plan is active at replay time t."""
-        return min(self.index_at(t)[0], max(0, self.n_solves - 1))
+        """Index of the MPC solve whose plan is active (being executed) at replay time t."""
+        return max(0, min(bisect_right(self.steps, self.index_at(t)[0]) - 1, self.n_solves - 1))
 
     def time_of_solve(self, k: int) -> float:
         """Replay time of solve k."""
-        return k * self.dt
+        steps = self.steps
+        return steps[max(0, min(k, len(steps) - 1))] * self.dt if steps else 0.0
+
+    def solves_until(self, t: float) -> int:
+        """How many solves have happened up to replay time t (for a compute-budget bar)."""
+        return bisect_right(self.steps, self.index_at(t)[0])
 
     @property
     def duration(self) -> float:
@@ -127,7 +145,12 @@ class Trajectory:
                    solve_time_ms=list(d.get("solve_time_ms", [])),
                    iterations=list(d.get("iterations", [])),
                    costs=list(d.get("costs", [])), status=list(d.get("status", [])),
-                   ref_index=list(d.get("ref_index", [])), crash_point=d.get("crash_point"))
+                   ref_index=list(d.get("ref_index", [])), crash_point=d.get("crash_point"),
+                   prediction_lookahead=int(d.get("prediction_lookahead", 0)),
+                   prediction_error=list(d.get("prediction_error", [])),
+                   solve_steps=list(d.get("solve_steps", [])),
+                   disturbance=list(d.get("disturbance", [])), drift=list(d.get("drift", [])),
+                   solve_budget=int(d.get("solve_budget", 0)))
 
 
 @dataclass
@@ -161,3 +184,20 @@ class RunResult:
             waypoints=list(payload.get("waypoints", [])),
             fix=payload.get("fix"),
         )
+
+
+@dataclass
+class TestDrive:
+    """Answer of POST /test_drive (Level 4): constant acceleration from rest for `duration`
+    seconds; where the model (gain g) expects the ball, and where the real ball got."""
+
+    accel: float
+    duration: float
+    g: float
+    predicted_m: float
+    measured_m: float
+
+    @classmethod
+    def from_json(cls, d: dict[str, Any]) -> TestDrive:
+        return cls(accel=float(d["accel"]), duration=float(d["duration"]), g=float(d["g"]),
+                   predicted_m=float(d["predicted_m"]), measured_m=float(d["measured_m"]))

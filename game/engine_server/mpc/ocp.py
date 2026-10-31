@@ -29,7 +29,9 @@ from acados_template import AcadosOcp
 from .model import MAX_OBSTACLES, NP, NU, NX, UNUSED_SLOT, export_model, obstacle_h
 
 
-SLACK_L1, SLACK_L2 = 1e3, 1e1  # penalty on obstacle slack (exact for multipliers < 1e3)
+# penalty on obstacle slack; exact only if larger than the constraint's multiplier: 1e3 let
+# plans cut ~1 m into ellipses when the stage cost is large (Level 5), 1e5 brings QP failures back
+SLACK_L1, SLACK_L2 = 1e4, 1e1
 H_MAX = 1e4  # upper bound of h: never active on a 50 m map (huge bounds slow HPIPM down)
 
 

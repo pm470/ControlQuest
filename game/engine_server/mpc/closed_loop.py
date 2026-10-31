@@ -10,6 +10,10 @@ Waypoints (optional): the MPC reference is the next waypoint (position, velocity
 once the ball is within `switch_radius` of it, the reference jumps to the next one,
 and after the last waypoint to the target. Success counts only at the target.
 Blocks (optional): the real path is checked against them -> outcome "crash_block".
+Re-plan interval (optional, replan_every = k): the OCP is solved only every k samples;
+in between the controller applies the next inputs of the last plan, open-loop.
+Disturbance (optional): disturbance(k) = extra acceleration on the real ball at sample
+k (e.g. wind); the controller's model does not know it.
 """
 
 from __future__ import annotations
@@ -40,9 +44,11 @@ class Simulation:
     t: list = field(default_factory=list)  # n+1 times [s]
     x: list = field(default_factory=list)  # n+1 states
     u: list = field(default_factory=list)  # n applied inputs
-    plans: list = field(default_factory=list)  # one plan (N+1, 4) per solve, plan k at t[k]
+    plans: list = field(default_factory=list)  # one plan (N+1, 4) per solve
+    solve_steps: list = field(default_factory=list)  # per solve: the sample k it was computed at
+    disturbance: list = field(default_factory=list)  # n applied disturbance accelerations
     energy: list = field(default_factory=lambda: [0.0])  # n+1 cumulative sum dt*|u|^2
-    # per solve (same length as plans: n, or n+1 if the last solve failed)
+    # per solve (same length as plans; = n or n+1 when solving every sample)
     solve_time: list = field(default_factory=list)  # [s]
     iterations: list = field(default_factory=list)  # SQP iterations
     costs: list = field(default_factory=list)  # optimal OCP cost J* (None if failed)
@@ -60,6 +66,8 @@ END_REASONS = ("success", "time_out", "controller_failure", "crash_wall", "crash
 def simulate(mpc: MPCController, x0, target, *, dt: float, t_limit: float,
              p_min, p_max, pos_tol: float = 0.05, speed_tol: float = 0.05,
              plant_gain: float = 1.0, waypoints=(), switch_radius: float = 2.0, blocks=(),
+             replan_every: int = 1,
+             disturbance: Optional[Callable[[int], np.ndarray]] = None,
              stop_rule: Optional[Callable[[Simulation], Optional[str]]] = None) -> Simulation:
     """Run until success, time out, controller failure, leaving the workspace,
     or until stop_rule(sim) returns an outcome name (e.g. "battery_empty")."""
@@ -74,6 +82,8 @@ def simulate(mpc: MPCController, x0, target, *, dt: float, t_limit: float,
     refs = [np.array([*w[:2], 0.0, 0.0], dtype=float) for w in waypoints] + [target]
     i_ref = 0
     mpc.set_target(refs[0])
+    replan_every = max(1, int(replan_every))
+    plan, j = None, 0  # the plan being executed and the index of its next input
 
     for k in range(n_max + 1):
         if np.linalg.norm(x[:2] - target[:2]) < pos_tol and np.linalg.norm(x[2:]) < speed_tol:
@@ -86,19 +96,24 @@ def simulate(mpc: MPCController, x0, target, *, dt: float, t_limit: float,
         while i_ref < len(refs) - 1 and np.linalg.norm(x[:2] - refs[i_ref][:2]) < switch_radius:
             i_ref += 1
             mpc.set_target(refs[i_ref])
-        plan = mpc.solve(x)
-        sim.ref_index.append(i_ref)
-        sim.plans.append(plan.X)  # kept even if it failed (shown in the replay)
-        sim.solve_time.append(plan.solve_time)
-        sim.iterations.append(plan.iterations)
-        sim.costs.append(plan.cost)
-        sim.status.append(plan.status)
-        if not plan.ok:
-            sim.outcome, sim.detail = "controller_failure", plan.message
-            break
+        if plan is None or k % replan_every == 0 or j >= len(plan.U):
+            plan, j = mpc.solve(x), 0
+            sim.solve_steps.append(k)
+            sim.ref_index.append(i_ref)
+            sim.plans.append(plan.X)  # kept even if it failed (shown in the replay)
+            sim.solve_time.append(plan.solve_time)
+            sim.iterations.append(plan.iterations)
+            sim.costs.append(plan.cost)
+            sim.status.append(plan.status)
+            if not plan.ok:
+                sim.outcome, sim.detail = "controller_failure", plan.message
+                break
 
-        u = plan.u0
-        x_prev, x = x, plant_step(x, u, dt, gain=plant_gain)
+        u = plan.U[j].copy()  # j = 0 right after a solve: the usual MPC input u0
+        j += 1
+        w = np.zeros(2) if disturbance is None else np.asarray(disturbance(k), dtype=float)
+        x_prev, x = x, plant_step(x, u, dt, gain=plant_gain, disturbance=w)
+        sim.disturbance.append(w)
         sim.u.append(u)
         sim.t.append((k + 1) * dt)
         sim.x.append(x)

@@ -54,6 +54,7 @@ class MPCController:
         self._x_lb = self._x_ub = self._u_lb = self._u_ub = None
         self._gain = 1.0
         self._slots = list(UNUSED_SLOT) * MAX_OBSTACLES
+        self._strict_obstacles = True
         self.reset()
 
     # --- runtime configuration (no recompilation) ------------------------------------
@@ -88,6 +89,13 @@ class MPCController:
             slots += [float(c[0]), float(c[1]), float(E[0][0]), float(E[0][1]), float(E[1][1])]
         self._slots = slots + list(UNUSED_SLOT) * (MAX_OBSTACLES - len(ellipses))
         self._set_params()
+
+    def set_strict_obstacles(self, strict: bool) -> None:
+        """strict (default): a plan that enters an obstacle ellipse is invalid (controller
+        failure). Not strict: converged plans may start inside an ellipse and leave it (the
+        constraints are soft), e.g. when a disturbance pushed the ball in; iteration-limit
+        iterates are still checked."""
+        self._strict_obstacles = bool(strict)
 
     def set_damping(self, lm: float) -> None:
         """Levenberg-Marquardt term added to the SQP Hessian (0 = plain Gauss-Newton)."""
@@ -125,7 +133,8 @@ class MPCController:
         # limit. The last iterate is still used if it is a valid plan (finite, within the
         # bounds, outside every ellipse): suboptimal, but safe. The status stays visible.
         message = (f"acados status {status} ({ACADOS_STATUS.get(status, 'unknown')})"
-                   if status not in (0, MAX_ITER) else self._check(x0, X, U))
+                   if status not in (0, MAX_ITER)
+                   else self._check(x0, X, U, obstacles=self._strict_obstacles or status == MAX_ITER))
         if status == MAX_ITER and message:
             message = f"acados status {status} ({ACADOS_STATUS[MAX_ITER]}): {message}"
         ok = message == ""
@@ -151,7 +160,7 @@ class MPCController:
             self.solver.set(k, "u", U[k])
         self.solver.set(self.N, "x", X[self.N])
 
-    def _check(self, x0, X, U) -> str:
+    def _check(self, x0, X, U, obstacles: bool = True) -> str:
         """'' if the plan is finite and within bounds, otherwise the reason."""
         tol = self.bound_tol
         if not (np.all(np.isfinite(X)) and np.all(np.isfinite(U))):
@@ -161,7 +170,7 @@ class MPCController:
             vu = np.maximum(self._u_lb - U, U - self._u_ub).max()
             if vx > tol or vu > tol:
                 return f"plan violates bounds (state {vx:.1e}, input {vu:.1e})"
-        h_min = self._min_obstacle_h(X[1:])
+        h_min = self._min_obstacle_h(X[1:]) if obstacles else np.inf
         if h_min < 1.0 - H_TOL:
             return f"plan enters an obstacle ellipse (h = {h_min:.3f} < 1)"
         return ""

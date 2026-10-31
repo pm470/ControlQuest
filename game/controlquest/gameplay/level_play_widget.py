@@ -191,10 +191,11 @@ class LevelPlayWidget(QWidget):
         self.result = result
         m = result.metrics
         self.status.setText(f"Replaying: {result.trajectory.duration:.1f} s of motion, "
-                            f"{len(result.trajectory.u)} MPC solves "
+                            f"{result.trajectory.n_solves} MPC solves "
                             f"(~{m.get('mean_solve_ms', 0):.2f} ms each).")
         self.map.set_trajectory(result.trajectory)
-        self.solve_selector.set_count(result.trajectory.n_solves, result.trajectory.dt)
+        tr = result.trajectory
+        self.solve_selector.set_count(tr.n_solves, tr.dt, [tr.time_of_solve(i) for i in range(tr.n_solves)])
         self.run_info.set_result(result)
         self.on_result(result)
         self.playback.load(result.trajectory.duration)

@@ -71,6 +71,9 @@ def configured_controller(cache: SolverCache, level: dict, knobs: dict,
     ellipses = level_ellipses(level, knobs)
     mpc.set_obstacles([(e.center, e.E) for e in ellipses])
     mpc.set_damping(level.get("solver", {}).get("levenberg_marquardt", 1e-2) if ellipses else 0.0)
+    # level["solver"]["ellipse_entry_fails"] = false: entering an ellipse is not a failure
+    # (Level 5: the wind pushes the ball into the safety zone; touching a block still crashes)
+    mpc.set_strict_obstacles(level.get("solver", {}).get("ellipse_entry_fails", True))
     mpc.set_target([*level["target"], 0.0, 0.0])
     return mpc
 
@@ -135,6 +138,8 @@ def trajectory_json(sim: Simulation, dt: float) -> dict:
         "costs": [None if c is None else round(c, 4) for c in sim.costs],
         "status": list(sim.status),
         "ref_index": list(sim.ref_index),
+        "solve_steps": list(sim.solve_steps),  # sample of each solve (re-plan interval > 1)
+        "disturbance": np.round(np.array(sim.disturbance).reshape(-1, 2), 3).tolist(),
         "crash_point": sim.crash_point,
     }
 
