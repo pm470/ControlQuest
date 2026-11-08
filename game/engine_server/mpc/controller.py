@@ -75,6 +75,15 @@ class MPCController:
             self.solver.constraints_set(k, "lbx", self._x_lb)
             self.solver.constraints_set(k, "ubx", self._x_ub)
 
+    def set_terminal_stop(self, on: bool) -> None:
+        """Terminal constraint v_N = 0: every plan must end at rest (Level 2). Call after
+        set_bounds, which resets it to off (so other levels never inherit it)."""
+        lb, ub = self._x_lb.copy(), self._x_ub.copy()
+        if on:
+            lb[2:], ub[2:] = 0.0, 0.0
+        self.solver.constraints_set(self.N, "lbx", lb)
+        self.solver.constraints_set(self.N, "ubx", ub)
+
     def set_model_gain(self, g: float) -> None:
         self._gain = float(g)
         self._set_params()

@@ -62,11 +62,11 @@ installed in the course Docker image) and the game window (normal Python on the 
 They talk over HTTP on `http://127.0.0.1:8000`.
 
 ### Prerequisites
-- **Docker Desktop**, running, with the course image. Default name:
-  `vsc-mpcrl26-exercises-94d9982245bae36f409cb410a37b514aafe63fa52604de9d9dc9f0c9c94c729a`
-  (built from the `Dockerfile` of the course repository `mpcrl26-exercises`; contains
-  Python 3.11, acados, CasADi, NumPy). Check with `docker images`. If the image has a
-  different name on this machine, set `CONTROLQUEST_IMAGE` to it.
+- **Docker Desktop**, running, with the course image, built from the `Dockerfile` of the
+  course repository `mpcrl26-exercises` (Python 3.11, acados, CasADi, NumPy). VS Code
+  names it `vsc-mpcrl26-exercises-<hash>`, and **the hash is different on every
+  computer**: the start scripts find the image automatically (first local image named
+  `vsc-mpcrl26-exercises-*`); `CONTROLQUEST_IMAGE` overrides it. Check with `docker images`.
 - **Python 3.10+** on the host (tested with 3.14 on Windows 11).
 
 ### Start the engine (terminal 1, from the repository root)
@@ -133,7 +133,10 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
   (`calibrate.py dead_end`). Since 2026-10-26 the player **picks a fix** (no fix /
   ① longer horizon N ∈ {30, 60, 100, 150} / ② waypoints) and compares them in
   "Your experiments"; fix ③ is still a TODO (below). Engine v0.5.0.
-- Not yet: levels 2, 4, 5 (show "coming soon"), speed/acceleration plots (PRD 5.6),
+- Done (2026-11-03): **Level 2 "Brake Check"** playable (horizon dropdown, terminal-stop
+  switch, brake-check gauge; `calibrate.py brake_check`). Levels 4 and 5 are built too
+  (branch `level3to4`, `calibrate.py heavy_ball` / `crosswind`). Engine v0.9.0.
+- Not yet: speed/acceleration plots (PRD 5.6),
   saving progress to disk (progress resets on restart, intentionally for now).
 - Next planned work: the MPC side of levels 2, 4, 5 (horizon N per level, terminal
   constraint, model gain, wind, re-plan interval); obstacles are already in place.
@@ -212,6 +215,15 @@ Feasibility spike results (engine only, default map):
   works better". Built now: ① longer horizon, ② waypoints. ③ (better terminal cost /
   cost-to-go) is **on hold** (TODO in section 6); it must use runtime parameters only
   (one OCP recipe, see below). ★★★ stays "≤ 1 waypoint" (only fix ② can succeed).
+- (2026-11-03) Level 2 calibrated (PRD 7): target **2 m in front of the wall** (x = 48), weights
+  locked at Level 1's defaults, t_limit 60 s, ★★ ≤ 27 s, ★★★ also **N ≤ 20**. The user rejected an
+  artificial "≥ 3 m from the wall" star rule: the terminal stop must be *needed*, so the map makes
+  N = 20 without it fail (controller failure); only N = 20 + stop gets ★★★ (25.1 s). Default
+  N = 10 without stop fails; N = 10 + stop succeeds slowly (★, "safe but slow"); N ≥ 30 gets ★★.
+- (2026-11-03) New knob type `"scale": "toggle"` (on/off switch, value 1/0, `"choices": [0, 1]`)
+  in `knob_panel.py`; the controller's `set_terminal_stop(on)` sets v_N = 0 at runtime
+  (`set_bounds` resets it, so no other level inherits it). `calibrate.py` supports
+  `checks.cases` (more expected outcomes/stars per level).
 - (2026-10-26) The knob-range rule (max ≤ max(50, 3 × reference)) is for weights only;
   discrete knobs with `"choices"` (e.g. horizon N) are exempt (`calibrate.py`).
 
@@ -295,6 +307,9 @@ Feasibility spike results (engine only, default map):
   exact size (snapped to device pixels) and re-renders at a smaller font when too wide.
 - Don't override QWidget method names in subclasses (e.g. a `screen()` method on the main
   window broke Qt's `QWidget.screen()`; it is now `get_screen()`).
+- Never hard-code the course image name (`vsc-mpcrl26-exercises-<hash>`) in scripts or
+  docs: the hash is machine-specific (2026-11-03: a commit with one teammate's hash broke
+  the engine start for the other). `start_engine.ps1/.sh` detect it; use `<image>` in docs.
 - Generated code (`engine_server/build/`), `.venv/`, `__pycache__/` are gitignored.
 - Obstacles in acados (2026-10-26, Level 3 calibration): with **hard** ellipse constraints
   HPIPM failed (MINSTEP) whenever an ellipse and the input bounds were active together
@@ -347,7 +362,8 @@ Feasibility spike results (engine only, default map):
      crashed; Level 3: lilac numbered waypoint diamonds with a dotted route, the active
      one highlighted during the replay, reached ones grey);
      under it the level's extras (Level 1: **battery bar**, drains, star mark = ★★★
-     limit), the **replay bar** (Play/Pause, scrubber, time, speed 1×/2×/4×/8×,
+     limit; Level 2: **brake check**: wall ahead / braking needs / plan looks ahead, red
+     after the point of no return), the **replay bar** (Play/Pause, scrubber, time, speed 1×/2×/4×/8×,
      default 2×) and the **"MPC solve ‹ k › of n"** selector;
    - middle: **"The OCP your MPC solves"** (typeset math: min over u, stage cost ℓ, Q, P,
      "s.t." constraints; short notes and a symbol legend) and **"Solver info"** (this

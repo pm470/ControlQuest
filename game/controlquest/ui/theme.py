@@ -7,6 +7,8 @@ that the stylesheet styles.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtGui import QColor, QFont
 
 # --- colours -----------------------------------------------------------------
@@ -74,6 +76,10 @@ def font(size_px: float, weight: QFont.Weight = QFont.Weight.Normal) -> QFont:
 
 def app_font() -> QFont:
     return font(14)
+
+
+# the dropdown arrow (an image: Qt stylesheets cannot draw one); forward slashes for Qt
+CHEVRON = (Path(__file__).resolve().parent / "assets" / "chevron_down.svg").as_posix()
 
 
 def stylesheet() -> str:
@@ -175,7 +181,8 @@ def stylesheet() -> str:
         border-radius: 12px; padding: 6px 12px; min-width: 56px;
     }}
     QComboBox:hover {{ border-color: {PRIMARY}; }}
-    QComboBox::drop-down {{ border: none; width: 18px; }}
+    QComboBox::drop-down {{ border: none; width: 22px; }}
+    QComboBox::down-arrow {{ image: url("{CHEVRON}"); width: 12px; height: 8px; }}
     QComboBox QAbstractItemView {{
         background: {SURFACE}; border: 2px solid {LINE}; selection-background-color: {SURFACE_ALT};
         selection-color: {INK}; outline: none;

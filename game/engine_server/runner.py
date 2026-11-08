@@ -10,7 +10,7 @@ import threading
 import time
 from pathlib import Path
 
-from level_rules import crosswind, dead_end, heavy_ball, price_of_speed
+from level_rules import brake_check, crosswind, dead_end, heavy_ball, price_of_speed
 from level_rules.common import horizons, load_level
 from mpc.controller import SolverCache
 
@@ -19,6 +19,7 @@ BUILD_DIR = Path(__file__).resolve().parent / "build"  # generated C code (gitig
 # level id -> rules module; add one line per playable level
 RULES = {
     "price_of_speed": price_of_speed,
+    "brake_check": brake_check,
     "dead_end": dead_end,
     "heavy_ball": heavy_ball,
     "crosswind": crosswind,

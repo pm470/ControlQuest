@@ -1,2 +1,3 @@
 # Local acados checkout (installed in the course Docker image; not part of this repo)
 acados/
+__pycache__/**

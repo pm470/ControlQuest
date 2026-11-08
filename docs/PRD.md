@@ -263,18 +263,18 @@ the wall. Stop on it."*
 
 | Item | Value |
 |---|---|
-| Map | open field. Start (4, 25), target (46, 25), so the wall at x = 50 is 4 m behind the target. |
+| Map | open field. Start (4, 25), target (48, 25), so the wall at x = 50 is 2 m behind the target (calibrated: at 4 m, N = 20 without the terminal stop still succeeded by overshooting towards the wall) |
 | Limits | a_max = 1, v_max = 4 → braking from full speed: 4 s, 8 m |
-| Time limit | 30 s **(calibrate)** |
+| Time limit | 60 s (calibrated: long enough that "short horizon + terminal stop" can succeed slowly) |
 | Unlocked knobs | horizon N ∈ {5, 10, 20, 30, 40, 60}; toggle **terminal stop** (`v_N = 0`) |
-| Locked | Q, R, P at defaults |
+| Locked | q_p = 10, q_v = 1, r = 0.1 (Level 1's defaults), P = 10·Q (calibrated: gentler weights do not fail at N = 10) |
 | Default | N = 10 (1 s), terminal stop off |
-| Why the default fails | the plan only reaches ~4 m ahead at full speed, but stopping needs 8 m. When the controller "sees" it must brake, no feasible plan exists any more → **controller failure** (or a wall crash) |
+| Why the default fails | (calibrated) at t = 11.6 s the ball is 7.6 m from the wall at 4 m/s, braking needs 8 m, the plan sees ≈ 4 m: point of no return; at 13.0 s the OCP is infeasible → **controller failure** |
 | Intended fix A | long horizon (N ≥ 40) → fast and safe, but expensive |
-| Intended fix B | short horizon + terminal stop → always feasible, but the ball only drives as fast as it can stop within the horizon → slow. With N = 10 that is too slow (time out); N = 20 + terminal stop should pass **(calibrate)** |
-| ★★ time par | ≤ 16 s **(calibrate)** |
-| ★★★ secondary par | N ≤ 20 (compute is cheap), i.e. needs fix B and a good N |
-| Extra plot | distance to the wall ahead vs braking distance `v²/(2·a_max)` and vs horizon reach |
+| Intended fix B | short horizon + terminal stop → always feasible, but slow: N = 10 + stop arrives after 49.9 s (★), N = 20 + stop after 25.1 s (★★★). Without the stop N ≤ 20 fails (N = 20 sees the wall exactly at the braking distance: no margin). Fix A (N ≥ 30, with or without stop): 16.6–19.3 s (★★) |
+| ★★ time par | ≤ 27 s (calibrated) |
+| ★★★ secondary par | N ≤ 20 (cheaper solves). Only N = 20 + terminal stop reaches it. Check: `calibrate.py brake_check` |
+| Extra plot | "Brake check" under the map: wall ahead vs braking distance `v²/(2·a_max)` vs plan reach `N·Δt·v`, live during the replay; red after the point of no return |
 | Teaching note | failure text names both numbers: "At t = 9.4 s the ball was 6.1 m from the wall at 4 m/s; braking needs 8 m. Your horizon covered 1.0 s (≈ 4 m)." |
 
 Dropdown values for N are **precompiled solvers** (see §9.3), so switching N is instant.

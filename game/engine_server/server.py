@@ -23,7 +23,7 @@ import json
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.8.0"  # bump whenever the messages change (game: protocol.ENGINE_VERSION)
+VERSION = "0.9.0"  # bump whenever the messages change (game: protocol.ENGINE_VERSION)
 PROTOCOL_VERSION = 1
 MAX_BODY_BYTES = 1_000_000
 

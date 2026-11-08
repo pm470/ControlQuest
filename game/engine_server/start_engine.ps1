@@ -1,12 +1,21 @@
 # Start the ControlQuest MPC engine in Docker (Windows PowerShell).
 #   .\game\engine_server\start_engine.ps1
-# Override the image with:  $env:CONTROLQUEST_IMAGE = "my-image"; .\start_engine.ps1
+# The course image is found automatically: VS Code names it vsc-mpcrl26-exercises-<hash>,
+# and the hash differs on every computer, so it must NOT be hard-coded here.
+# Override with:  $env:CONTROLQUEST_IMAGE = "my-image"; .\start_engine.ps1
 # Stop it with Ctrl+C.
 
 $ErrorActionPreference = "Stop"
 $image = $env:CONTROLQUEST_IMAGE
 if (-not $image) {
-    $image = "vsc-mpcrl26-exercises-570cc587851b7c4c296579abda9e2ed1f22a62772feeee307a76615826aa7aad"
+    # newest local image whose name starts with vsc-mpcrl26-exercises-
+    $image = docker images --format "{{.Repository}}" | Where-Object { $_ -like "vsc-mpcrl26-exercises-*" } | Select-Object -First 1
+}
+if (-not $image) {
+    Write-Host "No course Docker image found (vsc-mpcrl26-exercises-...)." -ForegroundColor Red
+    Write-Host "Build it by opening the course repository mpcrl26-exercises in its VS Code Dev Container,"
+    Write-Host "or set the image name yourself:  `$env:CONTROLQUEST_IMAGE = '<image>'  (see: docker images)"
+    exit 1
 }
 $port = $env:CONTROLQUEST_PORT
 if (-not $port) { $port = "8000" }

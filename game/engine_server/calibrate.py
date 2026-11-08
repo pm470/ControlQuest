@@ -7,7 +7,8 @@
     python calibrate.py dead_end fix=horizon N=100
 
 Checks: the default knobs fail with checks.default_outcome, the reference knobs
-pass with checks.reference.stars, and every knob range follows the team rule
+pass with checks.reference.stars, each of checks.cases gives its outcome (and
+stars), and every knob range follows the team rule
 max <= max(50, 3 * reference value) (and the default/reference lie inside the range).
 Exit code 1 if a check fails.
 """
@@ -103,6 +104,13 @@ def main() -> int:
         show("reference", res)
         if res["outcome"] != "success" or res["stars"] < ref.get("stars", 1):
             print(f"FAIL: reference should pass with {ref.get('stars', 1)} stars")
+            ok = False
+    for i, case in enumerate(checks.get("cases", []), 1):  # more expected results (Level 2)
+        res = runner.run_level(args.level_id, case.get("knobs", {}), case.get("waypoints"), case.get("fix"))
+        show(f"case {i}", res)
+        if res["outcome"] != case["outcome"] or res["stars"] != case.get("stars", res["stars"]):
+            print(f"FAIL: case {i} should end with '{case['outcome']}'"
+                  + (f" and {case['stars']} stars" if "stars" in case else ""))
             ok = False
     for fix, chk in checks.get("fixes", {}).items():  # expected outcome per fix (Level 3)
         res = runner.run_level(args.level_id, chk.get("knobs", {}), chk.get("waypoints"), fix)

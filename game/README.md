@@ -3,10 +3,10 @@
 A PySide6 desktop app (runs on your computer) plus a small **MPC engine** server
 (runs acados inside Docker). The design is in [`docs/PRD.md`](../docs/PRD.md).
 
-**Status:** menus done; **Levels 1, 3, 4 and 5** ("The Price of Speed", "Dead End",
-"Heavy Ball", "Crosswind") are playable end to end (tune knobs / pick a fix / place
+**Status:** menus done; **all five levels** ("The Price of Speed", "Brake Check", "Dead
+End", "Heavy Ball", "Crosswind") are playable end to end (tune knobs / pick a fix / place
 waypoints → Run → MPC computes the run in Docker → replay with the live plan → result
-card, stars, unlock). Level 2 shows a "coming soon" card.
+card, stars, unlock).
 
 ## Run it
 
@@ -50,6 +50,7 @@ game can stay open.
 game/
 ├── level_data/                  ONE JSON PER LEVEL, read by BOTH game and engine
 │   ├── price_of_speed.json          start, target, limits, time limit, battery, pars, knobs, checks
+│   ├── brake_check.json             Level 2: horizon choices, terminal-stop toggle, pars, checks.cases
 │   ├── dead_end.json                + blocks (4 corners each), locked weights/margin, waypoint rules
 │   ├── heavy_ball.json              + plant (hidden real gain g_true), test drive, margin/g knobs
 │   └── crosswind.json               + wind (constant + seeded gusts), solve budget, k/margin knobs
@@ -62,6 +63,7 @@ game/
 │   ├── screens/                     title, level select, how to play, settings, level screen
 │   ├── levels/                      one file per level: LevelInfo (+ play_screen when playable)
 │   │   ├── level_1_price_of_speed.py    Level 1's goal text, battery bar, result rows
+│   │   ├── level_2_brake_check.py       Level 2's goal, brake-check gauge, OCP with v_N = 0, result rows
 │   │   ├── level_3_dead_end.py          Level 3: fix selector, N / waypoint controls, OCP per fix
 │   │   ├── level_4_heavy_ball.py        Level 4: margin + g knobs, test drive, OCP with g
 │   │   └── level_5_crosswind.py         Level 5: re-plan interval k + margin, compute-budget bar
@@ -73,7 +75,9 @@ game/
 │   │   ├── fix_selector.py              "Choose a fix": one selectable card per fix (Level 3)
 │   │   ├── comparison_card.py           "Your experiments": best run per fix (Level 3)
 │   │   ├── obstacles.py                 block corners -> the solver's ellipse (drawing, clicks)
-│   │   ├── knob_panel.py                log sliders (+ dropdowns for "choices" knobs, e.g. N)
+│   │   ├── knob_panel.py                log sliders (+ dropdowns for "choices" knobs, e.g. N;
+│   │   │                                    on/off switches for "toggle" knobs, e.g. terminal stop)
+│   │   ├── brake_gauge.py               Level 2's brake check (wall ahead / braking / plan reach)
 │   │   ├── playback.py                  replay clock + play/pause/scrub/speed bar
 │   │   ├── result_panel.py              outcome, stars, metrics, "what happened"
 │   │   ├── ocp_card.py                  "The OCP your MPC solves" card (typeset math)
@@ -92,6 +96,7 @@ game/
     ├── level_rules/                 game rules per level (stop rules, stars, explanations)
     │   ├── common.py                    load level file, knobs -> weights, result JSON
     │   ├── price_of_speed.py            Level 1: battery, stars, "what happened"
+    │   ├── brake_check.py               Level 2: terminal stop, point of no return, stars, "what happened"
     │   ├── dead_end.py                  Level 3: the chosen fix (none / horizon N / waypoints),
     │                                    stars, local-optimum explanations
     │   ├── heavy_ball.py                Level 4: plant with g_true, test drive, 1 s-ahead

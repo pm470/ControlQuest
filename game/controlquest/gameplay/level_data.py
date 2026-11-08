@@ -19,7 +19,7 @@ class KnobSpec:
     default: float
     min: float
     max: float
-    scale: str = "log"  # "log", "linear" or "choice" (dropdown of `choices`)
+    scale: str = "log"  # "log", "linear", "int", "choice" (dropdown of `choices`) or "toggle" (on/off)
     choices: tuple[float, ...] = ()  # allowed values of a "choice" knob, e.g. horizon N
     fix: str = ""  # Level 3: the fix this knob belongs to ("" = always shown)
 

@@ -2,7 +2,8 @@
 
 Weights use logarithmic sliders: only ratios matter, and useful values span decades.
 Whole-number knobs ("scale": "int", e.g. the horizon N) use a linear slider and only
-take integers; "scale": "choice" knobs use a dropdown of allowed values.
+take integers; "scale": "choice" knobs use a dropdown of allowed values; "scale":
+"toggle" knobs are an on/off switch (value 1.0 / 0.0).
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLineEdit, QSlider, QToolTip, QVBoxLayout,
                                QWidget)
 
-from ..ui.widgets import label
+from ..ui.widgets import ToggleSwitch, label
 from .level_data import KnobSpec
 
 STEPS_PER_DECADE = 100  # log slider resolution
@@ -165,6 +166,33 @@ class ChoiceRow(QWidget):
         self.combo.setCurrentIndex(i)
 
 
+class ToggleRow(QWidget):
+    """An on/off knob ("scale": "toggle", value 1.0 or 0.0): name and a switch."""
+
+    changed = Signal()
+
+    def __init__(self, spec: KnobSpec, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.spec = spec
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        name = label(f"<b>{spec.symbol}</b>&nbsp;&nbsp;{spec.label}", "body")
+        name.setTextFormat(Qt.TextFormat.RichText)
+        name.setToolTip(spec.help)
+        self.switch = ToggleSwitch(bool(spec.default))
+        self.switch.setToolTip(spec.help)
+        row.addWidget(name, 1)
+        row.addWidget(self.switch)
+        self.switch.toggled.connect(lambda _on: self.changed.emit())
+
+    def value(self) -> float:
+        return 1.0 if self.switch.isChecked() else 0.0
+
+    def set_value(self, value: float) -> None:
+        """On if value >= 0.5; emits changed if it changed."""
+        self.switch.setChecked(value >= 0.5)
+
+
 class KnobPanel(QWidget):
     """All knob rows of a level. Emits changed() when any value changes."""
 
@@ -175,7 +203,8 @@ class KnobPanel(QWidget):
         col = QVBoxLayout(self)
         col.setContentsMargins(0, 0, 0, 0)
         col.setSpacing(14)
-        self.rows = [ChoiceRow(spec) if spec.scale == "choice" else KnobRow(spec) for spec in specs]
+        rows = {"choice": ChoiceRow, "toggle": ToggleRow}
+        self.rows = [rows.get(spec.scale, KnobRow)(spec) for spec in specs]
         for row in self.rows:
             row.changed.connect(self.changed)
             col.addWidget(row)

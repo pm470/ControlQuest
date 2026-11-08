@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 PROTOCOL_VERSION = 1
-ENGINE_VERSION = "0.8.0"  # the engine_server version this game expects (engine_server/server.py)
+ENGINE_VERSION = "0.9.0"  # the engine_server version this game expects (engine_server/server.py)
 
 # outcome name -> (label for the player, ui.theme colour name)
 OUTCOMES = {
