@@ -6,7 +6,11 @@ translates HTTP <-> Python; the work happens in runner.py (levels) and mpc/ (aca
 Endpoints (keep in sync with game/controlquest/engine/protocol.py):
     GET  /health  -> {"status": "ok", "version": ..., "protocol": 1, "acados": bool,
                       "levels": [playable level ids]}
-    POST /run     {"level_id": ..., "knobs": {...}} -> RunResult JSON
+    POST /run     {"level_id": ..., "knobs": {...}, "waypoints": [[x, y], ...] (optional),
+                   "fix": "none" | "horizon" | "waypoints" (optional, Level 3)}
+                  -> RunResult JSON
+    POST /test_drive {"level_id": ..., "knobs": {...}} -> {"predicted_m", "measured_m", ...}
+                  (Level 4: constant acceleration from rest, model vs real ball)
 
 Run (inside the container):  python server.py --host 0.0.0.0 --port 8000
 """
@@ -19,7 +23,7 @@ import json
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.3.0"  # bump whenever the messages change (game: protocol.ENGINE_VERSION)
+VERSION = "0.9.0"  # bump whenever the messages change (game: protocol.ENGINE_VERSION)
 PROTOCOL_VERSION = 1
 MAX_BODY_BYTES = 1_000_000
 
@@ -50,7 +54,7 @@ class EngineHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": f"unknown endpoint {self.path}"})
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path != "/run":
+        if self.path not in ("/run", "/test_drive"):
             self._send_json(404, {"error": f"unknown endpoint {self.path}"})
             return
         length = int(self.headers.get("Content-Length") or 0)
@@ -66,8 +70,19 @@ class EngineHandler(BaseHTTPRequestHandler):
             self._send_json(503, {"error": "acados is not available: start the engine in Docker"})
             return
         level_id = request.get("level_id")
+        if self.path == "/test_drive":
+            try:
+                answer = runner.test_drive(level_id, request.get("knobs", {}))
+            except ValueError as exc:
+                self._send_json(400, {"error": str(exc)})
+                return
+            print(f"[engine] test drive {level_id} g={answer['g']:g}: predicted "
+                  f"{answer['predicted_m']:.2f} m, measured {answer['measured_m']:.2f} m", flush=True)
+            self._send_json(200, answer)
+            return
         try:
-            result = runner.run_level(level_id, request.get("knobs", {}))
+            result = runner.run_level(level_id, request.get("knobs", {}), request.get("waypoints"),
+                                      request.get("fix"))
         except ValueError as exc:  # bad request (unknown level/knob, ...)
             self._send_json(400, {"error": str(exc)})
             return
@@ -76,7 +91,9 @@ class EngineHandler(BaseHTTPRequestHandler):
             self._send_json(500, {"error": f"engine error: {exc}"})
             return
         m = result["metrics"]
-        print(f"[engine] run {level_id} {result['knobs']} -> {result['outcome']} "
+        wps = f" waypoints={result['waypoints']}" if result.get("waypoints") else ""
+        wps += f" fix={result['fix']}" if result.get("fix") else ""
+        print(f"[engine] run {level_id} {result['knobs']}{wps} -> {result['outcome']} "
               f"({result['stars']} stars, t={m['time']:.1f} s, E={m['energy']:.2f}) "
               f"computed in {result['compute_time_s']:.2f} s", flush=True)
         self._send_json(200, result)

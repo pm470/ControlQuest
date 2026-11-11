@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
 # Start the ControlQuest MPC engine in Docker (macOS / Linux / Git Bash).
 #   ./game/engine_server/start_engine.sh
-# Override the image with:  CONTROLQUEST_IMAGE=my-image ./start_engine.sh
+# The course image is found automatically: VS Code names it vsc-mpcrl26-exercises-<hash>,
+# and the hash differs on every computer, so it must NOT be hard-coded here.
+# Override with:  CONTROLQUEST_IMAGE=my-image ./start_engine.sh
 # Stop it with Ctrl+C.
 set -euo pipefail
 
-IMAGE="${CONTROLQUEST_IMAGE:-vsc-mpcrl26-exercises-94d9982245bae36f409cb410a37b514aafe63fa52604de9d9dc9f0c9c94c729a}"
+IMAGE="${CONTROLQUEST_IMAGE:-}"
+if [ -z "$IMAGE" ]; then  # newest local image whose name starts with vsc-mpcrl26-exercises-
+  IMAGE="$(docker images --format '{{.Repository}}' | grep '^vsc-mpcrl26-exercises-' | head -n 1 || true)"
+fi
+if [ -z "$IMAGE" ]; then
+  echo "No course Docker image found (vsc-mpcrl26-exercises-...)." >&2
+  echo "Build it by opening the course repository mpcrl26-exercises in its VS Code Dev Container," >&2
+  echo "or set the image name yourself:  CONTROLQUEST_IMAGE=<image> ./start_engine.sh  (see: docker images)" >&2
+  exit 1
+fi
 PORT="${CONTROLQUEST_PORT:-8000}"
 
 # repository root = two folders above this script; mounted at /workspace

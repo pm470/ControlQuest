@@ -39,8 +39,9 @@ class BudgetBar(QWidget):
                    self._title)
         p.setPen(QColor(theme.DANGER if left < 0 else theme.INK_SOFT))
         p.setFont(theme.font(14, QFont.Weight.DemiBold))
+        used = f"{self._used:.0f}" if float(self._used).is_integer() else f"{self._used:.2f}"
         p.drawText(QRectF(0, 0, w, 22), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                   f"used {self._used:.2f} / {self._budget:g}{self._unit}")
+                   f"used {used} / {self._budget:g}{self._unit}")
 
         body = QRectF(1, 30, w - 12, 26)
         p.setPen(QPen(QColor(theme.INK_SOFT), 2))

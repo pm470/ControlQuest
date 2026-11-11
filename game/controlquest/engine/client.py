@@ -4,6 +4,7 @@ Uses Qt's asynchronous network manager, so the UI never freezes while waiting.
 Endpoints (see engine_server/server.py):
     GET  /health -> {"status": "ok", "version": ..., "acados": bool, "levels": [...]}
     POST /run    -> RunResult JSON
+    POST /test_drive -> TestDrive JSON (Level 4)
 
     ticket = ctx.engine.request_run(RunRequest(...), parent=self)
     ticket.finished.connect(self.on_result)    # RunResult
@@ -21,7 +22,7 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequ
 from shiboken6 import isValid
 
 from ..core.config import ENGINE_POLL_INTERVAL_MS, ENGINE_RUN_TIMEOUT_MS, ENGINE_TIMEOUT_MS
-from .protocol import EngineStatus, RunRequest, RunResult
+from .protocol import EngineStatus, RunRequest, RunResult, TestDrive
 
 
 class RunTicket(QObject):
@@ -104,16 +105,24 @@ class EngineClient(QObject):
     # --- runs ---------------------------------------------------------------------------
     def request_run(self, run: RunRequest, parent: QObject | None = None) -> RunTicket:
         """Ask the engine to simulate one run; the answer arrives on the returned ticket."""
+        return self._post("/run", run.to_json(), RunResult.from_json, "run result", parent)
+
+    def request_test_drive(self, level_id: str, knobs: dict, parent: QObject | None = None) -> RunTicket:
+        """Level 4 test drive: the ticket's finished(TestDrive) has predicted vs measured."""
+        return self._post("/test_drive", {"level_id": level_id, "knobs": knobs}, TestDrive.from_json,
+                          "test drive", parent)
+
+    def _post(self, path: str, payload: dict, parse, what: str, parent: QObject | None) -> RunTicket:
         ticket = RunTicket(parent if parent is not None else self)
-        request = QNetworkRequest(QUrl(f"{self._base_url}/run"))
+        request = QNetworkRequest(QUrl(f"{self._base_url}{path}"))
         request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json")
         request.setTransferTimeout(ENGINE_RUN_TIMEOUT_MS)
-        body = QByteArray(json.dumps(run.to_json()).encode("utf-8"))
+        body = QByteArray(json.dumps(payload).encode("utf-8"))
         reply = self._nam.post(request, body)
-        reply.finished.connect(lambda: self._on_run(reply, ticket))
+        reply.finished.connect(lambda: self._on_answer(reply, ticket, parse, what))
         return ticket
 
-    def _on_run(self, reply: QNetworkReply, ticket: RunTicket) -> None:
+    def _on_answer(self, reply: QNetworkReply, ticket: RunTicket, parse, what: str) -> None:
         try:
             if not isValid(ticket):  # the screen that asked is gone
                 return
@@ -132,8 +141,8 @@ class EngineClient(QObject):
                 ticket.failed.emit(str(reason))
                 return
             try:
-                ticket.finished.emit(RunResult.from_json(payload))
+                ticket.finished.emit(parse(payload))
             except (KeyError, TypeError, ValueError) as exc:
-                ticket.failed.emit(f"Invalid run result from the engine: {exc}")
+                ticket.failed.emit(f"Invalid {what} from the engine: {exc}")
         finally:
             reply.deleteLater()

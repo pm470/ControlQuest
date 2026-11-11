@@ -1,6 +1,6 @@
 # ControlQuest: Product Requirements Document
 
-**Last updated:** 2026-10-19
+**Last updated:** 2026-10-26
 
 Numbers marked **(calibrate)** are first guesses that must be
 tuned with real runs before they are final.
@@ -101,6 +101,9 @@ plan existed" is one of the lessons (Level 2), so we show it, not hide it.
 Entering an **ellipse** but not the block is not a crash. It shows a yellow
 "constraint violated" warning on the timeline. In practice the next solve usually
 fails, which then ends the run as a controller failure.
+*(2026-10-26: the ellipse constraints are soft with a large L1 penalty, so the solver
+keeps returning plans; a plan that enters an ellipse by more than ~2 cm is treated as
+invalid → controller failure. The timeline warning is not built yet.)*
 
 ## 5. Game structure and screens
 
@@ -260,18 +263,18 @@ the wall. Stop on it."*
 
 | Item | Value |
 |---|---|
-| Map | open field. Start (4, 25), target (46, 25), so the wall at x = 50 is 4 m behind the target. |
+| Map | open field. Start (4, 25), target (48, 25), so the wall at x = 50 is 2 m behind the target (calibrated: at 4 m, N = 20 without the terminal stop still succeeded by overshooting towards the wall) |
 | Limits | a_max = 1, v_max = 4 → braking from full speed: 4 s, 8 m |
-| Time limit | 30 s **(calibrate)** |
+| Time limit | 60 s (calibrated: long enough that "short horizon + terminal stop" can succeed slowly) |
 | Unlocked knobs | horizon N ∈ {5, 10, 20, 30, 40, 60}; toggle **terminal stop** (`v_N = 0`) |
-| Locked | Q, R, P at defaults |
+| Locked | q_p = 10, q_v = 1, r = 0.1 (Level 1's defaults), P = 10·Q (calibrated: gentler weights do not fail at N = 10) |
 | Default | N = 10 (1 s), terminal stop off |
-| Why the default fails | the plan only reaches ~4 m ahead at full speed, but stopping needs 8 m. When the controller "sees" it must brake, no feasible plan exists any more → **controller failure** (or a wall crash) |
+| Why the default fails | (calibrated) at t = 11.6 s the ball is 7.6 m from the wall at 4 m/s, braking needs 8 m, the plan sees ≈ 4 m: point of no return; at 13.0 s the OCP is infeasible → **controller failure** |
 | Intended fix A | long horizon (N ≥ 40) → fast and safe, but expensive |
-| Intended fix B | short horizon + terminal stop → always feasible, but the ball only drives as fast as it can stop within the horizon → slow. With N = 10 that is too slow (time out); N = 20 + terminal stop should pass **(calibrate)** |
-| ★★ time par | ≤ 16 s **(calibrate)** |
-| ★★★ secondary par | N ≤ 20 (compute is cheap), i.e. needs fix B and a good N |
-| Extra plot | distance to the wall ahead vs braking distance `v²/(2·a_max)` and vs horizon reach |
+| Intended fix B | short horizon + terminal stop → always feasible, but slow: N = 10 + stop arrives after 49.9 s (★), N = 20 + stop after 25.1 s (★★★). Without the stop N ≤ 20 fails (N = 20 sees the wall exactly at the braking distance: no margin). Fix A (N ≥ 30, with or without stop): 16.6–19.3 s (★★) |
+| ★★ time par | ≤ 27 s (calibrated) |
+| ★★★ secondary par | N ≤ 20 (cheaper solves). Only N = 20 + terminal stop reaches it. Check: `calibrate.py brake_check` |
+| Extra plot | "Brake check" under the map: wall ahead vs braking distance `v²/(2·a_max)` vs plan reach `N·Δt·v`, live during the replay; red after the point of no return |
 | Teaching note | failure text names both numbers: "At t = 9.4 s the ball was 6.1 m from the wall at 4 m/s; braking needs 8 m. Your horizon covered 1.0 s (≈ 4 m)." |
 
 Dropdown values for N are **precompiled solvers** (see §9.3), so switching N is instant.
@@ -281,27 +284,30 @@ Dropdown values for N are **precompiled solvers** (see §9.3), so switching N is
 ### Level 3: "Dead End" (nonconvexity and local optima)
 
 **Concept:** with obstacles the OCP is nonconvex. The MPC is a *local* planner with
-a short horizon, so it can get trapped in a local optimum. A higher-level plan
-(waypoints) fixes it; this is how MPC is used in practice.
+a short horizon, so it can get trapped in a local optimum. More foresight (a longer
+horizon) does not get it out; a higher-level plan (waypoints) does; this is how MPC is
+used in practice.
 
-**Briefing:** *"The direct route looks open… it isn't. Help the controller with up
-to 3 waypoints."*
+**Briefing:** *"The direct route looks open… it isn't. Two ideas to get the controller
+out: let it look further ahead, or give it a route. Find out which one works."*
 
 | Item | Value |
 |---|---|
-| Map | U-shaped trap that opens towards the start: back wall x ∈ [30, 33], y ∈ [15, 35]; arms y ∈ [32, 35] and y ∈ [15, 18], x ∈ [20, 33]. Start (5, 25), target (45, 25). **(calibrate: check the ellipse sizes)** |
+| Map | U-shaped trap that opens towards the start: back wall x ∈ [30, 33], y ∈ [15, 35]; arms y ∈ [32, 35] and y ∈ [15, 18], x ∈ [20, 33]. Start (5, 25), target (45, 25). Calibrated: **each wall is split into 2 blocks (6 blocks)**; with 3 long blocks the overlapping ellipses formed notches where even good routes got stuck |
 | Limits | a_max = 2, v_max = 2 |
-| Time limit | 45 s **(calibrate)** |
-| Unlocked knobs | place up to **3 waypoints** by clicking on the map (drag to move, right-click to delete) |
-| Locked | Q, R, P, N = 30, margin |
-| Default | no waypoints |
-| Why the default fails | the ball drives into the U and stops at the back wall: the cost gradient points straight into the obstacle, the 3 s horizon sees no way around → **time out** |
-| Intended fix | 1–2 waypoints outside the U (e.g. above the top arm), then the target |
-| Waypoint rule | the MPC reference is the next waypoint (position only, velocity reference = 0). Within the *switch radius* of 2 m **(calibrate)**, the reference jumps to the next waypoint, so the ball doesn't brake at each waypoint. Waypoints inside an ellipse are rejected when placed. |
-| ★★ time par | ≤ 32 s **(calibrate)** |
-| ★★★ secondary par | ≤ 1 waypoint |
+| Time limit | 45 s (calibrated) |
+| Mechanic (2026-10-26) | the player **picks one fix** and tunes only its control; "Your experiments" keeps the best run per fix (outcome, time, ms per solve, stars). Fixes: **no fix** (default); **① longer horizon**: N ∈ {30, 60, 100, 150} (dropdown, all solvers precompiled); **② waypoints**: up to **3 waypoints** by clicking on the map (drag to move, right-click to delete); **③ better terminal cost / cost-to-go**: planned, on hold (AGENTS.md section 6) |
+| Locked | q_p = 1, q_v = 1, r = 0.1, P = 10·Q, margin 0.2 m; N = 30 except with fix ① |
+| Default | no fix (N = 30, no waypoints) |
+| Why the default fails | the ball drives into the U and stops 0.2 m before the back wall: the cost gradient points straight into the obstacle, the 3 s horizon sees no way around → **time out** (calibrated) |
+| Fix ① result (calibrated) | **never escapes**: N = 30/60/100/150 all time out at (29.8, 25); mean solve time 0.86 → 2.5 ms. SQP warm-started from the previous plan stays on the same side of the wall |
+| Intended fix | ② 1 waypoint above/right of the U (x ≥ 30, y ≥ 36), then the target; waypoints left of x ≈ 25 lead back into the top of the U (time out again) |
+| Waypoint rule | the MPC reference is the next waypoint (position only, velocity reference = 0). Within the *switch radius* of 2 m, the reference jumps to the next waypoint, so the ball doesn't brake at each waypoint. Waypoints inside an ellipse are rejected when placed (game and engine). |
+| ★★ time par | ≤ 28 s (calibrated: single good waypoints take 23.6–34 s) |
+| ★★★ secondary par | ≤ 1 waypoint (so only fix ② reaches ★★★). Reference: fix ②, one waypoint at (35, 40) → 25.2 s. Check with `engine_server/calibrate.py dead_end` (also checks that fix ① with N = 150 times out) |
 | Extra plot | distance to the current reference (shows switching) |
-| Teaching note | on time out near an obstacle: "The ball stopped 0.4 m from obstacle 1 with the target behind it: a local optimum. The horizon (3 s) cannot see around the obstacle." |
+| Teaching note | on time out near an obstacle: "The ball stopped 0.2 m from the block at (32, 20) with the target behind it: a local optimum. The horizon (3 s) cannot see around the obstacle…" |
+| Solver note | obstacle constraints are **soft** (exact L1 penalty) since 2026-10-26: hard ellipse constraints made the QP solver fail whenever braking at a_max to stop at an ellipse. Crashes are still checked against the real blocks. |
 
 **Cheaper fallback if we are short on time:** replace click-to-place with 2–3
 predefined waypoint candidates the player toggles on and off.
@@ -584,3 +590,6 @@ live plan display or the "What happened" messages: they are the point of the gam
    warning only (§4.4).
 4. Level 3 mechanic: click-to-place waypoints or the toggle fallback?
 5. Is the terminal weight P a knob anywhere? Current answer: no, fixed at 10·Q.
+6. (2026-10-26, on hold) Level 3 with **three fixes to compare** (longer horizon,
+   waypoints, better terminal cost / cost-to-go). Spike results and the open
+   decision on fix ③ are in AGENTS.md section 6 (TODO).

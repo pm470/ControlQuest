@@ -49,9 +49,11 @@ class SolveSelector(QWidget):
         self.spin.valueChanged.connect(self._on_spin)
         self.set_count(0, 0.1)
 
-    def set_count(self, n: int, dt: float) -> None:
-        """n solves in the current run (0 = no run yet)."""
+    def set_count(self, n: int, dt: float, times: list[float] | None = None) -> None:
+        """n solves in the current run (0 = no run yet). times: when each solve was computed
+        (default: one solve per dt; Level 5 re-plans less often)."""
         self._dt = dt
+        self._times = times
         self.spin.blockSignals(True)
         self.spin.setRange(1, max(1, n))
         self.spin.setValue(1)
@@ -77,4 +79,6 @@ class SolveSelector(QWidget):
         self.solve_selected.emit(value - 1)
 
     def _show_time(self, k: int) -> None:
-        self.time_label.setText(f"computed at t = {k * self._dt:.1f} s" if self.spin.isEnabled() else "")
+        times = getattr(self, "_times", None)
+        t = times[k] if times and 0 <= k < len(times) else k * self._dt
+        self.time_label.setText(f"computed at t = {t:.1f} s" if self.spin.isEnabled() else "")

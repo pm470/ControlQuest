@@ -62,11 +62,11 @@ installed in the course Docker image) and the game window (normal Python on the 
 They talk over HTTP on `http://127.0.0.1:8000`.
 
 ### Prerequisites
-- **Docker Desktop**, running, with the course image. Default name:
-  `vsc-mpcrl26-exercises-94d9982245bae36f409cb410a37b514aafe63fa52604de9d9dc9f0c9c94c729a`
-  (built from the `Dockerfile` of the course repository `mpcrl26-exercises`; contains
-  Python 3.11, acados, CasADi, NumPy). Check with `docker images`. If the image has a
-  different name on this machine, set `CONTROLQUEST_IMAGE` to it.
+- **Docker Desktop**, running, with the course image, built from the `Dockerfile` of the
+  course repository `mpcrl26-exercises` (Python 3.11, acados, CasADi, NumPy). VS Code
+  names it `vsc-mpcrl26-exercises-<hash>`, and **the hash is different on every
+  computer**: the start scripts find the image automatically (first local image named
+  `vsc-mpcrl26-exercises-*`); `CONTROLQUEST_IMAGE` overrides it. Check with `docker images`.
 - **Python 3.10+** on the host (tested with 3.14 on Windows 11).
 
 ### Start the engine (terminal 1, from the repository root)
@@ -120,17 +120,51 @@ without the engine; pressing Run then shows a clear "engine offline" message.
 Contract between the two sides: `controlquest/engine/protocol.py` ↔
 `engine_server/level_rules/common.py` + `server.py`, plus the level JSON files.
 
-## 6. Status (2026-10-25)
+## 6. Status (2026-10-26)
 
 - Done: menus (title with animation, level select with stars/locks/free mode, how
   to play, settings), engine server, MPC package, **Level 1 "The Price of Speed"
   fully playable** (calibrated; `calibrate.py price_of_speed` passes), OCP shown as
   typeset math, battery bar, result card, hints, MPC-solve selector, solver info card,
   responsive layout.
-- Not yet: levels 2–5 (show "coming soon"), speed/acceleration plots (PRD 5.6),
+- Done (2026-10-26, branch `level3to4`): **obstacles in the engine** (up to 6 blocks per
+  level, soft ellipse constraints, block crash check) and **Level 3 "Dead End"**
+  playable: click-to-place waypoints, blocks + ellipses + waypoints on the map
+  (`calibrate.py dead_end`). Since 2026-10-26 the player **picks a fix** (no fix /
+  ① longer horizon N ∈ {30, 60, 100, 150} / ② waypoints) and compares them in
+  "Your experiments"; fix ③ is still a TODO (below). Engine v0.5.0.
+- Done (2026-11-03): **Level 2 "Brake Check"** playable (horizon dropdown, terminal-stop
+  switch, brake-check gauge; `calibrate.py brake_check`). Levels 4 and 5 are built too
+  (branch `level3to4`, `calibrate.py heavy_ball` / `crosswind`). Engine v0.9.0.
+- Not yet: speed/acceleration plots (PRD 5.6),
   saving progress to disk (progress resets on restart, intentionally for now).
-- Next planned work: UI changes requested by the team, then the MPC side of levels 2–5
-  (horizon N per level, terminal constraint, obstacles, model gain, wind, re-plan interval).
+- Next planned work: the MPC side of levels 2, 4, 5 (horizon N per level, terminal
+  constraint, model gain, wind, re-plan interval); obstacles are already in place.
+
+**TODO (on hold since 2026-10-26): fix ③ of Level 3 (a better terminal cost / cost-to-go).**
+The pick-a-fix mechanic is built with fixes ① and ② (fix selector, N dropdown, comparison
+table); ③ is missing. Adding it: one entry in `level_data/dead_end.json` "fixes", a branch
+in `level_rules/dead_end.py`, its controls in `levels/level_3_dead_end.py` (`_on_fix`).
+Plan: `~/.claude/plans/now-i-had-imagined-wondrous-spring.md` (on pm470's machine).
+Feasibility spike results (engine only, default map):
+- ① **Longer horizon N**: never escapes. N = 30/60/100/150 all time out at (29.8, 25);
+  mean solve time 0.95 → 2.67 ms (max 84 ms), run 1.0 → 2.9 s. Lesson: foresight
+  doesn't fix a local optimum; SQP with a warm start stays in its homotopy class.
+  Built as fix ① (it is the "doesn't work" lesson).
+- ② **Waypoints**: built as fix ②, 23.6–34 s with one good waypoint.
+- ③ **Better terminal cost**, as first planned (smooth RBF fit of the cost-to-go as a
+  NONLINEAR_LS terminal cost, runtime weights): **not viable**. 1 of ~40 settings
+  escaped (q_p = 1, no straight-line terminal pull, w_V = 1: 23.4 s), but 20–200 ms
+  per solve, QP failures, 5–90 s runs. Every smooth fit (11×11/σ4, 16×16/σ3,
+  21×21/σ2.5, also with "ridge" data inside the walls) has a false minimum at the trap:
+  the true cost-to-go jumps ~30 m across the 3 m wall (the RL-critic problem).
+- ③ **Alternative that works** (tested, not built): exact cost-to-go D(p) by Dijkstra
+  around the ellipses (0.03 s), MPC reference = point L metres ahead on the descent
+  path of D (no solver change). L = 1 m: time out (creeps); **L = 2–8 m: success,
+  23.3 s, 1.5 ms/solve**; L ≥ 12 m: time out (reference past the corner, trapped
+  at (30, 14)). Open decision: build ③ this way, or keep the terminal-cost version.
+- Code already in the repo for it: `engine_server/mpc/value_function.py` (Dijkstra
+  grid cost-to-go + RBF fit; **not used yet**).
 
 ## 7. Rules for agents working in this repo
 
@@ -172,6 +206,26 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
   feasible): time limit 40 s, battery 5, ★★ ≤ 30 s, ★★★ also energy ≤ 4.75;
   reference q_p = 0.1, q_v = 1, r = 1. Far from the target the MPC always starts at
   full acceleration (~4 energy), so weights mainly change braking/approach.
+
+- (2026-10-25) Level 3 is built now, before the must-have Levels 2, 4, 5 (its obstacle
+  support is reused by Levels 4 and 5). Waypoints are **placed by clicking on the map**
+  (drag to move, right-click to delete), not the PRD's toggle fallback.
+- (2026-10-26) Level 3 presents the trap with **fixes the player picks one at a time
+  and compares** in a table ("Your experiments"); stars + the comparison show "which
+  works better". Built now: ① longer horizon, ② waypoints. ③ (better terminal cost /
+  cost-to-go) is **on hold** (TODO in section 6); it must use runtime parameters only
+  (one OCP recipe, see below). ★★★ stays "≤ 1 waypoint" (only fix ② can succeed).
+- (2026-11-03) Level 2 calibrated (PRD 7): target **2 m in front of the wall** (x = 48), weights
+  locked at Level 1's defaults, t_limit 60 s, ★★ ≤ 27 s, ★★★ also **N ≤ 20**. The user rejected an
+  artificial "≥ 3 m from the wall" star rule: the terminal stop must be *needed*, so the map makes
+  N = 20 without it fail (controller failure); only N = 20 + stop gets ★★★ (25.1 s). Default
+  N = 10 without stop fails; N = 10 + stop succeeds slowly (★, "safe but slow"); N ≥ 30 gets ★★.
+- (2026-11-03) New knob type `"scale": "toggle"` (on/off switch, value 1/0, `"choices": [0, 1]`)
+  in `knob_panel.py`; the controller's `set_terminal_stop(on)` sets v_N = 0 at runtime
+  (`set_bounds` resets it, so no other level inherits it). `calibrate.py` supports
+  `checks.cases` (more expected outcomes/stars per level).
+- (2026-10-26) The knob-range rule (max ≤ max(50, 3 × reference)) is for weights only;
+  discrete knobs with `"choices"` (e.g. horizon N) are exempt (`calibrate.py`).
 
 **MPC**
 - (2026-10-19) Obstacles: a block is given by 4 corners; the solver avoids the
@@ -236,7 +290,7 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
 - Qt: don't name custom widget properties `size` (clashes with QWidget.size); the
   button style property is `scale`. `&` in button text is a mnemonic: write `&&`.
   Some symbols (e.g. ❚❚) are missing from the fonts; use words or painted icons.
-- acados: each compiled solver needs a unique name (`cq_N{N}`); solvers are not
+- acados: each compiled solver needs a unique name (`cq_N{N}_o{MAX_OBSTACLES}`); solvers are not
   thread-safe (the server serialises runs with a lock).
 - The engine does not reload code: restart it after changes. The game warns when the
   engine version does not match (bump both version numbers when the messages change).
@@ -253,7 +307,21 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
   exact size (snapped to device pixels) and re-renders at a smaller font when too wide.
 - Don't override QWidget method names in subclasses (e.g. a `screen()` method on the main
   window broke Qt's `QWidget.screen()`; it is now `get_screen()`).
+- Never hard-code the course image name (`vsc-mpcrl26-exercises-<hash>`) in scripts or
+  docs: the hash is machine-specific (2026-11-03: a commit with one teammate's hash broke
+  the engine start for the other). `start_engine.ps1/.sh` detect it; use `<image>` in docs.
 - Generated code (`engine_server/build/`), `.venv/`, `__pycache__/` are gitignored.
+- Obstacles in acados (2026-10-26, Level 3 calibration): with **hard** ellipse constraints
+  HPIPM failed (MINSTEP) whenever an ellipse and the input bounds were active together
+  (braking at full a_max to stop at an ellipse). What made it robust: ellipse constraints
+  **soft** with an exact L1 penalty (`ocp.py`, `SLACK_L1`), `qp_tol` 1e-6 (not 1e-8),
+  NLP `tol` 1e-4, `hpipm_mode` ROBUST, a small upper bound on h (1e4, not 1e9), unused
+  obstacle slots as a small circle far away (well scaled), and LM 1e-2 only when the
+  level has obstacles. SQP can still cycle near ellipse tips: a solve that stops at the
+  iteration limit (status 2) is used if its plan is valid (finite, within bounds,
+  outside all ellipses), else it is a controller failure (`controller.solve`).
+- Long thin blocks: their ellipses stick out far and overlapping ellipses form notches
+  where the MPC gets stuck. Split walls into shorter blocks (Level 3 uses 6).
 
 ## 10. UI structure and content (what the player sees, as of 2026-10-25)
 
@@ -289,16 +357,25 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
    still being built" (+ dev buttons with `CONTROLQUEST_DEV=1`).
    **Playable level** (`gameplay/level_play_widget.py`), three columns on wide windows:
    - left: the **map** (50 m field, grid every 5 m, labels every 10 m, start ring, target
-     star, ball with trail, current plan, acceleration arrow, HUD "t = … |v| = …");
+     star, ball with trail, current plan, acceleration arrow, HUD "t = … |v| = …";
+     with obstacles: beige blocks, the solver's ellipses dashed, a red × where the ball
+     crashed; Level 3: lilac numbered waypoint diamonds with a dotted route, the active
+     one highlighted during the replay, reached ones grey);
      under it the level's extras (Level 1: **battery bar**, drains, star mark = ★★★
-     limit), the **replay bar** (Play/Pause, scrubber, time, speed 1×/2×/4×/8×,
+     limit; Level 2: **brake check**: wall ahead / braking needs / plan looks ahead, red
+     after the point of no return), the **replay bar** (Play/Pause, scrubber, time, speed 1×/2×/4×/8×,
      default 2×) and the **"MPC solve ‹ k › of n"** selector;
    - middle: **"The OCP your MPC solves"** (typeset math: min over u, stage cost ℓ, Q, P,
      "s.t." constraints; short notes and a symbol legend) and **"Solver info"** (this
      solve: plan cost J*, solve time, SQP iterations, status; whole run: solves, solve
      time avg/max, total solve time, iterations, total cost, engine time);
    - right: **Goal** (one paragraph), **Tune the weights** (one row per knob: symbol +
-     name, a typeable value field, a log slider; Reset + Run ▶; a status line), and
+     name, a typeable value field, a log slider; discrete knobs as a dropdown; Reset +
+     Run ▶; a status line; Level 3: **Choose a fix** instead: selectable cards "No fix",
+     "1. Longer horizon" (N dropdown + "N steps = … s ahead" note), "2. Waypoints"
+     (map editing only then; instructions, "n / 3 waypoints", Clear, the list of
+     waypoints), then **Your experiments** (best run per fix: result with colour dot,
+     ms per solve, stars; this visit only); the OCP card follows the chosen fix; and
      **Stuck?** with hints revealed one at a time (3 per level, the last almost the
      answer).
    - At the end of a replay a **result card** appears over the map: outcome title with

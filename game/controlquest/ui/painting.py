@@ -13,6 +13,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import (
     QBrush,
     QColor,
+    QFont,
     QIcon,
     QPainter,
     QPainterPath,
@@ -146,6 +147,54 @@ def draw_dashed_ellipse(p: QPainter, rect: QRectF, color: str = theme.BLOCK_DARK
     p.setPen(pen)
     p.setBrush(Qt.BrushStyle.NoBrush)
     p.drawEllipse(rect)
+    p.restore()
+
+
+def draw_block_polygon(p: QPainter, corners: list[QPointF], depth: float = 4.0) -> None:
+    """An obstacle block given by its corners (screen points), same look as draw_block."""
+    p.save()
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    poly = QPolygonF(corners)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(theme.BLOCK_DARK))
+    p.drawPolygon(poly.translated(0, depth))
+    p.setBrush(QColor(theme.BLOCK))
+    p.drawPolygon(poly)
+    p.restore()
+
+
+def draw_dashed_outline(p: QPainter, points: list[QPointF], color: str = theme.BLOCK_DARK,
+                        width: float = 2.0) -> None:
+    """A closed dashed outline, e.g. the ellipse the solver sees around a block."""
+    p.save()
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color), width, Qt.PenStyle.CustomDashLine, Qt.PenCapStyle.RoundCap)
+    pen.setDashPattern([3, 3])
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawPolygon(QPolygonF(points))
+    p.restore()
+
+
+def draw_waypoint(p: QPainter, center: QPointF, r: float, number: int, active: bool = False,
+                  done: bool = False) -> None:
+    """A waypoint: a lilac diamond with its number. active = the MPC's current reference."""
+    p.save()
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    fill = theme.WAYPOINT if not done else theme.NEUTRAL
+    if active:
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(theme.qcolor(fill, 70))
+        p.drawEllipse(center, r * 1.7, r * 1.7)
+    diamond = QPolygonF([center + QPointF(0, -r), center + QPointF(r, 0),
+                         center + QPointF(0, r), center + QPointF(-r, 0)])
+    p.setPen(QPen(QColor(theme.SURFACE), 2))
+    p.setBrush(QColor(fill))
+    p.drawPolygon(diamond)
+    p.setPen(QColor(theme.SURFACE))
+    p.setFont(theme.font(max(8, int(r * 0.95)), QFont.Weight.Black))
+    p.drawText(QRectF(center.x() - r, center.y() - r, 2 * r, 2 * r), Qt.AlignmentFlag.AlignCenter,
+               str(number))
     p.restore()
 
 

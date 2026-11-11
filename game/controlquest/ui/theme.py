@@ -7,6 +7,8 @@ that the stylesheet styles.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtGui import QColor, QFont
 
 # --- colours -----------------------------------------------------------------
@@ -30,6 +32,7 @@ STAR = "#FFC93C"
 STAR_DARK = "#E8A90C"
 BLOCK = "#C9BBA8"  # obstacles
 BLOCK_DARK = "#A8977F"
+WAYPOINT = "#A98BEB"  # lilac diamonds (Level 3)
 
 SUCCESS = "#4CBF6B"
 WARNING = "#FFA94D"
@@ -73,6 +76,10 @@ def font(size_px: float, weight: QFont.Weight = QFont.Weight.Normal) -> QFont:
 
 def app_font() -> QFont:
     return font(14)
+
+
+# the dropdown arrow (an image: Qt stylesheets cannot draw one); forward slashes for Qt
+CHEVRON = (Path(__file__).resolve().parent / "assets" / "chevron_down.svg").as_posix()
 
 
 def stylesheet() -> str:
@@ -140,6 +147,12 @@ def stylesheet() -> str:
         background: {SURFACE}; border: 2px solid {LINE}; border-radius: 15px;
     }}
     QFrame[role="divider"] {{ background: {LINE}; max-height: 2px; min-height: 2px; border: none; }}
+    QFrame[role="choice"] {{
+        background: {SURFACE}; border: 2px solid {LINE}; border-radius: 14px;
+    }}
+    QFrame[role="choice"]:hover {{ border-color: {PRIMARY_HOVER}; }}
+    QFrame[role="choice"][selected="true"] {{ background: {SURFACE_ALT}; border-color: {PRIMARY}; }}
+    QFrame[role="choice"] QLabel {{ background: transparent; }}
 
     /* inputs */
     QLineEdit {{
@@ -168,7 +181,8 @@ def stylesheet() -> str:
         border-radius: 12px; padding: 6px 12px; min-width: 56px;
     }}
     QComboBox:hover {{ border-color: {PRIMARY}; }}
-    QComboBox::drop-down {{ border: none; width: 18px; }}
+    QComboBox::drop-down {{ border: none; width: 22px; }}
+    QComboBox::down-arrow {{ image: url("{CHEVRON}"); width: 12px; height: 8px; }}
     QComboBox QAbstractItemView {{
         background: {SURFACE}; border: 2px solid {LINE}; selection-background-color: {SURFACE_ALT};
         selection-color: {INK}; outline: none;

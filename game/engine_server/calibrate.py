@@ -3,9 +3,12 @@
     python calibrate.py price_of_speed            # checks from the level file
     python calibrate.py price_of_speed --sweep    # table of time / energy over the weights
     python calibrate.py price_of_speed q_p=0.3 r=1   # one run with these knobs
+    python calibrate.py dead_end fix=waypoints wp=35,40   # one run with a fix and waypoints
+    python calibrate.py dead_end fix=horizon N=100
 
 Checks: the default knobs fail with checks.default_outcome, the reference knobs
-pass with checks.reference.stars, and every knob range follows the team rule
+pass with checks.reference.stars, each of checks.cases gives its outcome (and
+stars), and every knob range follows the team rule
 max <= max(50, 3 * reference value) (and the default/reference lie inside the range).
 Exit code 1 if a check fails.
 """
@@ -22,7 +25,9 @@ from level_rules.common import load_level
 def show(label: str, result: dict) -> None:
     m = result["metrics"]
     print(f"{label:<10} {result['outcome']:<18} {result['stars']} stars  t={m['time']:5.1f} s  "
-          f"E={m['energy']:5.2f}  max|a|={m['max_accel']:.2f}  knobs={result['knobs']}")
+          f"E={m['energy']:5.2f}  max|a|={m['max_accel']:.2f}  knobs={result['knobs']}"
+          + (f"  waypoints={result['waypoints']}" if result.get("waypoints") else "")
+          + (f"  fix={result['fix']}  mean solve {m['mean_solve_ms']:.2f} ms" if result.get("fix") else ""))
     for msg in result["messages"]:
         print(f"{'':<10} - {msg}")
 
@@ -35,6 +40,8 @@ def check_knob_ranges(level: dict) -> bool:
     ok = True
     for spec in level["knobs"]:
         name = spec["name"]
+        if "choices" in spec or spec.get("scale") == "int":  # e.g. horizon N: not a weight, rule n/a
+            continue
         allowed = max(KNOB_MAX_FLOOR, KNOB_MAX_FACTOR * ref.get(name, 0.0))
         if spec["max"] > allowed + 1e-12:
             print(f"FAIL: knob {name} max {spec['max']:g} > allowed {allowed:g} "
@@ -53,17 +60,23 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("level_id")
-    parser.add_argument("knobs", nargs="*", help="name=value pairs for a single run")
+    parser.add_argument("knobs", nargs="*", help="name=value pairs (wp=x,y for a waypoint) for one run")
     parser.add_argument("--sweep", action="store_true")
     args = parser.parse_args()
     level = load_level(args.level_id)
 
     if args.knobs:
-        knobs = {k: float(v) for k, v in (kv.split("=", 1) for kv in args.knobs)}
-        show("run", runner.run_level(args.level_id, knobs))
+        pairs = [kv.split("=", 1) for kv in args.knobs]
+        knobs = {k: float(v) for k, v in pairs if k not in ("wp", "fix")}
+        wps = [[float(c) for c in v.split(",")] for k, v in pairs if k == "wp"]
+        fix = next((v for k, v in pairs if k == "fix"), None)
+        show("run", runner.run_level(args.level_id, knobs, wps or None, fix))
         return 0
 
     if args.sweep:
+        if args.level_id != "price_of_speed":
+            print("--sweep is only written for price_of_speed")
+            return 1
         print("q_p / r rows, q_v columns: time [s] / energy (T/O = time out, BAT = battery empty)")
         qps, qvs = [10, 1, 0.3, 0.1, 0.03, 0.01], [0.01, 0.1, 1, 3, 10, 30]
         print(f"{'q_p':>8} " + "".join(f"{f'q_v={v:g}':>15}" for v in qvs))
@@ -87,10 +100,23 @@ def main() -> int:
         ok = False
     ref = checks.get("reference")
     if ref:
-        res = runner.run_level(args.level_id, ref["knobs"])
+        res = runner.run_level(args.level_id, ref["knobs"], ref.get("waypoints"), ref.get("fix"))
         show("reference", res)
         if res["outcome"] != "success" or res["stars"] < ref.get("stars", 1):
             print(f"FAIL: reference should pass with {ref.get('stars', 1)} stars")
+            ok = False
+    for i, case in enumerate(checks.get("cases", []), 1):  # more expected results (Level 2)
+        res = runner.run_level(args.level_id, case.get("knobs", {}), case.get("waypoints"), case.get("fix"))
+        show(f"case {i}", res)
+        if res["outcome"] != case["outcome"] or res["stars"] != case.get("stars", res["stars"]):
+            print(f"FAIL: case {i} should end with '{case['outcome']}'"
+                  + (f" and {case['stars']} stars" if "stars" in case else ""))
+            ok = False
+    for fix, chk in checks.get("fixes", {}).items():  # expected outcome per fix (Level 3)
+        res = runner.run_level(args.level_id, chk.get("knobs", {}), chk.get("waypoints"), fix)
+        show(fix, res)
+        if res["outcome"] != chk["outcome"]:
+            print(f"FAIL: fix {fix} should end with '{chk['outcome']}'")
             ok = False
     print("all checks passed" if ok else "checks FAILED")
     return 0 if ok else 1
