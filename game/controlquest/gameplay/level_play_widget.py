@@ -1,5 +1,12 @@
-"""The playable level (PRD 5.2): map + playback on the left, goal / knobs / Run /
-level extras / hints on the right, result card over the map at the end.
+"""The playable level (PRD 5.2): three tiles (AGENTS.md section 10, "Design rules"):
+
+    map tile            | OCP tile               | controls tile
+    map (+ result card) | the OCP your MPC solves| Goal
+    level extras        | This solve (4 numbers) | knobs (+ level controls)
+    replay well:        | Whole run (one line)   | Reset · Run
+    ▶ scrubber time 2×  ‹ k/n ›                  | (level sections) · Stuck? hints
+
+Narrow windows: the OCP tile moves into the right column, under the controls tile.
 
 Flow of one run:
     Run -> RunRequest(level id, knobs) -> engine (Docker) -> RunResult
@@ -23,8 +30,8 @@ from ..core.context import AppContext
 from ..core.navigation import ScreenId
 from ..engine.protocol import EngineStatus, RunRequest, RunResult
 from ..levels.base import LevelInfo
-from ..ui.widgets import Button, Card, label, scrollable
-from .knob_panel import KnobPanel
+from ..ui.widgets import Button, Card, label, scrollable, well
+from .knob_panel import KnobPanel, knob_colors
 from .level_data import LevelData
 from .map_view import MapView
 from .ocp_card import OcpCard, OcpSpec
@@ -36,6 +43,7 @@ from .solve_selector import SolveSelector
 SIDE_WIDTH = 330
 MIDDLE_WIDTH = 350
 WIDE_MIN_WIDTH = 1150  # below this the OCP column moves into the right column
+TILE_PADDING = 20
 
 
 class LevelPlayWidget(QWidget):
@@ -50,7 +58,7 @@ class LevelPlayWidget(QWidget):
         self._hints_shown = 0
         self.playback = Playback(self)
 
-        # --- left: map with the result card on top, playback below ---
+        # --- left: the map tile: map (result card on top), level extras, replay well ---
         self.map = MapView()
         self.map.set_level(data)
         self.result_panel = ResultPanel()
@@ -64,80 +72,92 @@ class LevelPlayWidget(QWidget):
         self.solve_selector = SolveSelector()
         self.solve_selector.setToolTip("Step through the MPC solves of this run: the map shows "
                                        "the plan computed in the selected solve")
-        left = QVBoxLayout()
-        left.setSpacing(8)
-        left.addWidget(map_area, 1)
-        self.add_extras(left)  # level extras (e.g. battery) under the map, near the replay
-        left.addWidget(self.bar)
-        left.addWidget(self.solve_selector)
+        map_tile = Card(padding=16, spacing=10, shadow=False)
+        map_tile.body.addWidget(map_area, 1)
+        self.add_extras(map_tile.body)  # level extras (e.g. battery) under the map, above the replay
+        replay = well()
+        replay_row = QHBoxLayout(replay)
+        replay_row.setContentsMargins(8, 7, 8, 7)
+        replay_row.setSpacing(10)
+        replay_row.addWidget(self.bar, 1)
+        replay_row.addWidget(self.solve_selector)
+        map_tile.body.addWidget(replay)
 
-        # --- middle: the OCP and the solver info ---
+        # --- middle: one tile with the OCP and the solver info ---
         # Wide window: own column next to the map. Narrow window: moved into the
-        # right column below the knobs (see resizeEvent).
+        # right column below the controls (see resizeEvent).
+        self.knob_colors = knob_colors(data.knobs)  # same colours in the knobs and in the OCP
         self._middle = QWidget()
         mid = QVBoxLayout(self._middle)
-        mid.setContentsMargins(4, 4, 8, 8)
-        mid.setSpacing(12)
-        self.ocp_card = OcpCard(self.ocp_spec())
-        mid.addWidget(self.ocp_card)
+        mid.setContentsMargins(0, 0, 0, 0)
+        ocp_tile = Card(padding=TILE_PADDING, spacing=18, shadow=False)
+        self.ocp_card = OcpCard(self.ocp_spec(), knob_colors=self.knob_colors)
+        ocp_tile.body.addWidget(self.ocp_card)
+        ocp_tile.body.addStretch(1)
         self.run_info = RunInfoCard()
-        mid.addWidget(self.run_info)
-        mid.addStretch(1)
+        ocp_tile.body.addWidget(self.run_info)
+        mid.addWidget(ocp_tile, 1)
         self._middle_scroll = scrollable(self._middle)
         self._middle_scroll.setFixedWidth(MIDDLE_WIDTH)
         self._wide = True
 
-        # --- right: goal, knobs + run, hints ---
+        # --- right: one tile with goal, controls + Reset/Run, level sections, hints ---
         side = QWidget()
         col = QVBoxLayout(side)
-        col.setContentsMargins(4, 4, 8, 8)
-        col.setSpacing(12)
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(16)
         self._side_col = col
+        controls = Card(padding=TILE_PADDING, spacing=16, shadow=False)
+        tile = controls.body
 
-        goal = Card(padding=18, spacing=6, shadow=False)
-        goal.body.addWidget(label("Goal", "subheading"))
-        goal.body.addWidget(label(self.goal_text(), "body", wrap=True))
-        col.addWidget(goal)
+        goal = QVBoxLayout()
+        goal.setSpacing(3)
+        goal.addWidget(label("Goal", "eyebrow"))
+        goal.addWidget(label(self.goal_text(), "goal", wrap=True))
+        tile.addLayout(goal)
 
-        knobs_card = Card(padding=18, spacing=10, shadow=False)
-        knobs_card.body.addWidget(label(self.controls_title(), "subheading"))
+        # the level's controls: title, knobs, and whatever add_controls() adds
+        self.controls_box = QVBoxLayout()
+        self.controls_box.setSpacing(12)
+        self.controls_box.addWidget(label(self.controls_title(), "eyebrow"))
         self.knobs = KnobPanel(data.knobs)
-        knobs_card.body.addWidget(self.knobs)
+        self.controls_box.addWidget(self.knobs)
         self.knobs.setVisible(bool(data.knobs))
-        self.add_controls(knobs_card.body)
+        self.add_controls(self.controls_box)
+        tile.addLayout(self.controls_box)
+
         buttons = QHBoxLayout()
-        self.reset_button = Button("Reset", variant="ghost")
+        buttons.setSpacing(10)
+        self.reset_button = Button("Reset", scale="tall")
         self.reset_button.setToolTip("Back to the level's default settings")
-        self.run_button = Button("Run  ▶", variant="primary")
+        self.run_button = Button("Run  ▶", variant="primary", scale="large")
         buttons.addWidget(self.reset_button)
-        buttons.addStretch(1)
-        buttons.addWidget(self.run_button)
-        knobs_card.body.addLayout(buttons)
+        buttons.addWidget(self.run_button, 1)
+        tile.addLayout(buttons)
         self.status = label("", "caption", wrap=True)
-        knobs_card.body.addWidget(self.status)
-        col.addWidget(knobs_card)
-        self.add_side_cards(col)  # level cards under the controls (e.g. a comparison table)
-        self._middle_slot = col.count()  # where the middle column goes when narrow
+        tile.addWidget(self.status)
+        self.add_side_cards(tile)  # level sections under the controls (e.g. a comparison table)
+        tile.addStretch(1)
 
         if level.hints:
-            hints = Card(padding=18, spacing=8, shadow=False)
             row = QHBoxLayout()
             row.addWidget(label("Stuck?", "subheading"), 1)
-            self.hint_button = Button(f"Hint 1/{len(level.hints)}", variant="ghost")
+            self.hint_button = Button(f"Show hint 1/{len(level.hints)}", variant="link")
             row.addWidget(self.hint_button)
-            hints.body.addLayout(row)
+            tile.addLayout(row)
             self.hint_box = QVBoxLayout()
-            hints.body.addLayout(self.hint_box)
-            col.addWidget(hints)
+            self.hint_box.setSpacing(6)
+            tile.addLayout(self.hint_box)
             self.hint_button.clicked.connect(self._show_hint)
-        col.addStretch(1)
+        col.addWidget(controls, 1)
+        self._middle_slot = col.count()  # where the middle column goes when narrow
 
         side_scroll = scrollable(side)
         side_scroll.setFixedWidth(SIDE_WIDTH)
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(14)
-        root.addLayout(left, 1)
+        root.setSpacing(16)
+        root.addWidget(map_tile, 1)
         root.addWidget(self._middle_scroll)
         root.addWidget(side_scroll)
 
@@ -271,7 +291,7 @@ class LevelPlayWidget(QWidget):
         done = self._hints_shown >= len(hints)
         self.hint_button.setEnabled(not done)
         self.hint_button.setText("No more hints" if done else
-                                 f"Hint {self._hints_shown + 1}/{len(hints)}")
+                                 f"Show hint {self._hints_shown + 1}/{len(hints)}")
 
     def _on_engine_status(self, status: EngineStatus) -> None:
         self.run_button.setToolTip("Simulate this controller" if status.can_run
@@ -284,8 +304,9 @@ class LevelPlayWidget(QWidget):
         return f"Bring the ball to the star and stop there within {self.data.t_limit:g} s."
 
     def ocp_spec(self) -> OcpSpec:
-        """The OCP shown in the side panel. Default: the standard point-mass OCP with
-        weights q_p, q_v, r, built from the level file's numbers."""
+        """The OCP shown in the middle tile. Default: the standard point-mass OCP with
+        weights q_p, q_v, r, built from the level file's numbers. Wrap what a knob changes
+        in \\knob{name}{...}: it is drawn in that knob's colour (top level of a line only)."""
         d = self.data
         n = d.N
         (x0, y0), (x1, y1) = d.workspace
@@ -293,7 +314,8 @@ class LevelPlayWidget(QWidget):
             objective=[
                 rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
                 rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2",
-                r"\ell(x,u) = q_p\,\|p-p_{\star}\|^2 + q_v\,\|v\|^2 + r\,\|u\|^2",
+                r"\ell(x,u) = \knob{q_p}{q_p}\,\|p-p_{\star}\|^2 + \knob{q_v}{q_v}\,\|v\|^2"
+                r" + \knob{r}{r}\,\|u\|^2",
                 rf"Q = \mathrm{{diag}}(q_p,q_p,q_v,q_v),\quad P = {d.raw.get('terminal_factor', 10):g}\,Q",
             ],
             constraints=[
@@ -316,7 +338,8 @@ class LevelPlayWidget(QWidget):
         return "Tune the weights"
 
     def add_controls(self, layout: QVBoxLayout) -> None:
-        """Add level-specific controls to the knobs card (above Reset / Run)."""
+        """Add level-specific controls under the knobs (above Reset / Run). layout holds
+        [0] the controls title, [1] the knobs. Plain widgets only: no cards inside the tile."""
 
     def waypoints(self) -> list[tuple[float, float]]:
         """Waypoints sent with the run (levels with waypoints override this)."""
@@ -334,14 +357,16 @@ class LevelPlayWidget(QWidget):
         """Lock level-specific controls while the engine computes."""
 
     def add_side_cards(self, column: QVBoxLayout) -> None:
-        """Add level-specific cards to the right column, under the controls."""
+        """Add level-specific sections (e.g. a comparison table) to the controls tile, under
+        Reset / Run. Plain widgets with a subheading, not cards (no boxes in boxes)."""
 
     def on_result(self, result: RunResult) -> None:
         """Called when a new run result arrives (before its replay starts)."""
 
     def add_extras(self, column: QVBoxLayout) -> None:
-        """Add level-specific widgets (e.g. a budget bar) under the map, above the replay bar.
-        Keep them low (one row, ~70 px): the map gets the rest of the height."""
+        """Add level-specific widgets (e.g. a budget bar) to the map tile, under the map and
+        above the replay well. Plain widgets, no cards; keep them low (one row, ~30-90 px):
+        the map gets the rest of the height."""
 
     def update_extras(self, t: float) -> None:
         """Update level-specific widgets for replay time t."""

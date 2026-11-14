@@ -4,6 +4,9 @@ Weights use logarithmic sliders: only ratios matter, and useful values span deca
 Whole-number knobs ("scale": "int", e.g. the horizon N) use a linear slider and only
 take integers; "scale": "choice" knobs use a dropdown of allowed values; "scale":
 "toggle" knobs are an on/off switch (value 1.0 / 0.0).
+
+Every knob has a colour (theme.KNOB_COLORS, by its position in the level file): its
+symbol chip and slider use it, and so does its part of the OCP (\\knob{name}{...}).
 """
 
 from __future__ import annotations
@@ -14,6 +17,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLineEdit, QSlider, QToolTip, QVBoxLayout,
                                QWidget)
 
+from ..ui import theme
+from ..ui.math_render import MathChip
 from ..ui.widgets import ToggleSwitch, label
 from .level_data import KnobSpec
 
@@ -22,6 +27,21 @@ STEPS_PER_DECADE = 100  # log slider resolution
 
 def format_value(v: float) -> str:
     return f"{v:.4g}" if 1e-3 <= abs(v) < 1e5 else f"{v:.2e}"
+
+
+def _name_row(spec: KnobSpec, color: theme.KnobColor) -> QHBoxLayout:
+    """Coloured symbol chip + the knob's name (tooltip: the help text)."""
+    row = QHBoxLayout()
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(8)
+    chip = MathChip(spec.symbol, color)
+    chip.setToolTip(spec.help)
+    name = label(spec.label, "body")
+    name.setStyleSheet(f"font-weight: 700; color: {theme.INK};")
+    name.setToolTip(spec.help)
+    row.addWidget(chip)
+    row.addWidget(name, 1)
+    return row
 
 
 class KnobRow(QWidget):
@@ -34,27 +54,29 @@ class KnobRow(QWidget):
 
     changed = Signal()
 
-    def __init__(self, spec: KnobSpec, parent: QWidget | None = None):
+    def __init__(self, spec: KnobSpec, color: theme.KnobColor = theme.KNOB_COLORS[0],
+                 parent: QWidget | None = None):
         super().__init__(parent)
         self.spec = spec
         self._value = spec.default
         col = QVBoxLayout(self)
         col.setContentsMargins(0, 0, 0, 0)
         col.setSpacing(4)
-        top = QHBoxLayout()
-        name = label(f"<b>{spec.symbol}</b>&nbsp;&nbsp;{spec.label}", "body")
-        name.setTextFormat(Qt.TextFormat.RichText)
+        top = _name_row(spec, color)
         self.edit = QLineEdit()
         self.edit.setProperty("role", "knob_value")
         self.edit.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.edit.setFixedWidth(92)
+        self.edit.setFixedWidth(76)
         self.edit.setToolTip(f"Type a value between {format_value(spec.min)} and "
                              f"{format_value(spec.max)}, then press Enter")
-        top.addWidget(name, 1)
         top.addWidget(self.edit)
         col.addLayout(top)
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.slider.setStyleSheet(  # the knob's colour (the rest comes from the theme)
+            f"QSlider::sub-page:horizontal {{ background: {color.main}; border-radius: 5px; }}"
+            f"QSlider::sub-page:horizontal:disabled {{ background: {theme.LOCKED}; }}"
+            f"QSlider::handle:horizontal:hover {{ border-color: {color.main}; }}")
         if spec.scale == "log":
             self._lo = math.log10(spec.min)
             self.slider.setRange(0, round((math.log10(spec.max) - self._lo) * STEPS_PER_DECADE))
@@ -63,7 +85,6 @@ class KnobRow(QWidget):
         else:
             self.slider.setRange(0, 1000)
         col.addWidget(self.slider)
-        name.setToolTip(spec.help)
         self.slider.setToolTip(spec.help)
         self.slider.valueChanged.connect(self._on_slider)
         self.edit.editingFinished.connect(self._on_edit)
@@ -139,21 +160,20 @@ class ChoiceRow(QWidget):
 
     changed = Signal()
 
-    def __init__(self, spec: KnobSpec, parent: QWidget | None = None):
+    def __init__(self, spec: KnobSpec, color: theme.KnobColor = theme.KNOB_COLORS[0],
+                 parent: QWidget | None = None):
         super().__init__(parent)
         self.spec = spec
-        row = QHBoxLayout(self)
+        row = QVBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        name = label(f"<b>{spec.symbol}</b>&nbsp;&nbsp;{spec.label}", "body")
-        name.setTextFormat(Qt.TextFormat.RichText)
-        name.setToolTip(spec.help)
+        top = _name_row(spec, color)
         self.combo = QComboBox()
         self.combo.setCursor(Qt.CursorShape.PointingHandCursor)
         self.combo.setToolTip(spec.help)
         for c in spec.choices:
             self.combo.addItem(format_value(c), c)
-        row.addWidget(name, 1)
-        row.addWidget(self.combo)
+        top.addWidget(self.combo)
+        row.addLayout(top)
         self.combo.currentIndexChanged.connect(lambda _i: self.changed.emit())
         self.set_value(spec.default)
 
@@ -171,18 +191,17 @@ class ToggleRow(QWidget):
 
     changed = Signal()
 
-    def __init__(self, spec: KnobSpec, parent: QWidget | None = None):
+    def __init__(self, spec: KnobSpec, color: theme.KnobColor = theme.KNOB_COLORS[0],
+                 parent: QWidget | None = None):
         super().__init__(parent)
         self.spec = spec
-        row = QHBoxLayout(self)
+        row = QVBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        name = label(f"<b>{spec.symbol}</b>&nbsp;&nbsp;{spec.label}", "body")
-        name.setTextFormat(Qt.TextFormat.RichText)
-        name.setToolTip(spec.help)
+        top = _name_row(spec, color)
         self.switch = ToggleSwitch(bool(spec.default))
         self.switch.setToolTip(spec.help)
-        row.addWidget(name, 1)
-        row.addWidget(self.switch)
+        top.addWidget(self.switch)
+        row.addLayout(top)
         self.switch.toggled.connect(lambda _on: self.changed.emit())
 
     def value(self) -> float:
@@ -191,6 +210,11 @@ class ToggleRow(QWidget):
     def set_value(self, value: float) -> None:
         """On if value >= 0.5; emits changed if it changed."""
         self.switch.setChecked(value >= 0.5)
+
+
+def knob_colors(specs: list[KnobSpec]) -> dict[str, theme.KnobColor]:
+    """{knob name: colour}, by the knob's position in the level file."""
+    return {spec.name: theme.knob_color(i) for i, spec in enumerate(specs)}
 
 
 class KnobPanel(QWidget):
@@ -204,7 +228,8 @@ class KnobPanel(QWidget):
         col.setContentsMargins(0, 0, 0, 0)
         col.setSpacing(14)
         rows = {"choice": ChoiceRow, "toggle": ToggleRow}
-        self.rows = [rows.get(spec.scale, KnobRow)(spec) for spec in specs]
+        self.colors = knob_colors(specs)
+        self.rows = [rows.get(spec.scale, KnobRow)(spec, self.colors[spec.name]) for spec in specs]
         for row in self.rows:
             row.changed.connect(self.changed)
             col.addWidget(row)

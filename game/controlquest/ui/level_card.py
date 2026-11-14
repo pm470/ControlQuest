@@ -1,22 +1,36 @@
-"""The clickable card for one level in the level select (custom painted)."""
+"""The clickable tile for one level in the level select (custom painted).
+
+    ┌──────────────┐   top block in the level's accent colour: number + icon
+    │ 2        ⟶|  │   (locked: muted, with a lock)
+    ├──────────────┤
+    │ Brake Check  │   title, topic
+    │ Horizon & …  │
+    │ ★ ★ ☆  / Play│   stars, or a Play pill on the next level to play
+    └──────────────┘   stands on a lip like every tile; the next level is lifted
+                       and ringed in its colour (no mascot on this screen).
+"""
 
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QAbstractButton, QWidget
 
 from ..core.config import MAX_STARS
 from ..levels.base import LevelInfo
 from . import painting, theme
+from .widgets import is_keyboard_focus
 
-CARD_SIZE = QSize(212, 244)
+TILE_W, TILE_H, BLOCK_H = 200, 290, 132
+PAD_X, PAD_TOP, PAD_BOTTOM = 10, 20, 12  # room for the ring, the lift and the lip
+CARD_SIZE = QSize(TILE_W + 2 * PAD_X, TILE_H + PAD_TOP + PAD_BOTTOM)
+RADIUS = theme.RADIUS_CARD
 
 
 class LevelCard(QAbstractButton):
-    """Shows number, title, topic and stars; greyed out with a lock when locked.
+    """Shows number, icon, title, topic and stars; muted with a lock when locked.
 
-    Locked cards stay clickable so the screen can explain how to unlock them.
+    Locked tiles stay clickable so the screen can explain how to unlock them.
     """
 
     def __init__(self, level: LevelInfo, parent: QWidget | None = None):
@@ -24,21 +38,32 @@ class LevelCard(QAbstractButton):
         self.level = level
         self._stars = 0
         self._locked = False
+        self._next = False
         self._lock_text = ""
         self._hover = False
+        self._keyboard_focus = False  # focus ring only when focused with Tab
         self.setFixedSize(CARD_SIZE)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName(f"Level {level.number}: {level.title}")
 
-    def set_progress(self, stars: int, locked: bool, lock_text: str = "") -> None:
+    def set_progress(self, stars: int, locked: bool, lock_text: str = "", is_next: bool = False) -> None:
         self._stars, self._locked, self._lock_text = stars, locked, lock_text
+        self._next = is_next and not locked
         self.setToolTip(lock_text if locked else f"{self.level.topic}: {self.level.concept}")
         self.update()
 
     @property
     def locked(self) -> bool:
         return self._locked
+
+    def focusInEvent(self, event) -> None:
+        self._keyboard_focus = is_keyboard_focus(event)
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event) -> None:
+        self._keyboard_focus = False
+        super().focusOutEvent(event)
 
     def enterEvent(self, event) -> None:
         self._hover = True
@@ -54,64 +79,74 @@ class LevelCard(QAbstractButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         locked = self._locked
-        accent = QColor(theme.accent(self.level.accent))
-        lifted = self._hover and not locked
-        rect = QRectF(self.rect()).adjusted(8, 8, -8, -14)
-        if lifted:
-            rect.translate(0, -4)
+        accent = theme.accent(self.level.accent)
+        rect = QRectF(PAD_X, PAD_TOP, TILE_W, TILE_H)
+        lift = (8 if self._next else 0) + (3 if self._hover and not locked else 0)
+        rect.translate(0, -lift + 8)  # resting tiles sit a little lower than the lifted one
 
-        # shadow + body
+        # ring around the next level, lip, body
+        if self._next:
+            ring = QColor(accent)
+            ring.setAlpha(110)
+            p.setPen(QPen(ring, 4))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRoundedRect(rect.adjusted(-6, -6, 6, 6 + 7), RADIUS + 6, RADIUS + 6)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(43, 45, 66, 38 if lifted else (12 if locked else 22)))
-        p.drawRoundedRect(rect.translated(0, 7 if lifted else 5), theme.RADIUS_CARD, theme.RADIUS_CARD)
-        border = accent if lifted else QColor(theme.BALL if self.hasFocus() else theme.LINE)
-        p.setPen(QPen(border, 2.5))
-        p.setBrush(QColor(theme.SURFACE_ALT if locked else theme.SURFACE))
-        p.drawRoundedRect(rect, theme.RADIUS_CARD, theme.RADIUS_CARD)
+        p.setBrush(QColor(theme.LIP))
+        p.drawRoundedRect(rect.translated(0, 7), RADIUS, RADIUS)
+        body = QPainterPath()
+        body.addRoundedRect(rect, RADIUS, RADIUS)
+        p.save()
+        p.setClipPath(body)
+        p.fillRect(rect, QColor(theme.SURFACE_ALT if locked else theme.SURFACE))
+        block = QRectF(rect.left(), rect.top(), rect.width(), BLOCK_H)
+        p.fillRect(block, QColor(theme.LOCKED if locked else accent))
+        p.restore()
+        if self.hasFocus() and self._keyboard_focus:
+            p.setPen(QPen(QColor(theme.FOCUS), 3))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRoundedRect(rect.adjusted(1.5, 1.5, -1.5, -1.5), RADIUS - 1, RADIUS - 1)
 
-        # number badge (a lock when locked)
-        badge_c = QPointF(rect.left() + 42, rect.top() + 42)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(theme.LOCKED) if locked else accent)
-        p.drawEllipse(badge_c, 24, 24)
+        # number + icon (lock when locked)
+        p.setPen(QColor(theme.SURFACE_ALT if locked else "white"))
+        p.setFont(theme.font(60, QFont.Weight.Black))
+        p.drawText(QRectF(block.left() + 22, block.top(), 90, block.height()),
+                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, str(self.level.number))
+        icon_c = QPointF(block.right() - 44, block.center().y())
         if locked:
-            painting.draw_lock(p, badge_c + QPointF(0, 2), 24, color=theme.SURFACE, hole=theme.LOCKED)
-        else:
-            p.setPen(QColor("white"))
-            p.setFont(theme.font(22, QFont.Weight.ExtraBold))
-            p.drawText(QRectF(badge_c.x() - 24, badge_c.y() - 24, 48, 48),
-                       Qt.AlignmentFlag.AlignCenter, str(self.level.number))
+            painting.draw_lock(p, icon_c + QPointF(0, 3), 34, color=theme.SURFACE_ALT, hole=theme.LOCKED)
+        elif self.level.icon:
+            painting.draw_level_icon(p, self.level.icon, icon_c, 44, "white")
 
-        # title
+        # title, topic (or how to unlock)
+        left, width = rect.left() + 18, rect.width() - 36
         p.setPen(QColor(theme.MUTED if locked else theme.INK))
         p.setFont(theme.font(18, QFont.Weight.ExtraBold))
-        left = rect.left() + 20
-        title_rect = QRectF(left, rect.top() + 80, rect.width() - 40, 50)
+        title_rect = QRectF(left, block.bottom() + 14, width, 48)
         p.drawText(title_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
                    | Qt.TextFlag.TextWordWrap, self.level.title)
-
-        if locked:  # how to unlock instead of topic and stars
-            p.setPen(QColor(theme.INK_SOFT))
-            p.setFont(theme.font(13, QFont.Weight.Bold))
-            p.drawText(QRectF(left, rect.top() + 136, rect.width() - 40, 40),
-                       Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap, self._lock_text)
+        title_h = p.fontMetrics().boundingRect(title_rect.toRect(), Qt.TextFlag.TextWordWrap,
+                                               self.level.title).height()
+        p.setFont(theme.font(13, QFont.Weight.Bold))
+        p.setPen(QColor(theme.MUTED if locked else theme.INK_SOFT))
+        p.drawText(QRectF(left, block.bottom() + 16 + title_h, width, 40),
+                   Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap,
+                   self._lock_text if locked else self.level.topic)
+        if locked:
             return
 
-        # topic tag
-        tag_font = theme.font(12, QFont.Weight.Bold)
-        p.setFont(tag_font)
-        tw = QFontMetricsF(tag_font).horizontalAdvance(self.level.topic) + 22
-        tag = QRectF(left, rect.top() + 136, min(tw, rect.width() - 40), 24)
-        tag_bg = QColor(accent)
-        tag_bg.setAlpha(40)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(tag_bg)
-        p.drawRoundedRect(tag, 12, 12)
-        p.setPen(QColor(theme.INK_SOFT))
-        p.drawText(tag, Qt.AlignmentFlag.AlignCenter, self.level.topic)
-
-        # stars
-        cy = rect.bottom() - 28
-        for i in range(MAX_STARS):
-            painting.draw_star(p, QPointF(rect.center().x() + (i - 1) * 32, cy), 11.5,
-                               filled=i < self._stars)
+        # bottom: a Play pill on the next level, stars otherwise
+        bottom = rect.bottom() - 22
+        if self._next and self._stars == 0:
+            pill = QRectF(left, bottom - 17, 78, 34)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(theme.PRIMARY_PRESSED))
+            p.drawRoundedRect(pill.translated(0, 3), 12, 12)
+            p.setBrush(QColor(theme.PRIMARY))
+            p.drawRoundedRect(pill, 12, 12)
+            p.setPen(QColor("white"))
+            p.setFont(theme.font(15, QFont.Weight.Black))
+            p.drawText(pill, Qt.AlignmentFlag.AlignCenter, "Play")
+        else:
+            for i in range(MAX_STARS):
+                painting.draw_star(p, QPointF(left + 12 + i * 30, bottom), 11.5, filled=i < self._stars)

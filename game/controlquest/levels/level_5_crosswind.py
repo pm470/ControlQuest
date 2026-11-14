@@ -16,7 +16,7 @@ from ..gameplay.budget_bar import BudgetBar
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_play_widget import LevelPlayWidget
 from ..gameplay.ocp_card import OcpSpec
-from ..ui.widgets import Card, label
+from ..ui.widgets import label
 from .base import LevelInfo
 
 
@@ -50,13 +50,11 @@ class CrosswindWidget(LevelPlayWidget):
 
     # --- under the map: the compute budget -------------------------------------------------
     def add_extras(self, column: QVBoxLayout) -> None:
-        card = Card(padding=12, spacing=0, shadow=False)
         self.budget = BudgetBar("Compute budget", self.data.budget["solves"], self.data.pars.get("solves"),
                                 unit=" solves")
-        self.budget.setToolTip("MPC solves used so far. The dashed star line: use fewer than this "
-                               "for ★★★.")
-        card.body.addWidget(self.budget)
-        column.addWidget(card)
+        self.budget.setToolTip("MPC solves used so far (the run stops when they are used up). "
+                               "The yellow tick: use fewer than this for ★★★.")
+        column.addWidget(self.budget)
 
     def update_extras(self, t: float) -> None:
         self.budget.set_used(self.result.trajectory.solves_until(t))
@@ -74,14 +72,16 @@ class CrosswindWidget(LevelPlayWidget):
                 rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2",
                 rf"\ell(x,u) = {lk['q_p']:g}\,\|p-p_{{\star}}\|^2 + {lk['q_v']:g}\,\|v\|^2 "
                 rf"+ {lk['r']:g}\,\|u\|^2",
-                rf"P = {d.raw.get('terminal_factor', 10):g}\,Q",
+                rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad \mathrm{{solve\ every}}\ "
+                rf"\knob{{k}}{{k = {k}}}\ \mathrm{{samples}}",
             ],
             constraints=[
                 r"x_0 = \hat{x}",
                 r"x_{k+1} = f(x_k,\,u_k)\quad \mathrm{(no\ wind\ in\ the\ model)}",
                 rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
                 rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
-                rf"(p_k-c_j)^{{T}} E_j(m)\, (p_k-c_j) \geq 1,\quad m = {m:.2g}\ \mathrm{{m}}",
+                rf"(p_k-c_j)^{{T}} E_j(\knob{{margin}}{{m}})\, (p_k-c_j) \geq 1,\quad "
+                rf"\knob{{margin}}{{m = {m:.2g}\ \mathrm{{m}}}}",
             ],
             notes=(f"Solved only every {k} sample(s) ({k * d.dt:g} s) from the measured state; in between "
                    f"the ball gets u₁, u₂, … of the last plan, open-loop. {n} steps ({n * d.dt:g} s) ahead."),
@@ -118,5 +118,6 @@ LEVEL = LevelInfo(
         "Re-plan every second (k = 10) and give the wind a little room: a margin of about 0.3 m.",
     ),
     accent="sun",
+    icon="wind",
     play_screen=build,
 )

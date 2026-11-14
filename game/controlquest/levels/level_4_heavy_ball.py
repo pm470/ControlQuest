@@ -17,7 +17,7 @@ from ..engine.protocol import TestDrive
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_play_widget import LevelPlayWidget
 from ..gameplay.ocp_card import OcpSpec
-from ..ui.widgets import Button, Card, label
+from ..ui.widgets import Button, label
 from .base import LevelInfo
 
 
@@ -82,12 +82,10 @@ class HeavyBallWidget(LevelPlayWidget):
 
     # --- under the map: what the dashed ghost ball means ----------------------------------------
     def add_extras(self, column: QVBoxLayout) -> None:
-        card = Card(padding=10, spacing=0, shadow=False)
         M = int(self.data.raw.get("prediction_lookahead", 10))
-        card.body.addWidget(label(f"Dashed ball: where the plan from {M * self.data.dt:g} s earlier "
-                                  "expected the ball to be now. If it runs ahead of the real ball, the "
-                                  "model is wrong.", "caption", wrap=True))
-        column.addWidget(card)
+        column.addWidget(label(f"Dashed ball: where the plan from {M * self.data.dt:g} s earlier "
+                               "expected the ball to be now. If it runs ahead of the real ball, the "
+                               "model is wrong.", "caption", wrap=True))
 
     # --- the OCP with the current knob values ---------------------------------------------------
     def ocp_spec(self) -> OcpSpec:
@@ -106,11 +104,12 @@ class HeavyBallWidget(LevelPlayWidget):
             ],
             constraints=[
                 r"x_0 = \hat{x}",
-                rf"p_{{k+1}} = p_k + \Delta t\, v_k + \frac{{1}}{{2}}\Delta t^2\, g\, u_k",
-                rf"v_{{k+1}} = v_k + \Delta t\, g\, u_k,\quad g = {g:.2g}",
+                rf"p_{{k+1}} = p_k + \Delta t\, v_k + \frac{{1}}{{2}}\Delta t^2\, \knob{{g}}{{g}}\, u_k",
+                rf"v_{{k+1}} = v_k + \Delta t\, \knob{{g}}{{g}}\, u_k,\quad \knob{{g}}{{g = {g:.2g}}}",
                 rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
                 rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
-                rf"(p_k-c_j)^{{T}} E_j(m)\, (p_k-c_j) \geq 1,\quad m = {m:.2g}\ \mathrm{{m}}",
+                rf"(p_k-c_j)^{{T}} E_j(\knob{{margin}}{{m}})\, (p_k-c_j) \geq 1,\quad "
+                rf"\knob{{margin}}{{m = {m:.2g}\ \mathrm{{m}}}}",
             ],
             notes=(f"Re-solved every Δt = {d.dt:g} s, {n} steps ({n * d.dt:g} s) ahead. The model "
                    "uses YOUR gain g; the real ball has its own."),
@@ -149,5 +148,6 @@ LEVEL = LevelInfo(
         "Set the model gain to what you measured: predicted distance = g · ½ · a · t².",
     ),
     accent="mint",
+    icon="weight",
     play_screen=build,
 )

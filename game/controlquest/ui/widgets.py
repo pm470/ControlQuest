@@ -7,7 +7,7 @@ in the screen's own file.
 from __future__ import annotations
 
 from PySide6.QtCore import Property, QPointF, QPropertyAnimation, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractButton,
     QFrame,
@@ -55,7 +55,9 @@ def add_soft_shadow(widget: QWidget, blur: int = 28, dy: int = 6, alpha: int = 2
 
 
 class Card(QFrame):
-    """White rounded card with a soft shadow. Use .body (a QVBoxLayout) to add content."""
+    """A tile: white, rounded, standing on a soft lip (no outline), optionally with a soft
+    shadow (floating cards, e.g. the result card). Use .body (a QVBoxLayout) to add content.
+    Inside a tile, group things with spacing or a well (role "well"), never another card."""
 
     def __init__(self, parent: QWidget | None = None, padding: int = 28, spacing: int = 12,
                  shadow: bool = True):
@@ -66,6 +68,98 @@ class Card(QFrame):
         self.body.setSpacing(spacing)
         if shadow:
             add_soft_shadow(self)
+
+
+def well(parent: QWidget | None = None) -> QFrame:
+    """A tonal inset area inside a tile (e.g. the replay bar). Add a layout to it."""
+    frame = QFrame(parent)
+    frame.setProperty("role", "well")
+    return frame
+
+
+def is_keyboard_focus(event) -> bool:
+    """True if a focusInEvent came from the keyboard (Tab): only then draw a focus ring."""
+    return event.reason() in (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason,
+                              Qt.FocusReason.ShortcutFocusReason)
+
+
+class IconButton(QAbstractButton):
+    """A square button with a painted icon, on a lip like the tiles: kind = 'back'."""
+
+    def __init__(self, kind: str = "back", size: int = 44, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._kind = kind
+        self.keyboard_focus = False  # focus ring only when focused with Tab, not by a click
+        self.setFixedSize(size, size + 4)  # + the lip
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def focusInEvent(self, event) -> None:
+        self.keyboard_focus = is_keyboard_focus(event)
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event) -> None:
+        self.keyboard_focus = False
+        super().focusOutEvent(event)
+
+    def paintEvent(self, _event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        s = self.width()
+        down = self.isDown()
+        body = QRectF(0, 2 if down else 0, s, s)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(theme.LIP))
+        p.drawRoundedRect(QRectF(0, 4, s, s), 15, 15)
+        p.setBrush(QColor(theme.WELL if self.underMouse() else theme.SURFACE))
+        p.drawRoundedRect(body, 15, 15)
+        if self.hasFocus() and self.keyboard_focus:
+            p.setPen(QPen(QColor(theme.FOCUS), 2))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRoundedRect(body.adjusted(1, 1, -1, -1), 14, 14)
+        c = body.center()
+        pen = QPen(QColor(theme.INK), 2.6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+                   Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        if self._kind == "back":
+            d = s * 0.14
+            p.drawPolyline([QPointF(c.x() + d * 0.5, c.y() - d), QPointF(c.x() - d * 0.5, c.y()),
+                            QPointF(c.x() + d * 0.5, c.y() + d)])
+
+    def enterEvent(self, event) -> None:
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self.update()
+        super().leaveEvent(event)
+
+
+class LevelBadge(QWidget):
+    """The level number on a round badge in the level's accent colour (with a lip)."""
+
+    def __init__(self, number: int = 1, accent: str = "coral", size: int = 40,
+                 parent: QWidget | None = None):
+        super().__init__(parent)
+        self._number, self._accent = number, accent
+        self.setFixedSize(size, size + 3)
+
+    def set_level(self, number: int, accent: str) -> None:
+        self._number, self._accent = number, accent
+        self.update()
+
+    def paintEvent(self, _event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        s = self.width()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(theme.accent_lip(self._accent)))
+        p.drawEllipse(QRectF(0, 3, s, s))
+        p.setBrush(QColor(theme.accent(self._accent)))
+        p.drawEllipse(QRectF(0, 0, s, s))
+        p.setPen(QColor("white"))
+        p.setFont(theme.font(s * 0.5, QFont.Weight.Black))
+        p.drawText(QRectF(0, 0, s, s), Qt.AlignmentFlag.AlignCenter, str(self._number))
 
 
 def scrollable(content: QWidget) -> QScrollArea:
@@ -198,21 +292,26 @@ class StatusPill(QFrame):
 
 
 class ScreenHeader(QWidget):
-    """Back button + heading (+ optional widget on the right). Emits back_clicked."""
+    """Back button + (optional level badge) + heading (+ optional widget on the right).
+    Emits back_clicked. Same on every screen."""
 
     back_clicked = Signal()
 
-    def __init__(self, title: str, right: QWidget | None = None, back_text: str = "←  Back",
+    def __init__(self, title: str, right: QWidget | None = None, back_text: str = "Back",
                  parent: QWidget | None = None):
         super().__init__(parent)
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(16)
-        back = Button(back_text, variant="ghost")
-        back.setToolTip("Back (Esc)")
+        row.setSpacing(14)
+        back = IconButton("back")
+        back.setToolTip(f"{back_text} (Esc)")
+        back.setAccessibleName(back_text)
         back.clicked.connect(self.back_clicked)
+        self.badge = LevelBadge()
+        self.badge.hide()
         self.title_label = label(title, "heading")
         row.addWidget(back)
+        row.addWidget(self.badge)
         row.addWidget(self.title_label)
         row.addStretch(1)
         if right is not None:
@@ -220,6 +319,12 @@ class ScreenHeader(QWidget):
 
     def set_title(self, title: str) -> None:
         self.title_label.setText(title)
+
+    def set_badge(self, number: int | None, accent: str = "coral") -> None:
+        """Show a level-number badge before the title (None hides it)."""
+        self.badge.setVisible(number is not None)
+        if number is not None:
+            self.badge.set_level(number, accent)
 
 
 class StepIcon(QWidget):

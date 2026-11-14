@@ -19,7 +19,6 @@ from ..gameplay.brake_gauge import BrakeGauge
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_play_widget import LevelPlayWidget
 from ..gameplay.ocp_card import OcpSpec
-from ..ui.widgets import Card
 from .base import LevelInfo
 
 
@@ -51,12 +50,10 @@ class BrakeCheckWidget(LevelPlayWidget):
 
     # --- under the map: the brake check ---------------------------------------------------
     def add_extras(self, column: QVBoxLayout) -> None:
-        card = Card(padding=10, spacing=0, shadow=False)
         self.gauge = BrakeGauge(scale_m=20.0)
         self.gauge.setToolTip("Red means the point of no return: from this speed the ball can no "
                               "longer stop before the wall.")
-        card.body.addWidget(self.gauge)
-        column.addWidget(card)
+        column.addWidget(self.gauge)
 
     def update_extras(self, t: float) -> None:
         tr, d = self.result.trajectory, self.data
@@ -82,14 +79,14 @@ class BrakeCheckWidget(LevelPlayWidget):
             rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
         ]
         if stop:
-            constraints.append(rf"v_{{{n}}} = 0\quad \mathrm{{(terminal\ stop)}}")
+            constraints.append(rf"\knob{{stop}}{{v_{{{n}}} = 0}}\quad \mathrm{{(terminal\ stop)}}")
         return OcpSpec(
             objective=[
                 rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
                 rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2",
                 rf"\ell(x,u) = {lk['q_p']:g}\,\|p-p_{{\star}}\|^2 + {lk['q_v']:g}\,\|v\|^2 "
                 rf"+ {lk['r']:g}\,\|u\|^2",
-                rf"P = {d.raw.get('terminal_factor', 10):g}\,Q",
+                rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad \mathrm{{horizon}}\ \knob{{N}}{{N = {n}}}",
             ],
             constraints=constraints,
             notes=(f"Re-solved every Δt = {d.dt:g} s, N = {n} steps ({n * d.dt:g} s) ahead"
@@ -131,5 +128,6 @@ LEVEL = LevelInfo(
         "For three stars: N = 20 with the terminal stop on.",
     ),
     accent="sky",
+    icon="wall",
     play_screen=build,
 )

@@ -12,7 +12,6 @@ from PySide6.QtWidgets import QVBoxLayout
 from ..gameplay.budget_bar import BudgetBar
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_play_widget import LevelPlayWidget
-from ..ui.widgets import Card
 from .base import LevelInfo
 
 
@@ -24,12 +23,10 @@ class PriceOfSpeedWidget(LevelPlayWidget):
                 f"The run stops when the battery is empty. Energy used = Σ Δt·|u|².")
 
     def add_extras(self, column: QVBoxLayout) -> None:
-        card = Card(padding=12, spacing=0, shadow=False)
         self.battery = BudgetBar("Battery", self.data.budget["energy"], self.data.pars.get("energy"))
-        self.battery.setToolTip("Energy used so far. The dashed star line: use less than this "
-                                "for ★★★.")
-        card.body.addWidget(self.battery)
-        column.addWidget(card)
+        self.battery.setToolTip("Energy used so far (the run stops when the battery is empty). "
+                                "The yellow tick: use less than this for ★★★.")
+        column.addWidget(self.battery)
 
     def update_extras(self, t: float) -> None:
         tr = self.result.trajectory
@@ -64,5 +61,6 @@ LEVEL = LevelInfo(
         "Try q_p = 0.1, q_v = 1, r = 1. For ★★★ the velocity weight q_v helps like damping.",
     ),
     accent="coral",
+    icon="bolt",
     play_screen=build,
 )

@@ -26,7 +26,8 @@ from ..ui import painting, theme
 from .level_data import LevelData
 from .obstacles import Ellipse, level_ellipses
 
-MARGIN_PX = 34  # room for axis labels
+# room around the field: axis numbers left and below, a little air top and right
+MARGIN_LEFT, MARGIN_BOTTOM, MARGIN_TOP, MARGIN_RIGHT = 30, 24, 10, 14
 BALL_RADIUS_M = 0.9
 
 
@@ -77,11 +78,11 @@ class MapView(QWidget):
     # --- world <-> screen ----------------------------------------------------------------
     def _transform(self):
         (x0, y0), (x1, y1) = self._data.workspace
-        w = self.width() - 2 * MARGIN_PX
-        h = self.height() - 2 * MARGIN_PX
+        w = self.width() - MARGIN_LEFT - MARGIN_RIGHT
+        h = self.height() - MARGIN_TOP - MARGIN_BOTTOM
         s = max(1e-6, min(w / (x1 - x0), h / (y1 - y0)))  # px per metre, same in x and y
-        ox = (self.width() - s * (x1 - x0)) / 2
-        oy = (self.height() + s * (y1 - y0)) / 2
+        ox = MARGIN_LEFT + (w - s * (x1 - x0)) / 2
+        oy = MARGIN_TOP + (h + s * (y1 - y0)) / 2
 
         def to_px(px: float, py: float) -> QPointF:
             return QPointF(ox + s * (px - x0), oy - s * (py - y0))
@@ -120,31 +121,41 @@ class MapView(QWidget):
         to_px, s = self._transform()
         (x0, y0), (x1, y1) = self._data.workspace
 
-        # field
+        # field: a soft board, no outline
         field = QRectF(to_px(x0, y1), to_px(x1, y0))
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(43, 45, 66, 18))
-        p.drawRoundedRect(field.translated(0, 5), 14, 14)
-        p.setBrush(QColor(theme.SURFACE))
-        p.setPen(QPen(QColor(theme.LINE), 2))
-        p.drawRoundedRect(field, 14, 14)
+        p.setBrush(QColor(theme.FIELD))
+        p.drawRoundedRect(field, 16, 16)
 
-        # grid every 5 m, labels every 10 m
-        p.setFont(theme.font(11, QFont.Weight.DemiBold))
+        # grid every 5 m (inner lines only), numbers every 10 m; one shared 0 at the corner
+        p.save()
+        clip = QPainterPath()
+        clip.addRoundedRect(field, 16, 16)
+        p.setClipPath(clip)
+        p.setPen(QPen(QColor(theme.FIELD_GRID), 1.3))
         for gx in range(int(math.ceil(x0)), int(x1) + 1, 5):
-            p.setPen(QPen(QColor(theme.SURFACE_ALT), 1.5))
-            p.drawLine(to_px(gx, y0), to_px(gx, y1))
-            if gx % 10 == 0:
-                p.setPen(QColor(theme.MUTED))
-                p.drawText(QRectF(to_px(gx, y0).x() - 20, field.bottom() + 4, 40, 18),
-                           Qt.AlignmentFlag.AlignHCenter, f"{gx}")
+            if x0 < gx < x1:
+                p.drawLine(to_px(gx, y0), to_px(gx, y1))
         for gy in range(int(math.ceil(y0)), int(y1) + 1, 5):
-            p.setPen(QPen(QColor(theme.SURFACE_ALT), 1.5))
-            p.drawLine(to_px(x0, gy), to_px(x1, gy))
-            if gy % 10 == 0:
-                p.setPen(QColor(theme.MUTED))
-                p.drawText(QRectF(field.left() - 32, to_px(x0, gy).y() - 9, 26, 18),
-                           Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"{gy}")
+            if y0 < gy < y1:
+                p.drawLine(to_px(x0, gy), to_px(x1, gy))
+        p.restore()
+        p.setFont(theme.font(11, QFont.Weight.Bold))
+        p.setPen(QColor(theme.MUTED))
+        same_origin = x0 == y0
+        for gx in range(int(math.ceil(x0)), int(x1) + 1, 10):
+            if gx == x0 and same_origin:
+                continue
+            p.drawText(QRectF(to_px(gx, y0).x() - 20, field.bottom() + 4, 40, 18),
+                       Qt.AlignmentFlag.AlignHCenter, f"{gx}")
+        for gy in range(int(math.ceil(y0)), int(y1) + 1, 10):
+            if gy == y0 and same_origin:
+                continue
+            p.drawText(QRectF(field.left() - 32, to_px(x0, gy).y() - 9, 26, 18),
+                       Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, f"{gy}")
+        if same_origin:  # the origin's 0 once, diagonally below-left of the corner
+            p.drawText(QRectF(field.left() - 32, field.bottom() + 4, 26, 18),
+                       Qt.AlignmentFlag.AlignRight, f"{x0:g}")
 
         r_px = max(9.0, min(18.0, s * BALL_RADIUS_M))
         start, target = to_px(*self._data.start), to_px(*self._data.target)
@@ -268,11 +279,11 @@ class MapView(QWidget):
             p.drawText(QRectF(c.x() - 34, c.y() + 18, 68, 14), Qt.AlignmentFlag.AlignHCenter,
                        f"wind {mag:.1f}")
 
-        # HUD
-        p.setPen(QColor(theme.INK_SOFT))
-        p.setFont(theme.font(13, QFont.Weight.Bold))
-        p.drawText(QRectF(field.left() + 12, field.top() + 8, 260, 20), Qt.AlignmentFlag.AlignLeft,
-                   f"t = {min(self._t, tr.duration):5.1f} s    |v| = {speed:4.2f} m/s")
+        # HUD: the speed in a pill (the time is in the replay bar)
+        text = f"|v| = {speed:.2f} m/s"
+        p.setFont(theme.font(13, QFont.Weight.ExtraBold))
+        tw = p.fontMetrics().horizontalAdvance(text) + 26
+        painting.draw_pill(p, QRectF(field.left() + 12, field.top() + 12, tw, 28), text)
 
     def _draw_waypoints(self, p: QPainter, to_px, start: QPointF, target: QPointF, r_px: float,
                         active: int | None) -> None:

@@ -11,11 +11,11 @@ the level only (like the rest of the progress, in memory).
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
 
 from ..engine.protocol import OUTCOMES, RunResult
 from ..ui import theme
-from ..ui.widgets import Card, ColorDot, StarRow, label
+from ..ui.widgets import ColorDot, StarRow, label
 from .level_data import FixSpec
 
 
@@ -23,9 +23,14 @@ def _rank(r: RunResult) -> tuple:
     return (r.stars, r.success, -r.metrics.get("time", 0.0))
 
 
-class ComparisonCard(Card):
+class ComparisonCard(QWidget):
+    """A section of the controls tile (not a card of its own: no boxes in boxes)."""
+
     def __init__(self, fixes: list[FixSpec], parent: QWidget | None = None):
-        super().__init__(parent, padding=14, spacing=8, shadow=False)
+        super().__init__(parent)
+        self.body = QVBoxLayout(self)
+        self.body.setContentsMargins(0, 6, 0, 0)
+        self.body.setSpacing(8)
         self.body.addWidget(label("Your experiments", "subheading"))
         self.body.addWidget(label("Best run of each fix so far. Which one works, and what does it "
                                   "cost per MPC solve (ms)?", "caption", wrap=True))
@@ -39,7 +44,7 @@ class ComparisonCard(Card):
         self._best: dict[str, RunResult] = {}
         self._cells: dict[str, tuple] = {}
         for i, f in enumerate(fixes, start=1):
-            dot = ColorDot(theme.LINE, 9)
+            dot = ColorDot(theme.LIP, 9)
             result = label("–", "caption")
             cell = QHBoxLayout()  # colour dot + result, one column (the side column is narrow)
             cell.setSpacing(5)

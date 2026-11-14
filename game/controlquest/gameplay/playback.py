@@ -7,9 +7,11 @@ PlaybackBar is the control strip: play/pause, scrubber, time, speed.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QElapsedTimer, QObject, Qt, QTimer, Signal
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QSlider, QWidget
+from PySide6.QtCore import QElapsedTimer, QObject, QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QPainter, QPolygonF
+from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QSlider, QWidget
 
+from ..ui import theme
 from ..ui.widgets import Button, label
 
 SPEEDS = [1.0, 2.0, 4.0, 8.0]
@@ -83,26 +85,67 @@ class Playback(QObject):
         self.seek(self._t + dt * self.speed)
 
 
+class PlayButton(QAbstractButton):
+    """Coral square button with a painted play / pause icon (fonts lack a pause glyph)."""
+
+    SIZE = 38
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._playing = False
+        self.setFixedSize(self.SIZE, self.SIZE + 3)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def set_playing(self, playing: bool) -> None:
+        self._playing = playing
+        self.setAccessibleName("Pause" if playing else "Play")
+        self.update()
+
+    def paintEvent(self, _event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        s = self.SIZE
+        on = self.isEnabled()
+        down = 2 if self.isDown() else 0
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(theme.PRIMARY_PRESSED if on else theme.BLOCK))
+        p.drawRoundedRect(QRectF(0, 3, s, s), 13, 13)
+        p.setBrush(QColor(theme.PRIMARY if on else theme.LOCKED))
+        body = QRectF(0, down, s, s)
+        p.drawRoundedRect(body, 13, 13)
+        p.setBrush(QColor("white"))
+        c = body.center()
+        if self._playing:
+            for dx in (-4.5, 1.5):
+                p.drawRoundedRect(QRectF(c.x() + dx, c.y() - 6.5, 3.5, 13), 1.5, 1.5)
+        else:
+            p.drawPolygon(QPolygonF([QPointF(c.x() - 4.5, c.y() - 7), QPointF(c.x() + 7, c.y()),
+                                     QPointF(c.x() - 4.5, c.y() + 7)]))
+
+
 class PlaybackBar(QWidget):
+    """Play/pause, scrubber, time and speed. Sits in the replay well under the map,
+    next to the MPC solve stepper."""
+
     def __init__(self, playback: Playback, parent: QWidget | None = None):
         super().__init__(parent)
         self.pb = playback
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(12)
-        self.play_button = Button("Play", variant="default")
-        self.play_button.setFixedWidth(96)
+        row.setSpacing(10)
+        self.play_button = PlayButton()
         self.play_button.setToolTip("Play / pause the replay")
+        self.play_button.set_playing(False)
         self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider.setProperty("role", "scrubber")
         self.slider.setRange(0, 0)
-        self.time_label = label("0.0 / 0.0 s", "body")
-        self.time_label.setMinimumWidth(110)
-        self.speed = QComboBox()
-        for s in SPEEDS:
-            self.speed.addItem(f"{s:g}×", s)
-        self.speed.setCurrentIndex(SPEEDS.index(DEFAULT_SPEED))
-        self.speed.setToolTip("Replay speed")
-        self.speed.setFixedWidth(84)
+        self.slider.setMinimumWidth(60)
+        self.slider.setToolTip("Drag to any moment of the run")
+        self.time_label = label("0.0 / 0.0 s", "caption")
+        self.time_label.setStyleSheet(f"font-weight: 800; color: {theme.INK_SOFT};")
+        self.speed = Button(f"{DEFAULT_SPEED:g}×", variant="chip")
+        self.speed.setToolTip("Replay speed (click to change)")
         row.addWidget(self.play_button)
         row.addWidget(self.slider, 1)
         row.addWidget(self.time_label)
@@ -111,10 +154,15 @@ class PlaybackBar(QWidget):
         self.play_button.clicked.connect(self.pb.toggle)
         self.slider.sliderMoved.connect(lambda v: self.pb.seek(v / 100.0))
         self.slider.sliderPressed.connect(self.pb.pause)
-        self.speed.currentIndexChanged.connect(lambda i: setattr(self.pb, "speed", SPEEDS[i]))
+        self.speed.clicked.connect(self._next_speed)
         self.pb.time_changed.connect(self._show_time)
-        self.pb.playing_changed.connect(lambda on: self.play_button.setText("Pause" if on else "Play"))
+        self.pb.playing_changed.connect(self.play_button.set_playing)
         self.set_enabled_for_run(False)
+
+    def _next_speed(self) -> None:
+        i = (SPEEDS.index(self.pb.speed) + 1) % len(SPEEDS) if self.pb.speed in SPEEDS else 0
+        self.pb.speed = SPEEDS[i]
+        self.speed.setText(f"{SPEEDS[i]:g}×")
 
     def set_enabled_for_run(self, has_run: bool) -> None:
         for w in (self.play_button, self.slider, self.speed):

@@ -72,18 +72,19 @@ game/
 │   │   ├── map_view.py                  the field in metres: blocks + dashed ellipses, waypoints,
 │   │   │                                ball, trail, dashed plan, accel arrow, crash marker
 │   │   ├── waypoint_editor.py           click / drag / right-click waypoints on the map (Level 3)
-│   │   ├── fix_selector.py              "Choose a fix": one selectable card per fix (Level 3)
-│   │   ├── comparison_card.py           "Your experiments": best run per fix (Level 3)
+│   │   ├── fix_selector.py              "Choose a fix": one selectable option per fix (Level 3)
+│   │   ├── comparison_card.py           "Your experiments": best run per fix (Level 3, a section)
 │   │   ├── obstacles.py                 block corners -> the solver's ellipse (drawing, clicks)
 │   │   ├── knob_panel.py                log sliders (+ dropdowns for "choices" knobs, e.g. N;
-│   │   │                                    on/off switches for "toggle" knobs, e.g. terminal stop)
+│   │   │                                    on/off switches for "toggle" knobs, e.g. terminal stop);
+│   │   │                                    each knob has a colour, also used in the OCP (\knob{...})
 │   │   ├── brake_gauge.py               Level 2's brake check (wall ahead / braking / plan reach)
-│   │   ├── playback.py                  replay clock + play/pause/scrub/speed bar
+│   │   ├── playback.py                  replay clock + play/pause/scrub/speed (in the replay well)
 │   │   ├── result_panel.py              outcome, stars, metrics, "what happened"
-│   │   ├── ocp_card.py                  "The OCP your MPC solves" card (typeset math)
-│   │   ├── run_info_card.py             "Solver info": J*, solve time, iterations, run statistics
-│   │   ├── solve_selector.py            "MPC solve ‹ k › of n": inspect one solve's plan
-│   │   ├── budget_bar.py                battery-style budget bar
+│   │   ├── ocp_card.py                  "The OCP your MPC solves" (typeset math, knob colours)
+│   │   ├── run_info_card.py             "This solve": J*, solve time, iterations, status + whole run
+│   │   ├── solve_selector.py            "‹ k /n ›": inspect one MPC solve's plan
+│   │   ├── budget_bar.py                one-row budget bar (battery, compute budget)
 │   │   └── level_data.py                reads level_data/<id>.json
 │   └── engine/                      talking to the engine
 │       ├── protocol.py                  RunRequest / RunResult / Trajectory (the contract)
@@ -134,7 +135,9 @@ game/
 
 ### Rules that keep it tidy
 - **Screens never talk to each other**; they call `self.go(ScreenId.X, payload)`.
-- **No colours or sizes in screens**: use `ui/theme.py` and the stylesheet roles.
+- **No colours or sizes in screens**: use `ui/theme.py` and the stylesheet roles, and
+  follow the **design rules** in AGENTS.md section 10 (borderless tiles on a lip, no card
+  in a card, knob colours in the OCP, few elements).
 - **UI and engine meet only in `engine/protocol.py`** ↔ `level_rules/common.py` /
   `server.py`. Change both sides together.
 - **Level numbers live only in `level_data/*.json`**, never in Python.

@@ -11,7 +11,6 @@ import math
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import (
-    QBrush,
     QColor,
     QFont,
     QIcon,
@@ -20,7 +19,6 @@ from PySide6.QtGui import (
     QPen,
     QPixmap,
     QPolygonF,
-    QRadialGradient,
 )
 
 from . import theme
@@ -47,59 +45,62 @@ def draw_dot_grid(p: QPainter, rect: QRectF, dpr: float = 1.0, spacing: int = 28
     p.drawTiledPixmap(rect, tile)
 
 
+BALL_EYES = "#1F2440"
+BALL_BLUSH = "#FF8FA8"
+
+
 def draw_ball(p: QPainter, center: QPointF, r: float, look: QPointF = QPointF(0, 0),
               blink: float = 0.0, shadow: bool = True) -> None:
-    """The ball mascot. look = direction it looks in (any length), blink in [0, 1]."""
+    """The ball mascot (flat, like the 2026-11-14 design sketch): a flat blue disc with a
+    soft highlight, two dark dot eyes with a shine, pink blush and a small smile.
+    look = direction it looks in (any length; the eyes shift a little), blink in [0, 1]."""
     p.save()
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     p.setPen(Qt.PenStyle.NoPen)
     cx, cy = center.x(), center.y()
+    u = r / 13.0  # the sketch was drawn with r = 13 units
 
     if shadow:
         p.setBrush(QColor(43, 45, 66, 26))
-        p.drawEllipse(QPointF(cx, cy + r * 1.02), r * 0.78, r * 0.2)
+        p.drawEllipse(QPointF(cx, cy + 16 * u), 10 * u, 2.6 * u)
 
-    grad = QRadialGradient(QPointF(cx - r * 0.35, cy - r * 0.45), r * 1.5)
-    grad.setColorAt(0.0, QColor(theme.BALL).lighter(135))
-    grad.setColorAt(0.55, QColor(theme.BALL))
-    grad.setColorAt(1.0, QColor(theme.BALL_DARK))
-    p.setBrush(QBrush(grad))
+    p.setBrush(QColor(theme.BALL))
     p.drawEllipse(center, r, r)
 
-    # shine
-    p.setBrush(QColor(255, 255, 255, 170))
-    p.drawEllipse(QPointF(cx - r * 0.45, cy - r * 0.48), r * 0.17, r * 0.11)
+    # highlight (top left)
+    p.setBrush(QColor(255, 255, 255, 153))
+    p.drawEllipse(QPointF(cx - 4.5 * u, cy - 6.5 * u), 4 * u, 2.4 * u)
 
     # blush
-    p.setBrush(QColor(255, 128, 170, 105))
+    blush = QColor(BALL_BLUSH)
+    blush.setAlpha(179)
+    p.setBrush(blush)
     for sx in (-1, 1):
-        p.drawEllipse(QPointF(cx + sx * r * 0.52, cy + r * 0.28), r * 0.14, r * 0.085)
+        p.drawEllipse(QPointF(cx + sx * 7.2 * u, cy + 3.2 * u), 2 * u, 1.2 * u)
 
-    # eyes, pupils shifted towards `look`
+    # eyes: dark dots with a shine, shifted a little towards `look`
     n = math.hypot(look.x(), look.y())
     lx, ly = (look.x() / n, look.y() / n) if n > 1e-9 else (0.0, 0.0)
     open_ = max(0.0, 1.0 - blink)
     for sx in (-1, 1):
-        ex, ey = cx + sx * r * 0.3 + lx * r * 0.06, cy - r * 0.08 + ly * r * 0.05
+        ex, ey = cx + sx * 4 * u + lx * 0.8 * u, cy - 0.5 * u + ly * 0.6 * u
         if open_ < 0.2:
-            p.setPen(QPen(QColor(theme.INK), max(1.5, r * 0.06), Qt.PenStyle.SolidLine,
+            p.setPen(QPen(QColor(BALL_EYES), max(1.2, 1.3 * u), Qt.PenStyle.SolidLine,
                           Qt.PenCapStyle.RoundCap))
-            p.drawLine(QPointF(ex - r * 0.11, ey), QPointF(ex + r * 0.11, ey))
+            p.drawLine(QPointF(ex - 2 * u, ey), QPointF(ex + 2 * u, ey))
             p.setPen(Qt.PenStyle.NoPen)
             continue
+        p.setBrush(QColor(BALL_EYES))
+        p.drawEllipse(QPointF(ex, ey), 2.1 * u, 2.1 * u * open_)
         p.setBrush(QColor("white"))
-        p.drawEllipse(QPointF(ex, ey), r * 0.16, r * 0.21 * open_)
-        p.setBrush(QColor(theme.INK))
-        p.drawEllipse(QPointF(ex + lx * r * 0.06, ey + ly * r * 0.07), r * 0.085, r * 0.11 * open_)
-        p.setBrush(QColor("white"))
-        p.drawEllipse(QPointF(ex + lx * r * 0.06 + r * 0.03, ey + ly * r * 0.07 - r * 0.04),
-                      r * 0.03, r * 0.03 * open_)
+        p.drawEllipse(QPointF(ex + 0.6 * u, ey - 0.7 * u * open_), 0.7 * u, 0.7 * u * open_)
 
     # smile
-    p.setPen(QPen(QColor(theme.INK), max(1.5, r * 0.065), Qt.PenStyle.SolidLine,
-                  Qt.PenCapStyle.RoundCap))
+    p.setPen(QPen(QColor(BALL_EYES), max(1.0, 1.3 * u), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
     p.setBrush(Qt.BrushStyle.NoBrush)
-    p.drawArc(QRectF(cx - r * 0.15, cy + r * 0.06, r * 0.3, r * 0.22), 200 * 16, 140 * 16)
+    smile = QPainterPath(QPointF(cx - 2.6 * u, cy + 3.4 * u))
+    smile.quadTo(QPointF(cx, cy + 5.8 * u), QPointF(cx + 2.6 * u, cy + 3.4 * u))
+    p.drawPath(smile)
     p.restore()
 
 
@@ -117,7 +118,7 @@ def draw_star(p: QPainter, center: QPointF, r: float, filled: bool = True,
     """A rounded five-point star. filled=False draws an empty (not earned) star."""
     p.save()
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    fill, line = (theme.STAR, theme.STAR_DARK) if filled else (theme.SURFACE_ALT, theme.LINE)
+    fill, line = (theme.STAR, theme.STAR_DARK) if filled else (theme.LIP, theme.LIP)  # no outline
     pen = QPen(QColor(line), max(1.5, r * 0.16))
     pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
     p.setPen(pen)
@@ -218,6 +219,60 @@ def draw_plan(p: QPainter, points: list[QPointF], color: str = theme.PRIMARY, wi
         p.setBrush(QColor(color))
         for q in points[2::2]:
             p.drawEllipse(q, width * 0.9, width * 0.9)
+    p.restore()
+
+
+def draw_pill(p: QPainter, rect: QRectF, text: str, font_px: float = 13) -> None:
+    """A small white HUD pill with a lip (e.g. '|v| = 2.00 m/s' on the map)."""
+    p.save()
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    r = rect.height() / 2
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(theme.LIP))
+    p.drawRoundedRect(rect.translated(0, 3), r, r)
+    p.setBrush(QColor(theme.SURFACE))
+    p.drawRoundedRect(rect, r, r)
+    p.setPen(QColor(theme.INK))
+    p.setFont(theme.font(font_px, QFont.Weight.ExtraBold))
+    p.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+    p.restore()
+
+
+def draw_level_icon(p: QPainter, kind: str, center: QPointF, size: float, color: str) -> None:
+    """Small line icons for the level tiles: bolt, wall, trap, weight, wind."""
+    p.save()
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color), max(2.0, size * 0.09), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+               Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    s, cx, cy = size / 24, center.x() - size / 2, center.y() - size / 2
+
+    def pt(x: float, y: float) -> QPointF:
+        return QPointF(cx + x * s, cy + y * s)
+
+    if kind == "bolt":
+        p.drawPolygon(QPolygonF([pt(13, 2), pt(4, 14), pt(11, 14), pt(10, 22), pt(19, 10), pt(12, 10)]))
+    elif kind == "wall":
+        p.drawLine(pt(20, 3), pt(20, 21))
+        p.drawLine(pt(3, 12), pt(14, 12))
+        p.drawPolyline([pt(10, 8), pt(14, 12), pt(10, 16)])
+    elif kind == "trap":
+        p.drawPolyline([pt(6, 4), pt(18, 4), pt(18, 20), pt(6, 20)])
+        p.drawEllipse(pt(9, 12), 2.5 * s, 2.5 * s)
+    elif kind == "weight":
+        p.drawPolygon(QPolygonF([pt(5, 20), pt(7, 9), pt(17, 9), pt(19, 20)]))
+        p.drawEllipse(pt(12, 6), 2.6 * s, 2.6 * s)
+    elif kind == "wind":
+        path = QPainterPath(pt(3, 8))
+        path.lineTo(pt(15, 8))
+        path.quadTo(pt(20, 8), pt(18, 4))
+        p.drawPath(path)
+        path = QPainterPath(pt(3, 13))
+        path.lineTo(pt(19, 13))
+        path.quadTo(pt(23, 13), pt(21, 17))
+        p.drawPath(path)
+        p.drawLine(pt(3, 18), pt(11, 18))
     p.restore()
 
 

@@ -162,6 +162,9 @@ class DeadEndWidget(LevelPlayWidget):
         if fix == WAYPOINTS:
             objective.append(rf"p_{{\mathrm{{ref}}}} = \mathrm{{next\ waypoint}}\ \mathrm{{(last:}}\ "
                              rf"p_{{\star}}),\quad P = {d.raw.get('terminal_factor', 10):g}\,Q")
+        elif fix == HORIZON:
+            objective.append(rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad "
+                             rf"\mathrm{{horizon}}\ \knob{{N}}{{N = {n}}}")
         else:
             objective.append(rf"P = {d.raw.get('terminal_factor', 10):g}\,Q")
         notes = {
@@ -219,5 +222,6 @@ LEVEL = LevelInfo(
         "is enough for three stars.",
     ),
     accent="lilac",
+    icon="trap",
     play_screen=build,
 )

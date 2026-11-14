@@ -27,6 +27,7 @@ class LevelInfo:
     concept: str  # what the player learns (PRD 7, "Concept")
     hints: tuple[str, ...] = ()  # PRD 5.8: from "points at the concept" to "almost the answer"
     accent: str = "coral"  # colour key in ui.theme.ACCENTS
+    icon: str = ""  # tile icon in the level select (ui.painting.draw_level_icon): bolt, wall, ...
     # builds the gameplay widget: play_screen(ctx, level) -> QWidget; None = not built yet
     play_screen: Optional[Callable[[AppContext, LevelInfo], QWidget]] = None
 

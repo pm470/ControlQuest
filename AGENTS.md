@@ -2,7 +2,8 @@
 
 Read this first. It tells you what the project is, how to run it, how the code is
 organised, **the decisions and remarks the team has already made** (section 8), the
-**UI structure and content** (section 10) and **how the team likes to work with an
+**UI design rules, structure and content** (section 10: follow the design rules for any
+GUI change, so every screen and level looks the same) and **how the team likes to work with an
 agent** (section 11). Follow those remarks unless a team member explicitly changes them or gives opposing instructions, in that case point out the different oppinion and let the user confirm it,
 and **add new remarks to section 8** (dated) when the user gives them, so every agent
 stays in sync.
@@ -120,7 +121,7 @@ without the engine; pressing Run then shows a clear "engine offline" message.
 Contract between the two sides: `controlquest/engine/protocol.py` ↔
 `engine_server/level_rules/common.py` + `server.py`, plus the level JSON files.
 
-## 6. Status (2026-10-26)
+## 6. Status (2026-11-14)
 
 - Done: menus (title with animation, level select with stars/locks/free mode, how
   to play, settings), engine server, MPC package, **Level 1 "The Price of Speed"
@@ -136,6 +137,9 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
 - Done (2026-11-03): **Level 2 "Brake Check"** playable (horizon dropdown, terminal-stop
   switch, brake-check gauge; `calibrate.py brake_check`). Levels 4 and 5 are built too
   (branch `level3to4`, `calibrate.py heavy_ball` / `crosswind`). Engine v0.9.0.
+- Done (2026-11-14, branch `gui`): **UI redesign** on all screens and levels (design rules
+  in section 10; borderless tiles with lips, three-tile level screen, knob colours in the
+  OCP, new level select). Game-side only: engine unchanged (still v0.9.0).
 - Not yet: speed/acceleration plots (PRD 5.6),
   saving progress to disk (progress resets on restart, intentionally for now).
 - Next planned work: the MPC side of levels 2, 4, 5 (horizon N per level, terminal
@@ -259,11 +263,13 @@ Feasibility spike results (engine only, default map):
   next to the knobs (own column on wide windows). Use p★ / x★ (subscript star) for
   the target, matching the star on the map. Each level provides its OCP via the
   `ocp_spec()` hook of `LevelPlayWidget`.
-- (2026-10-25) **Choose an individual MPC solve**: under the replay bar there is an
+- (2026-10-25) **Choose an individual MPC solve** (since 2026-11-14: "‹ k /n ›" inside the
+  replay well, number typeable): under the replay bar there is an
   "MPC solve ‹ k › of n" selector (`gameplay/solve_selector.py`). Picking a solve
   pauses the replay at that solve's time so the map shows exactly the plan computed
   in that solve; while playing, the selector follows the replay.
-- (2026-10-25) **Solver info card under the OCP card** (`gameplay/run_info_card.py`):
+- (2026-10-25) **Solver info card under the OCP card** (`gameplay/run_info_card.py`;
+  since 2026-11-14 shortened to four numbers + one "Whole run" line, see below):
   for the selected solve: optimal cost J*, solve time, SQP iterations, acados status;
   for the whole run: number of solves, solve time (avg/max/total), iterations,
   closed-loop cost, engine compute time. The engine sends per-solve `costs` and
@@ -281,6 +287,42 @@ Feasibility spike results (engine only, default map):
   bar + solve selector on the left; OCP card + solver info in the middle; goal, knobs,
   Run, hints on the right. Everything important must be visible without scrolling at
   ~1280×800 logical pixels; on narrow windows the middle column moves under the knobs.
+- (2026-11-14) **UI redesign: "feel like a real game, no AI slop".** The user compared
+  three sketches (A Paper Route, B Night Lab, C Tabletop; canvas "ControlQuest UI
+  directions" on claude.ai) and picked a mix. The result is the **design rules in section 10**:
+  follow them on every screen and in every level. In short:
+  - **Colours and background stay as they were** (warm cream + dot grid, coral, blue ball,
+    yellow star); the user rejected the sage green of sketch C.
+  - **Rounded, borderless tiles that stand on a soft lip** (no outlines anywhere, only
+    soft fills); inside a tile, tonal **wells** and spacing, never a card in a card.
+    Few elements; no extra boxes.
+  - **Level screen = three tiles** (sketch C): map tile | OCP + solver tile | controls tile.
+  - **Map tile** (exactly like the user's screenshot of sketch C): a soft board without
+    outline, grid every 5 m, **axis numbers every 10 m with ONE shared "0" at the
+    origin**, a "|v| = … m/s" pill on the map (the time is in the replay bar); under the
+    map the level extras (battery etc.), then ONE replay well: ▶ · scrubber · time ·
+    speed chip (click cycles 1×/2×/4×/8×) · "‹ k /n ›" MPC solve stepper.
+  - **OCP + solver tile**: the OCP keeps the current matplotlib/Computer Modern font;
+    under it "This solve" as four big numbers (plan cost J*, solve time, SQP iterations,
+    acados status) and ONE "Whole run" line (solves · avg ms · total cost; max time,
+    iterations and engine time in its tooltip). The user said this is enough: this
+    replaces the longer Solver info list of 2026-10-25.
+  - **Knob colours** (from sketch A): every knob has a colour (`theme.KNOB_COLORS`, by its
+    order in the level file); its symbol chip, its slider AND its part of the OCP
+    (`\knob{name}{...}` in `ocp_spec()`) use it, so the player sees which part of the
+    math a knob changes. Every new level must mark its knobs in its OCP this way.
+  - **Controls tile** (sketch C): "Goal" (coral eyebrow) + goal text, the controls title
+    (eyebrow) + knobs (chip, name, typed value, coloured slider), Reset + a wide Run ▶,
+    the status line, level sections (e.g. "Your experiments"), and at the bottom
+    "Stuck?" with a "Show hint k/3" link.
+  - **Level select = sketch C** in the current colours: chunky tiles with the accent-colour
+    top (big number + level icon), title, topic, stars; the next level to play is lifted,
+    ringed and has a Play pill; locked tiles are muted with a lock. The header has the
+    same back button as every screen.
+- (2026-11-14) **The ball mascot is the flat ball of sketch C** (flat blue disc, soft
+  highlight, dark dot eyes with a shine, pink blush, small smile; no gradient, no white
+  eyeballs), drawn by `painting.draw_ball` everywhere (map, title, how to play, icon).
+  **No ball on the level select** (the user does not want it above any level tile).
 
 ## 9. Gotchas already hit (don't repeat them)
 
@@ -305,6 +347,14 @@ Feasibility spike results (engine only, default map):
   scale them: QLabel draws into a rect of *rounded logical* size, so the image gets
   resampled and looks blurry (7 of 9 formulas were). `MathLabel` paints the pixmap at its
   exact size (snapped to device pixels) and re-renders at a smaller font when too wide.
+- Coloured math (2026-11-14): a `\knob{...}` line is rendered as several mathtext texts
+  side by side in ONE matplotlib Figure. Position them in figure fractions (the default
+  `transFigure`): with `IdentityTransform` or `dpi_scale_trans` the `bbox_inches="tight"`
+  crop does not follow and the descenders get cut off. The splitter keeps a trailing
+  escaped space (`\ `); stripping it leaves a lone `\` and the line fails to render (the
+  failure only prints `[math] could not render ...`: watch the console).
+- A QSpinBox in a narrow fixed width clips its number to nothing (the hidden arrow buttons
+  still take room): the solve stepper uses a QLineEdit + QIntValidator instead.
 - Don't override QWidget method names in subclasses (e.g. a `screen()` method on the main
   window broke Qt's `QWidget.screen()`; it is now `get_screen()`).
 - Never hard-code the course image name (`vsc-mpcrl26-exercises-<hash>`) in scripts or
@@ -323,19 +373,44 @@ Feasibility spike results (engine only, default map):
 - Long thin blocks: their ellipses stick out far and overlapping ellipses form notches
   where the MPC gets stuck. Split walls into shorter blocks (Level 3 uses 6).
 
-## 10. UI structure and content (what the player sees, as of 2026-10-25)
+## 10. UI structure and content (what the player sees, as of 2026-11-14)
 
-**Design system** (`controlquest/ui/theme.py`, `painting.py`, `widgets.py`):
-- Warm cream background with a soft dot grid (graph-paper feel), white rounded cards with
-  soft shadows, coral primary buttons (raised look), muted grey-blue secondary text.
-- Mascot: a blue ball with eyes, blush and a smile (`painting.draw_ball`); the target is
-  a yellow star; obstacles are beige blocks; MPC plans are a **coral dashed line with a
-  dot per stage**; the solver's obstacle ellipse is a dashed outline.
-- Fonts: Nunito → Segoe UI → Helvetica Neue → Arial (first one installed). Text roles:
-  title, heading, subheading, subtitle, body, quote, caption, tag.
-- Outcome colours: success green, crash/battery red, controller failure orange,
-  time out grey.
-- Window fits the screen (default 1280×800 logical), works down to 900×560; Esc = back.
+**Design rules: read these before any GUI work** (agreed 2026-11-14, section 8). The goal
+is a real game, not a generic "vibe-coded" app. Every screen and every level follows them;
+when a new widget needs a look, reuse a token/role below instead of inventing one.
+
+1. **Colours** (`ui/theme.py`, never hard-coded in screens): warm cream BACKGROUND with
+   the soft dot grid; white SURFACE tiles; tonal WELL (= SURFACE_ALT) for insets, inputs
+   and secondary buttons; coral PRIMARY for the one main action (Run, Play, Next level);
+   level accents (`ACCENTS`, lips in `ACCENT_LIPS`); INK / INK_SOFT / MUTED text.
+2. **No outlines.** Nothing has a border line. A tile or button "stands" on a **lip**: a
+   thicker bottom edge in a darker tone (`LIP`, `PRIMARY_PRESSED`, `ACCENT_LIPS`).
+   Inputs and wells are tonal fills; a soft blue `FOCUS` ring appears only for keyboard
+   focus (painted widgets: `widgets.is_keyboard_focus`). Empty stars are a soft fill.
+3. **Rounded everything**: tiles `RADIUS_CARD` (26), buttons 16-20, wells 16, chips 8-12.
+4. **Tiles, not boxes in boxes.** A screen has a few tiles (`Card`, QSS role "card").
+   Inside a tile, group with spacing, a coral **eyebrow** label ("Goal"), a subheading,
+   or a **well** (`widgets.well()`); never put a card inside a card. Level hooks
+   (`add_extras`, `add_controls`, `add_side_cards`) add plain widgets/sections.
+5. **Few elements.** Show what the player needs now; put details in tooltips (e.g. the
+   whole-run statistics). Prefer one strong line over a table.
+6. **Knob colours connect the controls to the math**: knob i gets `KNOB_COLORS[i]` (order
+   in the level file): `MathChip` symbol in the knob row, slider fill, and the
+   `\knob{name}{tex}` parts of the OCP (top level of a math line only, not inside {...}).
+7. **Math keeps the textbook font** (matplotlib mathtext, Computer Modern) via
+   `MathLabel`/`MathChip` (pixel-snapped, see gotchas). Never draw formulas as text.
+8. **One header everywhere** (`ScreenHeader`): the lip back button (`IconButton`), on level
+   screens the round level badge (`LevelBadge`, accent colour) + title, stars on the right.
+9. **Characters**: the flat blue ball mascot (`painting.draw_ball`; not on the level
+   select), yellow star target, beige
+   blocks, coral dashed plan with a dot per stage, dashed ellipses, lilac waypoints.
+10. **Text roles** (QSS): title, heading, subheading, subtitle, body, goal, quote, caption,
+    eyebrow, stat, tag. **Button variants**: default (tonal + lip), primary (coral + lip),
+    ghost, link (coral text), chip (small white, in wells), danger; scale large / tall.
+11. Fonts: Nunito → Segoe UI → Helvetica Neue → Arial. Outcome colours: success green,
+    crash/battery red, controller failure orange, time out grey.
+12. Window fits the screen (default 1280×800 logical), works down to 900×560; Esc = back.
+    Check new UI at both sizes (no scroll area content wider than its viewport).
 
 **Screens** (`controlquest/screens/`, one file each):
 1. **Title**: animated scene (the ball rolls over a block, dashed plan ahead of it,
@@ -343,41 +418,50 @@ Feasibility spike results (engine only, default map):
    "Quest" in coral, subtitle "Design the controller. Let the ball find its way.",
    buttons Play (big, coral) / How to play / Settings / Quit, an "MPC engine
    online/offline/outdated" pill bottom-left, version bottom-right.
-2. **Level select**: "Choose a level", Free mode switch, total stars "x / 15", one card
-   per level (number badge in the level's accent colour, title, topic tag, 3 stars);
-   locked cards are greyed with a lock in the badge and "Finish level N to unlock";
-   clicking a locked card explains how to unlock it. Cards reflow with window width.
+2. **Level select** (`ui/level_card.py`): "Choose a level" + subtitle, Free mode switch,
+   total stars pill "x / 15", one chunky tile per level: top block in the level's accent
+   colour with the big number and the level icon (`LevelInfo.icon`: bolt, wall, trap,
+   weight, wind; `painting.draw_level_icon`), then title, topic, 3 stars. The next level
+   to play (first unlocked one without stars) is lifted, ringed in its colour and shows a
+   Play pill (no mascot on this screen). Locked tiles are muted with a lock and
+   "Finish level N to unlock"; clicking one explains how to unlock it. Tiles reflow.
 3. **How to play**: four step cards (You are the engineer · Tune the controller · Run and
    watch the plan · Fix it, earn stars) and "How a run can end" (Success, Crash,
    Controller failure, Time out), then "Let's play".
 4. **Settings**: Animations on/off; MPC engine address + "Test connection" + status;
    Reset progress (with confirmation).
-5. **Level screen**: header "← Levels · Level N · Title · ★★★". Unplayable levels show a
-   card with topic, briefing (quote), "What this level is about", "The playing field is
-   still being built" (+ dev buttons with `CONTROLQUEST_DEV=1`).
-   **Playable level** (`gameplay/level_play_widget.py`), three columns on wide windows:
-   - left: the **map** (50 m field, grid every 5 m, labels every 10 m, start ring, target
-     star, ball with trail, current plan, acceleration arrow, HUD "t = … |v| = …";
-     with obstacles: beige blocks, the solver's ellipses dashed, a red × where the ball
-     crashed; Level 3: lilac numbered waypoint diamonds with a dotted route, the active
-     one highlighted during the replay, reached ones grey);
-     under it the level's extras (Level 1: **battery bar**, drains, star mark = ★★★
-     limit; Level 2: **brake check**: wall ahead / braking needs / plan looks ahead, red
-     after the point of no return), the **replay bar** (Play/Pause, scrubber, time, speed 1×/2×/4×/8×,
-     default 2×) and the **"MPC solve ‹ k › of n"** selector;
-   - middle: **"The OCP your MPC solves"** (typeset math: min over u, stage cost ℓ, Q, P,
-     "s.t." constraints; short notes and a symbol legend) and **"Solver info"** (this
-     solve: plan cost J*, solve time, SQP iterations, status; whole run: solves, solve
-     time avg/max, total solve time, iterations, total cost, engine time);
-   - right: **Goal** (one paragraph), **Tune the weights** (one row per knob: symbol +
-     name, a typeable value field, a log slider; discrete knobs as a dropdown; Reset +
+5. **Level screen**: header: back button · level badge (number in the accent colour) ·
+   title · ★★★. Unplayable levels show a card with topic, briefing (quote), "What this
+   level is about", "The playing field is still being built" (+ dev buttons with
+   `CONTROLQUEST_DEV=1`).
+   **Playable level** (`gameplay/level_play_widget.py`), three tiles on wide windows:
+   - left, **map tile**: the **map** (soft 50 m board without outline, grid every 5 m,
+     numbers every 10 m with one shared 0 at the origin, start ring, target star, ball
+     with trail, current plan, acceleration arrow, a "|v| = … m/s" pill; with obstacles:
+     beige blocks, the solver's ellipses dashed, a red × where the ball crashed; Level 3:
+     lilac numbered waypoint diamonds with a dotted route, the active one highlighted
+     during the replay, reached ones grey); under it the level's extras (Level 1:
+     **battery bar** "Battery ▬▬ 4.0 / 5", fills as energy is used, yellow tick = ★★★ par;
+     Level 2: **brake check**: wall ahead / braking needs / plan looks ahead, red after the
+     point of no return; Level 4: the ghost-ball caption; Level 5: compute budget), then
+     ONE **replay well**: ▶/❚❚ · scrubber · time · speed chip (1×/2×/4×/8×, default 2×) ·
+     "‹ k /n ›" MPC solve stepper (number typeable);
+   - middle, **OCP tile**: **"The OCP your MPC solves"** (typeset math: min over u, stage
+     cost ℓ, P, "s.t." constraints; knob parts in the knobs' colours; short notes and a
+     symbol legend), then **"This solve"** (k of n · t; four big numbers: plan cost J*,
+     solve time, SQP iterations, acados status) and one **"Whole run"** line;
+   - right, **controls tile**: **Goal** (eyebrow + text), **Tune the weights** (eyebrow;
+     one row per knob: coloured symbol chip + name, a typeable value field, a slider in
+     the knob's colour; discrete knobs as a dropdown, toggles as a switch); Reset + wide
      Run ▶; a status line; Level 3: **Choose a fix** instead: selectable cards "No fix",
      "1. Longer horizon" (N dropdown + "N steps = … s ahead" note), "2. Waypoints"
      (map editing only then; instructions, "n / 3 waypoints", Clear, the list of
      waypoints), then **Your experiments** (best run per fix: result with colour dot,
-     ms per solve, stars; this visit only); the OCP card follows the chosen fix; and
-     **Stuck?** with hints revealed one at a time (3 per level, the last almost the
-     answer).
+     ms per solve, stars; this visit only; a section of the tile, not a card); the OCP
+     follows the chosen fix; at the bottom **Stuck?** with a "Show hint k/3" link, hints
+     revealed one at a time (3 per level, the last almost the answer).
+   - Narrow windows (< 1150 px): the OCP tile moves into the right column, under the
+     controls tile; both columns scroll.
    - At the end of a replay a **result card** appears over the map: outcome title with
      colour dot, stars, metric rows (e.g. time vs limit and ★★ par, energy vs battery and
      ★★★ par, peak acceleration), 1–3 "what happened" sentences from the engine, buttons

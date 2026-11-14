@@ -27,10 +27,10 @@ class LevelScreen(BaseScreen):
         super().__init__(ctx, parent)
         self.level: LevelInfo | None = None
         root = QVBoxLayout(self)
-        root.setContentsMargins(40, 22, 40, 16)
+        root.setContentsMargins(32, 18, 32, 18)
         root.setSpacing(14)
         self.stars = StarRow(0, MAX_STARS, star_radius=13)
-        self.header = ScreenHeader("", right=self.stars, back_text="←  Levels")
+        self.header = ScreenHeader("", right=self.stars, back_text="Back to the levels")
         self.header.back_clicked.connect(self.go_back)
         root.addWidget(self.header)
         self._body_host = QVBoxLayout()
@@ -49,7 +49,8 @@ class LevelScreen(BaseScreen):
             self.go(ScreenId.LEVEL_SELECT)
             return
         level = self.level
-        self.header.set_title(f"Level {level.number}  ·  {level.title}")
+        self.header.set_title(level.title)
+        self.header.set_badge(level.number, level.accent)
         self.stars.set_stars(self.ctx.state.stars(level.id))
         self._set_body(level.play_screen(self.ctx, level) if level.is_playable
                        else self._coming_soon(level))

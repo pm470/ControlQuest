@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
 
 from ..core.config import MAX_STARS
 from ..core.navigation import ScreenId
@@ -13,7 +13,7 @@ from ..ui.level_card import CARD_SIZE, LevelCard
 from ..ui.widgets import ScreenHeader, StarRow, ToggleSwitch, label, scrollable
 from .base_screen import BaseScreen
 
-CARD_SPACING = 18
+CARD_SPACING = 14
 
 
 class LevelSelectScreen(BaseScreen):
@@ -22,34 +22,39 @@ class LevelSelectScreen(BaseScreen):
     def __init__(self, ctx, parent: QWidget | None = None):
         super().__init__(ctx, parent)
         root = QVBoxLayout(self)
-        root.setContentsMargins(40, 22, 40, 16)
-        root.setSpacing(10)
+        root.setContentsMargins(32, 18, 32, 18)
+        root.setSpacing(6)
 
-        # header: back, title, free-mode switch (PRD 5.1)
-        free_box = QWidget()
-        free_row = QHBoxLayout(free_box)
-        free_row.setContentsMargins(0, 0, 0, 0)
-        free_row.setSpacing(10)
-        free_label = label("Free mode", "subheading")
+        # header: back, title; right: free-mode switch (PRD 5.1) and the total stars
+        right = QWidget()
+        right_row = QHBoxLayout(right)
+        right_row.setContentsMargins(0, 0, 0, 0)
+        right_row.setSpacing(10)
+        free_label = label("Free mode", "body")
+        free_label.setStyleSheet("font-weight: 800;")
         free_label.setToolTip("Unlock all levels (for demos and presentations)")
         self.free_switch = ToggleSwitch(ctx.state.free_mode)
         self.free_switch.setToolTip(free_label.toolTip())
-        free_row.addWidget(free_label)
-        free_row.addWidget(self.free_switch)
-        header = ScreenHeader("Choose a level", right=free_box)
+        right_row.addWidget(free_label)
+        right_row.addWidget(self.free_switch)
+        right_row.addSpacing(10)
+        total = QFrame()
+        total.setProperty("role", "pill")
+        total_row = QHBoxLayout(total)
+        total_row.setContentsMargins(12, 6, 16, 6)
+        total_row.setSpacing(6)
+        self.total_stars = StarRow(1, 1, star_radius=10)
+        self.total_label = label("", "subheading")
+        total_row.addWidget(self.total_stars)
+        total_row.addWidget(self.total_label)
+        right_row.addWidget(total)
+        header = ScreenHeader("Choose a level", right=right, back_text="Back to the title")
         header.back_clicked.connect(self.go_back)
         root.addWidget(header)
 
-        # subtitle + total stars
-        info_row = QHBoxLayout()
-        info_row.addWidget(label("Every level breaks the controller in one way. "
-                                 "Fix it with one MPC idea.", "body"))
-        info_row.addStretch(1)
-        self.total_stars = StarRow(1, 1, star_radius=10)
-        self.total_label = label("", "subheading")
-        info_row.addWidget(self.total_stars)
-        info_row.addWidget(self.total_label)
-        root.addLayout(info_row)
+        subtitle = label("Every level breaks the controller in one way. Fix it with one MPC idea.", "body")
+        subtitle.setContentsMargins(58, 0, 0, 0)  # under the title, past the back button
+        root.addWidget(subtitle)
 
         # cards
         grid_host = QWidget()
@@ -112,12 +117,15 @@ class LevelSelectScreen(BaseScreen):
         self.free_switch.set_checked_silently(state.free_mode)
         if state.free_mode:
             self.message.setText("")
+        # the next level to play: the first unlocked one without stars
+        nxt = next((c.level for c in self.cards if state.is_unlocked(c.level, levels)
+                    and state.stars(c.level.id) == 0 and c.level.is_playable), None)
         for card in self.cards:
             level = card.level
             locked = not state.is_unlocked(level, levels)
             prev = self.ctx.previous_level(level)
             hint = f"Finish level {prev.number} to unlock" if prev else ""
-            card.set_progress(state.stars(level.id), locked, hint)
+            card.set_progress(state.stars(level.id), locked, hint, is_next=level is nxt)
         self.total_label.setText(f"{state.total_stars()} / {MAX_STARS * len(levels)}")
 
     def _open(self, card: LevelCard) -> None:
