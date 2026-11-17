@@ -19,11 +19,17 @@ from __future__ import annotations
 import io
 import math
 
-from PySide6.QtCore import QPoint, QPointF, QSize, Qt
+from PySide6.QtCore import QEvent, QPoint, QPointF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from . import theme
+
+# Events after which the display scaling (device pixel ratio) may have changed, e.g. the
+# window moved to a monitor with other Windows scaling (175% laptop -> 125% monitor).
+_DPR_EVENTS = {t for t in (getattr(QEvent.Type, "DevicePixelRatioChange", None),
+                           getattr(QEvent.Type, "ScreenChangeInternal", None),
+                           QEvent.Type.Show) if t is not None}
 
 _cache: dict[tuple, QPixmap] = {}
 _mathtext = None  # lazily imported matplotlib.mathtext (slow import)
@@ -139,6 +145,9 @@ class MathLabel(QWidget):
       and some lines look blurry, depending on where they happen to sit);
     - a line that is too wide is re-rendered at a smaller font size, never shrunk as
       an image.
+    When the display scaling changes (another monitor), the image is re-rendered in
+    event(), NEVER in paintEvent(): rendering or resizing while Qt paints crashed the game
+    (Windows access violation) when the window moved to a monitor with other scaling.
     """
 
     MIN_SIZE_PX = 9.0
@@ -190,6 +199,20 @@ class MathLabel(QWidget):
         super().resizeEvent(event)
         self._fit()
 
+    # --- display scaling -------------------------------------------------------------------
+    def event(self, e) -> bool:
+        if e.type() in _DPR_EVENTS:
+            self._check_dpr()
+        return super().event(e)
+
+    def _check_dpr(self) -> None:
+        """Re-render if the display scaling changed (outside of painting)."""
+        if abs(self.devicePixelRatioF() - getattr(self, "_dpr", 0.0)) > 1e-6:
+            self._render()
+            self.setFixedHeight(self._natural_size().height())
+            self.updateGeometry()
+            self.update()
+
     def _fit(self) -> None:
         """Choose the largest font size (<= size_px) at which the line fits the width."""
         if self._natural is None or self.width() <= 0:
@@ -205,9 +228,11 @@ class MathLabel(QWidget):
 
     # --- painting ------------------------------------------------------------------------
     def paintEvent(self, _event) -> None:
-        p = QPainter(self)
         if abs(self.devicePixelRatioF() - getattr(self, "_dpr", 1.0)) > 1e-6:
-            self._render()  # moved to a screen with another scaling
+            # scaling changed without an event we saw: draw the old image now and
+            # re-render right after this paint (never during it)
+            QTimer.singleShot(0, self, self._check_dpr)
+        p = QPainter(self)
         pm = self._pixmap
         if pm is None:
             p.setPen(QColor(self._color))
@@ -249,9 +274,20 @@ class MathChip(QWidget):
             fm = self.fontMetrics()
             self.setFixedSize(fm.horizontalAdvance(self._tex) + 2 * self.PAD_X, fm.height() + 2 * self.PAD_Y)
 
-    def paintEvent(self, _event) -> None:
+    def event(self, e) -> bool:
+        if e.type() in _DPR_EVENTS:
+            self._check_dpr()
+        return super().event(e)
+
+    def _check_dpr(self) -> None:
+        """Re-render (and resize) if the display scaling changed; never called while painting."""
         if abs(self.devicePixelRatioF() - self._dpr) > 1e-6:
             self._render()
+            self.update()
+
+    def paintEvent(self, _event) -> None:
+        if abs(self.devicePixelRatioF() - self._dpr) > 1e-6:
+            QTimer.singleShot(0, self, self._check_dpr)  # re-render after this paint, not during it
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)

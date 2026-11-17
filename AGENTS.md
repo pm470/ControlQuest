@@ -172,7 +172,9 @@ Feasibility spike results (engine only, default map):
 
 ## 7. Rules for agents working in this repo
 
-- **Ask before committing or pushing**; work on a feature branch; never rewrite shared history.
+- **Never commit or push** (not even after asking): the team members commit themselves.
+  When a change is done, **suggest a commit message** instead. Work on a feature branch;
+  never rewrite shared history.
 - **Never claim something works unless you ran it.** acados only runs in Docker: test
   engine code there (see section 4). If Docker is not available, say so.
 - Keep the split: one file per concern (two people work in parallel; avoid merge
@@ -240,6 +242,10 @@ Feasibility spike results (engine only, default map):
 - (2026-10-22) One OCP "recipe" (`mpc/ocp.py`), several compiled solvers cached per
   problem shape; level differences are runtime numbers or plant-side (wind, model
   mismatch), not separate solvers.
+
+**Working with agents**
+- (2026-11-17) **Agents never commit or push**; the user always commits themselves. After a
+  change, agents only recommend a commit message (section 7).
 
 **Architecture / tooling**
 - (2026-10-21) UI in **PySide6** (not pygame, not web). Game window on the host,
@@ -353,6 +359,14 @@ Feasibility spike results (engine only, default map):
   crop does not follow and the descenders get cut off. The splitter keeps a trailing
   escaped space (`\ `); stripping it leaves a lone `\` and the line fails to render (the
   failure only prints `[math] could not render ...`: watch the console).
+- Two monitors with different Windows scaling (2026-11-17: laptop 175%, BenQ 125%): the
+  game **crashed** (Windows access violation, no Python error) on every level screen
+  shown on the other monitor, because `MathLabel`/`MathChip` re-rendered their formula
+  image inside `paintEvent` when the device pixel ratio changed. Never render, resize or
+  change layout inside `paintEvent`. They now re-render in `event()` on
+  DevicePixelRatioChange / ScreenChangeInternal / Show (`_check_dpr`), and a paint that
+  still sees a stale ratio only schedules `QTimer.singleShot(0, self, ...)`. Test with
+  the window moved between the two monitors (title, and inside a level).
 - A QSpinBox in a narrow fixed width clips its number to nothing (the hidden arrow buttons
   still take room): the solve stepper uses a QLineEdit + QIntValidator instead.
 - Don't override QWidget method names in subclasses (e.g. a `screen()` method on the main
