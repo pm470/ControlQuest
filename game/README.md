@@ -61,13 +61,17 @@ game/
 │   ├── ui/                          theme (colours, stylesheet), painting (ball, stars...), widgets,
 │   │                                math_render (LaTeX-style formulas via matplotlib mathtext)
 │   ├── screens/                     title, level select, how to play, settings, level screen
-│   ├── levels/                      one file per level: LevelInfo (+ play_screen when playable)
+│   ├── levels/                      one file per level: LevelInfo (+ play_screen when playable,
+│   │                                    + intro texts/numbers for the level intro)
 │   │   ├── level_1_price_of_speed.py    Level 1's goal text, battery bar, result rows
 │   │   ├── level_2_brake_check.py       Level 2's goal, brake-check gauge, OCP with v_N = 0, result rows
 │   │   ├── level_3_dead_end.py          Level 3: fix selector, N / waypoint controls, OCP per fix
 │   │   ├── level_4_heavy_ball.py        Level 4: margin + g knobs, test drive, OCP with g
 │   │   └── level_5_crosswind.py         Level 5: re-plan interval k + margin, compute-budget bar
 │   ├── gameplay/                    reusable parts of a playable level
+│   │   ├── level_intro.py               the level intro shown before the play screen: story, what
+│   │   │                                    you learn / how / control, goal, stars, OCP (new parts
+│   │   │                                    highlighted: \new{...}), "Start level"
 │   │   ├── level_play_widget.py         layout + the Run → engine → replay → result flow
 │   │   ├── map_view.py                  the field in metres: blocks + dashed ellipses, waypoints,
 │   │   │                                ball, trail, dashed plan, accel arrow, crash marker
@@ -151,7 +155,7 @@ game/
 | change stars or explanation texts of Level 1 | `engine_server/level_rules/price_of_speed.py` | restart engine |
 | change the MPC (cost, constraints, solver options) | `engine_server/mpc/ocp.py`, `controller.py` | restart engine (it recompiles) |
 | change the simulated real ball | `engine_server/mpc/closed_loop.py` (`plant_step`) | restart engine |
-| change what the player sees in Level 1 | `controlquest/levels/level_1_price_of_speed.py` | restart game |
+| change what the player sees in Level 1 (incl. its intro texts) | `controlquest/levels/level_1_price_of_speed.py` | restart game |
 | change the shared level layout / map / replay | `controlquest/gameplay/*` | restart game |
 
 **Check a level without the game** (inside the engine container, or with
@@ -174,6 +178,12 @@ python calibrate.py dead_end fix=horizon N=100
 3. Game: in `controlquest/levels/level_2_....py` subclass `LevelPlayWidget`
    (goal text, `ocp_spec()` if the OCP differs from the standard one, extras, result
    rows), add `build()` and set `play_screen=build`.
+   Level intro: write `concept` ("What you learn") and `teaching` ("How this level teaches
+   it"), and an `intro(data) -> LevelIntro` function (goal, star conditions from the JSON
+   pars, the OCP at the default knob values, "Fixed: …"); set `intro=intro`. Build the OCP
+   in one module function `ocp(..., intro=False)` that both `ocp_spec()` and `intro()` use;
+   with `intro=True` wrap what is new in this level in `\new{...}` (or `\newknob{name}{...}`
+   for a knob part). Knob explanations come from the knobs' `help` texts in the JSON.
    Knob ranges: `max ≤ max(50, 3 × reference value)` (team rule, see AGENTS.md).
    Obstacles: add `"blocks"` (4 corners each, at most 6) to the level file; the engine
    and the map pick them up. Fixed values that are not knobs go into `"locked"`.

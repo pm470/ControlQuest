@@ -11,7 +11,8 @@ from PySide6.QtWidgets import QVBoxLayout
 
 from ..gameplay.budget_bar import BudgetBar
 from ..gameplay.level_data import load_level_data
-from ..gameplay.level_play_widget import LevelPlayWidget
+from ..gameplay.level_intro import LevelIntro
+from ..gameplay.level_play_widget import LevelPlayWidget, standard_ocp
 from .base import LevelInfo
 
 
@@ -45,6 +46,18 @@ def build(ctx, level: LevelInfo) -> PriceOfSpeedWidget:
     return PriceOfSpeedWidget(ctx, level, load_level_data(level.id))
 
 
+def intro(d) -> LevelIntro:
+    """The level intro's numbers and math (first level: nothing is marked as new)."""
+    return LevelIntro(
+        goal=(f"Bring the ball to the star and stop there within {d.t_limit:g} s, using at most "
+              f"{d.budget['energy']:g} units of energy (Σ Δt·‖u‖²)."),
+        stars=("reach the star", f"within {d.pars['time']:g} s",
+               f"also energy ≤ {d.pars['energy']:g}"),
+        ocp=standard_ocp(d),
+        fixed=f"N = {d.N}, P = {d.raw.get('terminal_factor', 10):g}·Q",
+    )
+
+
 LEVEL = LevelInfo(
     number=1,
     id="price_of_speed",
@@ -52,8 +65,15 @@ LEVEL = LevelInfo(
     topic="Cost trade-off",
     briefing=("The battery is small this time. Get to the target before the timer "
               "runs out, without using more energy than the battery holds."),
-    concept=("The cost function is a trade-off: Q against R decides between fast and "
-             "cheap, and only the ratios between the weights matter."),
+    concept=("The cost function is a trade-off. Q prices being far from the target and moving "
+             "fast; R prices accelerating. Large Q compared with R gives a fast, aggressive "
+             "controller; large R gives a slow, economical one. Only the ratios matter: "
+             "multiplying every weight by the same number changes nothing."),
+    teaching=("The default weights (q_p = 10, q_v = 1, r = 0.1) are almost time-optimal: the "
+              "ball accelerates and brakes at full power, and the battery runs empty just before "
+              "the star. Make inputs more expensive relative to the position error (raise r or "
+              "lower q_p) so it brakes more gently, but not so gently that time runs out. The "
+              "battery bar shows the energy used during the replay."),
     hints=(
         "Watch the arrow on the ball: it is the acceleration. How hard does it push at the start?",
         "Make inputs more expensive compared with being far from the target (raise r or lower "
@@ -63,4 +83,5 @@ LEVEL = LevelInfo(
     accent="coral",
     icon="bolt",
     play_screen=build,
+    intro=intro,
 )

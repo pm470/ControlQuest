@@ -46,6 +46,33 @@ WIDE_MIN_WIDTH = 1150  # below this the OCP column moves into the right column
 TILE_PADDING = 20
 
 
+def standard_ocp(data: LevelData) -> OcpSpec:
+    """The standard point-mass OCP with the weights q_p, q_v, r as knobs, built from the
+    level file's numbers (Level 1; also its intro)."""
+    d = data
+    n = d.N
+    (x0, y0), (x1, y1) = d.workspace
+    return OcpSpec(
+        objective=[
+            rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
+            rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2",
+            r"\ell(x,u) = \knob{q_p}{q_p}\,\|p-p_{\star}\|^2 + \knob{q_v}{q_v}\,\|v\|^2"
+            r" + \knob{r}{r}\,\|u\|^2",
+            rf"Q = \mathrm{{diag}}(q_p,q_p,q_v,q_v),\quad P = {d.raw.get('terminal_factor', 10):g}\,Q",
+        ],
+        constraints=[
+            r"x_0 = \hat{x}",
+            r"x_{k+1} = f(x_k,\,u_k)",
+            rf"|a_x|,\ |a_y| \leq {d.a_max:g}",
+            rf"|v_x|,\ |v_y| \leq {d.v_max:g}",
+            rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
+        ],
+        notes=(f"Re-solved every Δt = {d.dt:g} s from the measured state x̂, "
+               f"{n} steps ({n * d.dt:g} s) ahead; only u₀ is applied."),
+        legend=["x = (p, v): position, velocity · u = a: acceleration · p★: target"],
+    )
+
+
 class LevelPlayWidget(QWidget):
     navigate = Signal(str, object)  # forwarded by LevelScreen, like BaseScreen.navigate
 
@@ -304,31 +331,10 @@ class LevelPlayWidget(QWidget):
         return f"Bring the ball to the star and stop there within {self.data.t_limit:g} s."
 
     def ocp_spec(self) -> OcpSpec:
-        """The OCP shown in the middle tile. Default: the standard point-mass OCP with
-        weights q_p, q_v, r, built from the level file's numbers. Wrap what a knob changes
-        in \\knob{name}{...}: it is drawn in that knob's colour (top level of a line only)."""
-        d = self.data
-        n = d.N
-        (x0, y0), (x1, y1) = d.workspace
-        return OcpSpec(
-            objective=[
-                rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
-                rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2",
-                r"\ell(x,u) = \knob{q_p}{q_p}\,\|p-p_{\star}\|^2 + \knob{q_v}{q_v}\,\|v\|^2"
-                r" + \knob{r}{r}\,\|u\|^2",
-                rf"Q = \mathrm{{diag}}(q_p,q_p,q_v,q_v),\quad P = {d.raw.get('terminal_factor', 10):g}\,Q",
-            ],
-            constraints=[
-                r"x_0 = \hat{x}",
-                r"x_{k+1} = f(x_k,\,u_k)",
-                rf"|a_x|,\ |a_y| \leq {d.a_max:g}",
-                rf"|v_x|,\ |v_y| \leq {d.v_max:g}",
-                rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
-            ],
-            notes=(f"Re-solved every Δt = {d.dt:g} s from the measured state x̂, "
-                   f"{n} steps ({n * d.dt:g} s) ahead; only u₀ is applied."),
-            legend=["x = (p, v): position, velocity · u = a: acceleration · p★: target"],
-        )
+        """The OCP shown in the middle tile. Default: standard_ocp() (the point-mass OCP
+        with weights q_p, q_v, r). Wrap what a knob changes in \\knob{name}{...}: it is
+        drawn in that knob's colour (top level of a line only)."""
+        return standard_ocp(self.data)
 
     def computing_text(self) -> str:
         """Status line while the engine computes a run."""

@@ -108,8 +108,15 @@ invalid → controller failure. The timeline warning is not built yet.)*
 ## 5. Game structure and screens
 
 ### 5.1 Flow
-`Title → Level select → Level screen (briefing → tune → run → result) → next level`
+`Title → Level select → Level intro → Level screen (tune → run → result) → next level's intro`
 
+- **Level intro** (added 2026-11-17), shown every time a level opens: the briefing
+  (story), what the level teaches (the concept), how it teaches it (how the default
+  controller fails and the ideas to fix it), what the player controls (each knob with its
+  explanation, what stays fixed), the goal and the three star conditions, and the level's
+  OCP at the default values with the parts that are new in this level highlighted. "Start
+  level" opens the level screen; Back there returns to the intro (settings and the last
+  run are kept while the player stays in the level).
 - By default you start at Level 1. Each passed level unlocks the next.
 - A "Free mode" toggle in the level select unlocks all levels, for demos and the
   course presentation.

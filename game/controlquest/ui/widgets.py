@@ -303,9 +303,8 @@ class ScreenHeader(QWidget):
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(14)
-        back = IconButton("back")
-        back.setToolTip(f"{back_text} (Esc)")
-        back.setAccessibleName(back_text)
+        back = self.back_button = IconButton("back")
+        self.set_back_text(back_text)
         back.clicked.connect(self.back_clicked)
         self.badge = LevelBadge()
         self.badge.hide()
@@ -319,6 +318,11 @@ class ScreenHeader(QWidget):
 
     def set_title(self, title: str) -> None:
         self.title_label.setText(title)
+
+    def set_back_text(self, text: str) -> None:
+        """Where the back button leads, e.g. "Back to the levels" (tooltip, screen readers)."""
+        self.back_button.setToolTip(f"{text} (Esc)")
+        self.back_button.setAccessibleName(text)
 
     def set_badge(self, number: int | None, accent: str = "coral") -> None:
         """Show a level-number badge before the title (None hides it)."""

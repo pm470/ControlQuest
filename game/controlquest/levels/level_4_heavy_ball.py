@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
 
 from ..engine.protocol import TestDrive
 from ..gameplay.level_data import load_level_data
+from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
 from ..gameplay.ocp_card import OcpSpec
 from ..ui.widgets import Button, label
@@ -90,32 +91,8 @@ class HeavyBallWidget(LevelPlayWidget):
     # --- the OCP with the current knob values ---------------------------------------------------
     def ocp_spec(self) -> OcpSpec:
         d = self.data
-        n, lk = d.N, d.locked
         knobs = self.knobs.values() if hasattr(self, "knobs") else {k.name: k.default for k in d.knobs}
-        g, m = knobs["g"], knobs["margin"]
-        (x0, y0), (x1, y1) = d.workspace
-        return OcpSpec(
-            objective=[
-                rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
-                rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2",
-                rf"\ell(x,u) = {lk['q_p']:g}\,\|p-p_{{\star}}\|^2 + {lk['q_v']:g}\,\|v\|^2 "
-                rf"+ {lk['r']:g}\,\|u\|^2",
-                rf"P = {d.raw.get('terminal_factor', 10):g}\,Q",
-            ],
-            constraints=[
-                r"x_0 = \hat{x}",
-                rf"p_{{k+1}} = p_k + \Delta t\, v_k + \frac{{1}}{{2}}\Delta t^2\, \knob{{g}}{{g}}\, u_k",
-                rf"v_{{k+1}} = v_k + \Delta t\, \knob{{g}}{{g}}\, u_k,\quad \knob{{g}}{{g = {g:.2g}}}",
-                rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
-                rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
-                rf"(p_k-c_j)^{{T}} E_j(\knob{{margin}}{{m}})\, (p_k-c_j) \geq 1,\quad "
-                rf"\knob{{margin}}{{m = {m:.2g}\ \mathrm{{m}}}}",
-            ],
-            notes=(f"Re-solved every Δt = {d.dt:g} s, {n} steps ({n * d.dt:g} s) ahead. The model "
-                   "uses YOUR gain g; the real ball has its own."),
-            legend=["g: model actuator gain (1 = the ball does exactly what is commanded) · "
-                    "E_j(m): ellipse around block j, each semi-axis enlarged by the margin m"],
-        )
+        return ocp(d, knobs["g"], knobs["margin"])
 
     def result_rows(self, result):
         m, d = result.metrics, self.data
@@ -128,8 +105,52 @@ class HeavyBallWidget(LevelPlayWidget):
         ]
 
 
+def ocp(d, g: float, m: float, intro: bool = False) -> OcpSpec:
+    """The OCP with model gain g and obstacle margin m. intro=True: the level intro's version
+    (g and m marked as new)."""
+    n, lk = d.N, d.locked
+    knob = r"\newknob" if intro else r"\knob"
+    (x0, y0), (x1, y1) = d.workspace
+    return OcpSpec(
+        objective=[
+            rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
+            rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2",
+            rf"\ell(x,u) = {lk['q_p']:g}\,\|p-p_{{\star}}\|^2 + {lk['q_v']:g}\,\|v\|^2 "
+            rf"+ {lk['r']:g}\,\|u\|^2",
+            rf"P = {d.raw.get('terminal_factor', 10):g}\,Q",
+        ],
+        constraints=[
+            r"x_0 = \hat{x}",
+            rf"p_{{k+1}} = p_k + \Delta t\, v_k + \frac{{1}}{{2}}\Delta t^2\, {knob}{{g}}{{g}}\, u_k",
+            rf"v_{{k+1}} = v_k + \Delta t\, {knob}{{g}}{{g}}\, u_k,\quad {knob}{{g}}{{g = {g:.2g}}}",
+            rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
+            rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
+            rf"(p_k-c_j)^{{T}} E_j({knob}{{margin}}{{m}})\, (p_k-c_j) \geq 1,\quad "
+            rf"{knob}{{margin}}{{m = {m:.2g}\ \mathrm{{m}}}}",
+        ],
+        notes=(f"Re-solved every Δt = {d.dt:g} s, {n} steps ({n * d.dt:g} s) ahead. The model "
+               "uses YOUR gain g; the real ball has its own."),
+        legend=["g: model actuator gain (1 = the ball does exactly what is commanded) · "
+                "E_j(m): ellipse around block j, each semi-axis enlarged by the margin m"],
+    )
+
+
 def build(ctx, level: LevelInfo) -> HeavyBallWidget:
     return HeavyBallWidget(ctx, level, load_level_data(level.id))
+
+
+def intro(d) -> LevelIntro:
+    """The level intro's numbers and math."""
+    lk, knobs = d.locked, {k.name: k.default for k in d.knobs}
+    return LevelIntro(
+        goal=(f"Park the ball on the star in the bay within {d.t_limit:g} s, without touching "
+              "the walls."),
+        stars=("park on the star", f"within {d.pars['time']:g} s",
+               f"within {d.pars['time_best']:g} s"),
+        ocp=ocp(d, knobs["g"], knobs["margin"], intro=True),
+        fixed=(f"q_p = {lk['q_p']:g}, q_v = {lk['q_v']:g}, r = {lk['r']:g}, "
+               f"P = {d.raw.get('terminal_factor', 10):g}·Q, N = {d.N}"),
+    )
 
 
 LEVEL = LevelInfo(
@@ -139,9 +160,15 @@ LEVEL = LevelInfo(
     topic="Model mismatch",
     briefing=("Someone swapped the ball. It looks the same but responds less to the "
               "motors. Park it in the bay without touching the walls."),
-    concept=("The controller plans with a model. If the real system differs, safe plans "
-             "crash in reality. Fix it with a safety margin (robust, slower) or a better "
-             "model (identify the real parameter)."),
+    concept=("MPC plans with a model of the system. If the real system behaves differently "
+             "(model mismatch), plans that are safe on paper fail in reality. There are two "
+             "cures: robustness (a safety margin that leaves room for the error: safe, but "
+             "slower) or a better model (identify the real parameter with an experiment)."),
+    teaching=("The model assumes the ball does exactly what it is told (g = 1), but the real "
+              "ball reacts less. The controller brakes too late in the bay and ends up in an "
+              "obstacle ellipse: controller failure. Fix it with a larger margin m, or measure "
+              "the real gain with the Test drive and set g. The dashed ghost ball shows where "
+              "the plan expected the ball to be."),
     hints=(
         "Watch the dashed ghost ball: where the plan said the ball would be, and where it is.",
         "A test drive tells you how strongly the real ball responds.",
@@ -150,4 +177,5 @@ LEVEL = LevelInfo(
     accent="mint",
     icon="weight",
     play_screen=build,
+    intro=intro,
 )

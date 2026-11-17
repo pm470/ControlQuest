@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 from ..gameplay.comparison_card import ComparisonCard
 from ..gameplay.fix_selector import FixSelector
 from ..gameplay.level_data import load_level_data
+from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
 from ..gameplay.ocp_card import OcpSpec
 from ..gameplay.waypoint_editor import WaypointEditor
@@ -150,43 +151,7 @@ class DeadEndWidget(LevelPlayWidget):
         selector = getattr(self, "selector", None)  # ocp_spec() is first called before add_controls
         fix = selector.current() if selector else "none"
         n = int(self.knobs.values().get("N", d.N)) if fix == HORIZON and hasattr(self, "knobs") else d.N
-        lk = d.locked
-        ref = r"p_{\mathrm{ref}}" if fix == WAYPOINTS else r"p_{\star}"
-        xref = r"x_{\mathrm{ref}}" if fix == WAYPOINTS else r"x_{\star}"
-        (x0, y0), (x1, y1) = d.workspace
-        objective = [
-            rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
-            rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-{xref}\|_P^2",
-            rf"\ell(x,u) = {lk['q_p']:g}\,\|p-{ref}\|^2 + {lk['q_v']:g}\,\|v\|^2 + {lk['r']:g}\,\|u\|^2",
-        ]
-        if fix == WAYPOINTS:
-            objective.append(rf"p_{{\mathrm{{ref}}}} = \mathrm{{next\ waypoint}}\ \mathrm{{(last:}}\ "
-                             rf"p_{{\star}}),\quad P = {d.raw.get('terminal_factor', 10):g}\,Q")
-        elif fix == HORIZON:
-            objective.append(rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad "
-                             rf"\mathrm{{horizon}}\ \knob{{N}}{{N = {n}}}")
-        else:
-            objective.append(rf"P = {d.raw.get('terminal_factor', 10):g}\,Q")
-        notes = {
-            "none": "The default MPC.",
-            HORIZON: f"Fix: a longer horizon, N = {n}.",
-            WAYPOINTS: "Fix: waypoints; the reference switches from one to the next.",
-        }[fix]
-        return OcpSpec(
-            objective=objective,
-            constraints=[
-                r"x_0 = \hat{x}",
-                r"x_{k+1} = f(x_k,\,u_k)",
-                rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
-                rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
-                rf"(p_k-c_j)^{{T}} E_j\, (p_k-c_j) \geq 1,\quad j = 1,\ldots,{len(d.blocks)}",
-            ],
-            notes=(f"{notes} Re-solved every Δt = {d.dt:g} s, {n} steps ({n * d.dt:g} s) ahead. "
-                   "With obstacles the OCP is nonconvex: SQP finds a local optimum."),
-            legend=[f"c_j, E_j: ellipse around block j (dashed), {d.margin:g} m margin · "
-                    + ("p_ref: the current waypoint · " if fix == WAYPOINTS else "") + "p★: target",
-                    "The ellipse constraints are soft (large L1 penalty) so the QP stays solvable."],
-        )
+        return ocp(d, fix, n)
 
     def result_rows(self, result):
         m, d = result.metrics, self.data
@@ -201,8 +166,69 @@ class DeadEndWidget(LevelPlayWidget):
         return rows
 
 
+def ocp(d, fix: str, n: int, intro: bool = False) -> OcpSpec:
+    """The OCP of a fix ("none", HORIZON, WAYPOINTS) with horizon n. intro=True: the level
+    intro's version (the obstacle ellipses marked as new)."""
+    lk = d.locked
+    ref = r"p_{\mathrm{ref}}" if fix == WAYPOINTS else r"p_{\star}"
+    xref = r"x_{\mathrm{ref}}" if fix == WAYPOINTS else r"x_{\star}"
+    (x0, y0), (x1, y1) = d.workspace
+    objective = [
+        rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
+        rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-{xref}\|_P^2",
+        rf"\ell(x,u) = {lk['q_p']:g}\,\|p-{ref}\|^2 + {lk['q_v']:g}\,\|v\|^2 + {lk['r']:g}\,\|u\|^2",
+    ]
+    if fix == WAYPOINTS:
+        objective.append(rf"p_{{\mathrm{{ref}}}} = \mathrm{{next\ waypoint}}\ \mathrm{{(last:}}\ "
+                         rf"p_{{\star}}),\quad P = {d.raw.get('terminal_factor', 10):g}\,Q")
+    elif fix == HORIZON:
+        objective.append(rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad "
+                         rf"\mathrm{{horizon}}\ \knob{{N}}{{N = {n}}}")
+    else:
+        objective.append(rf"P = {d.raw.get('terminal_factor', 10):g}\,Q")
+    notes = {
+        "none": "The default MPC.",
+        HORIZON: f"Fix: a longer horizon, N = {n}.",
+        WAYPOINTS: "Fix: waypoints; the reference switches from one to the next.",
+    }[fix]
+    ellipses = r"(p_k-c_j)^{T} E_j\, (p_k-c_j) \geq 1"
+    if intro:
+        ellipses = rf"\new{{{ellipses}}}"
+    return OcpSpec(
+        objective=objective,
+        constraints=[
+            r"x_0 = \hat{x}",
+            r"x_{k+1} = f(x_k,\,u_k)",
+            rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
+            rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
+            rf"{ellipses},\quad j = 1,\ldots,{len(d.blocks)}",
+        ],
+        notes=(f"{notes} Re-solved every Δt = {d.dt:g} s, {n} steps ({n * d.dt:g} s) ahead. "
+               "With obstacles the OCP is nonconvex: SQP finds a local optimum."),
+        legend=[f"c_j, E_j: ellipse around block j (dashed), {d.margin:g} m margin · "
+                + ("p_ref: the current waypoint · " if fix == WAYPOINTS else "") + "p★: target",
+                "The ellipse constraints are soft (large L1 penalty) so the QP stays solvable."],
+    )
+
+
 def build(ctx, level: LevelInfo) -> DeadEndWidget:
     return DeadEndWidget(ctx, level, load_level_data(level.id))
+
+
+def intro(d) -> LevelIntro:
+    """The level intro's numbers and math: the no-fix OCP, plus what each fix changes."""
+    lk = d.locked
+    return LevelIntro(
+        goal=f"Bring the ball to the star and stop there within {d.t_limit:g} s.",
+        stars=("reach the star", f"within {d.pars['time']:g} s",
+               f"also at most {d.pars['waypoints']:g} waypoint"),
+        ocp=ocp(d, "none", d.N, intro=True),
+        notes=("① Longer horizon: the OCP above with a larger N.",
+               f"② Waypoints: p★ is replaced by the next waypoint p_ref (up to "
+               f"{d.max_waypoints} waypoints, placed on the map)."),
+        fixed=(f"q_p = {lk['q_p']:g}, q_v = {lk['q_v']:g}, r = {lk['r']:g}, "
+               f"P = {d.raw.get('terminal_factor', 10):g}·Q, margin {d.margin:g} m"),
+    )
 
 
 LEVEL = LevelInfo(
@@ -212,8 +238,14 @@ LEVEL = LevelInfo(
     topic="Local optima",
     briefing=("The direct route looks open... it isn't. Two ideas to get the controller out: "
               "let it look further ahead, or give it a route. Find out which one works."),
-    concept=("With obstacles the OCP is nonconvex. MPC with SQP is a local planner and can get "
-             "trapped; more foresight does not help, a rough higher-level route (waypoints) does."),
+    concept=("With obstacles the OCP is nonconvex and has several local optima. SQP starts from "
+             "the previous plan and only improves it locally, so the MPC is a local planner: it "
+             "can drive into a trap and stay there, even when a way around exists."),
+    teaching=("The default MPC aims straight at the star, drives into the U-shaped wall and stops "
+              "in front of it: time out. You try two fixes, one at a time, and compare them under "
+              "\"Your experiments\": ① a longer horizon (look further ahead) and ② waypoints "
+              "(give it a rough route). One gets the ball out; the other only costs computation. "
+              "Find out which one, and why."),
     hints=(
         "Try a fix and watch the dashed plan: does the MPC ever plan a way around the wall?",
         "A longer horizon sees further, but SQP starts from the previous plan and stays on the same "
@@ -224,4 +256,5 @@ LEVEL = LevelInfo(
     accent="lilac",
     icon="trap",
     play_screen=build,
+    intro=intro,
 )

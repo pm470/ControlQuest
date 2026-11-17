@@ -50,7 +50,9 @@ class LevelCard(QAbstractButton):
     def set_progress(self, stars: int, locked: bool, lock_text: str = "", is_next: bool = False) -> None:
         self._stars, self._locked, self._lock_text = stars, locked, lock_text
         self._next = is_next and not locked
-        self.setToolTip(lock_text if locked else f"{self.level.topic}: {self.level.concept}")
+        # rich text, so Qt wraps the (several sentences long) concept
+        self.setToolTip(lock_text if locked else
+                        f"<p><b>{self.level.topic}</b>: {self.level.concept}</p>")
         self.update()
 
     @property

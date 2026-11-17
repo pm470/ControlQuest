@@ -29,7 +29,7 @@ def format_value(v: float) -> str:
     return f"{v:.4g}" if 1e-3 <= abs(v) < 1e5 else f"{v:.2e}"
 
 
-def _name_row(spec: KnobSpec, color: theme.KnobColor) -> QHBoxLayout:
+def name_row(spec: KnobSpec, color: theme.KnobColor) -> QHBoxLayout:
     """Coloured symbol chip + the knob's name (tooltip: the help text)."""
     row = QHBoxLayout()
     row.setContentsMargins(0, 0, 0, 0)
@@ -62,7 +62,7 @@ class KnobRow(QWidget):
         col = QVBoxLayout(self)
         col.setContentsMargins(0, 0, 0, 0)
         col.setSpacing(4)
-        top = _name_row(spec, color)
+        top = name_row(spec, color)
         self.edit = QLineEdit()
         self.edit.setProperty("role", "knob_value")
         self.edit.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -166,7 +166,7 @@ class ChoiceRow(QWidget):
         self.spec = spec
         row = QVBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        top = _name_row(spec, color)
+        top = name_row(spec, color)
         self.combo = QComboBox()
         self.combo.setCursor(Qt.CursorShape.PointingHandCursor)
         self.combo.setToolTip(spec.help)
@@ -197,7 +197,7 @@ class ToggleRow(QWidget):
         self.spec = spec
         row = QVBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        top = _name_row(spec, color)
+        top = name_row(spec, color)
         self.switch = ToggleSwitch(bool(spec.default))
         self.switch.setToolTip(spec.help)
         top.addWidget(self.switch)

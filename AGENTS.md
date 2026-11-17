@@ -121,7 +121,7 @@ without the engine; pressing Run then shows a clear "engine offline" message.
 Contract between the two sides: `controlquest/engine/protocol.py` ↔
 `engine_server/level_rules/common.py` + `server.py`, plus the level JSON files.
 
-## 6. Status (2026-11-14)
+## 6. Status (2026-11-17)
 
 - Done: menus (title with animation, level select with stars/locks/free mode, how
   to play, settings), engine server, MPC package, **Level 1 "The Price of Speed"
@@ -140,6 +140,8 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
 - Done (2026-11-14, branch `gui`): **UI redesign** on all screens and levels (design rules
   in section 10; borderless tiles with lips, three-tile level screen, knob colours in the
   OCP, new level select). Game-side only: engine unchanged (still v0.9.0).
+- Done (2026-11-17, branch `gui`): **level intro** before every level (`gameplay/level_intro.py`,
+  `LevelInfo.teaching` + `LevelInfo.intro`; section 10). Game-side only.
 - Not yet: speed/acceleration plots (PRD 5.6),
   saving progress to disk (progress resets on restart, intentionally for now).
 - Next planned work: the MPC side of levels 2, 4, 5 (horizon N per level, terminal
@@ -329,6 +331,23 @@ Feasibility spike results (engine only, default map):
   highlight, dark dot eyes with a shine, pink blush, small smile; no gradient, no white
   eyeballs), drawn by `painting.draw_ball` everywhere (map, title, how to play, icon).
   **No ball on the level select** (the user does not want it above any level tile).
+- (2026-11-17) **Level intro before every level.** Picking a level (level select or "Next
+  level ›") opens its intro, **every time**; "Start level ▶" opens the play screen. Back on
+  the play screen → the intro; Back on the intro → the level select. The play screen keeps
+  its state (knobs, last run, Level 3's experiments) while the player stays in the level;
+  leaving the level or opening another starts fresh. Layout: **two tiles, one page**:
+  - left ("learn"): story quote, "What you learn" (`concept`), "How this level teaches it"
+    (`teaching`), "What you control" (one line per knob: chip + name + the knob's `help`
+    text from the level JSON; Level 3's fix notes; "Fixed: …"). The user moved the knob
+    lines here so that nothing scrolls at 1280×800;
+  - right ("play"): Goal, the three star conditions (numbers from the JSON pars), "What
+    changes in the OCP" = the **full OCP at the default knob values**, knob parts in the knob
+    colours, parts **new in this level on a soft yellow highlight** (+ the key "new in this
+    level"), and "Start level ▶" pinned at the bottom (each tile scrolls its own content).
+  - Spoilers allowed: the texts say the concept, how the default fails and the fix ideas
+    (Level 3 keeps "find out which one works"). No map preview. Level 1 marks nothing new.
+    Level 3 shows the no-fix OCP plus one note per fix. Level 2 shows the terminal stop as
+    "(terminal stop, optional)". The texts were drafted by the agent and approved by the user.
 
 ## 9. Gotchas already hit (don't repeat them)
 
@@ -367,6 +386,13 @@ Feasibility spike results (engine only, default map):
   DevicePixelRatioChange / ScreenChangeInternal / Show (`_check_dpr`), and a paint that
   still sees a stale ratio only schedules `QTimer.singleShot(0, self, ...)`. Test with
   the window moved between the two monitors (title, and inside a level).
+- (2026-11-17) Don't centre a widget that contains word-wrapped labels with an alignment flag
+  (`addWidget(w, 1, AlignHCenter)`) inside a scroll area: the layout reserves the height for
+  one width and lays out at another, so rows get squeezed and formulas overlap. Centre with
+  stretches on both sides instead (the level intro does).
+- (2026-11-17) The `bbox_inches="tight"` crop of a formula only sees the glyphs, not text
+  bbox patches (chips, the "new" highlight): `render_tex` adds the highlight's padding to
+  `pad_inches`, otherwise the highlight is cut flat at the top and bottom.
 - A QSpinBox in a narrow fixed width clips its number to nothing (the hidden arrow buttons
   still take room): the solve stepper uses a QLineEdit + QIntValidator instead.
 - Don't override QWidget method names in subclasses (e.g. a `screen()` method on the main
@@ -387,7 +413,7 @@ Feasibility spike results (engine only, default map):
 - Long thin blocks: their ellipses stick out far and overlapping ellipses form notches
   where the MPC gets stuck. Split walls into shorter blocks (Level 3 uses 6).
 
-## 10. UI structure and content (what the player sees, as of 2026-11-14)
+## 10. UI structure and content (what the player sees, as of 2026-11-17)
 
 **Design rules: read these before any GUI work** (agreed 2026-11-14, section 8). The goal
 is a real game, not a generic "vibe-coded" app. Every screen and every level follows them;
@@ -411,6 +437,8 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
 6. **Knob colours connect the controls to the math**: knob i gets `KNOB_COLORS[i]` (order
    in the level file): `MathChip` symbol in the knob row, slider fill, and the
    `\knob{name}{tex}` parts of the OCP (top level of a math line only, not inside {...}).
+   **New parts** (level intro only): `\new{tex}` on the soft yellow `NEW_GLOW` highlight,
+   `\newknob{name}{tex}` for a knob part that is also new (knob chip on the highlight).
 7. **Math keeps the textbook font** (matplotlib mathtext, Computer Modern) via
    `MathLabel`/`MathChip` (pixel-snapped, see gotchas). Never draw formulas as text.
 8. **One header everywhere** (`ScreenHeader`): the lip back button (`IconButton`), on level
@@ -448,6 +476,17 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
    title · ★★★. Unplayable levels show a card with topic, briefing (quote), "What this
    level is about", "The playing field is still being built" (+ dev buttons with
    `CONTROLQUEST_DEV=1`).
+   **Level intro** (`gameplay/level_intro.py`), shown first every time a level opens; two
+   tiles side by side, each scrolling its own content (nothing scrolls at 1280×800):
+   - left: the story (quote), **What you learn**, **How this level teaches it**, **What you
+     control** (per knob: coloured chip + name + help text; notes; "Fixed: …");
+   - right: **Goal**, ★ / ★★ / ★★★ conditions, **What changes in the OCP** (full OCP at the
+     default values, knob colours, new parts highlighted, "new in this level" key next to
+     the heading), and the coral **Start level ▶** pinned at the bottom.
+   A level provides it with `LevelInfo.concept`, `LevelInfo.teaching` and
+   `LevelInfo.intro(data) -> LevelIntro` (goal, stars, OCP, fixed, notes); each level file
+   builds its OCP in a module function `ocp(..., intro=False)` used by both screens.
+   Back (button or Esc) on the play screen returns to the intro (play state kept).
    **Playable level** (`gameplay/level_play_widget.py`), three tiles on wide windows:
    - left, **map tile**: the **map** (soft 50 m board without outline, grid every 5 m,
      numbers every 10 m with one shared 0 at the origin, start ring, target star, ball

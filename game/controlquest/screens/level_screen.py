@@ -1,9 +1,13 @@
 """Level screen: hosts one level.
 
-If the level file provides `play_screen` (see levels/base.py), its gameplay
-widget (usually a gameplay.LevelPlayWidget) is shown below the header; otherwise
-a "coming soon" card with the briefing. A body widget with a `navigate` signal
-(str, object) can ask for another screen, e.g. "Next level".
+Opening a level (from the level select or "Next level") first shows its intro
+(gameplay/level_intro.py, if the level file sets `intro`); "Start level" then shows the
+gameplay widget (usually a gameplay.LevelPlayWidget) built by `play_screen`. Back on the
+play screen returns to the intro, Back on the intro to the level select. The play screen
+is kept while the player stays in the level (knobs, last run, experiments survive a look
+at the intro); leaving the level or opening another one starts fresh. Levels without
+`play_screen` show a "coming soon" card with the briefing. A body widget with a `navigate`
+signal (str, object) can ask for another screen, e.g. "Next level".
 """
 
 from __future__ import annotations
@@ -15,6 +19,8 @@ from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from ..core.config import DEV_MODE, MAX_STARS
 from ..core.navigation import ScreenId
+from ..gameplay.level_data import load_level_data
+from ..gameplay.level_intro import LevelIntroWidget
 from ..levels.base import LevelInfo
 from ..ui.widgets import Button, Card, ScreenHeader, StarRow, StepIcon, divider, label, scrollable
 from .base_screen import BaseScreen
@@ -35,7 +41,10 @@ class LevelScreen(BaseScreen):
         root.addWidget(self.header)
         self._body_host = QVBoxLayout()
         root.addLayout(self._body_host, 1)
-        self._body: QWidget | None = None
+        self._intro: QWidget | None = None  # the level intro (built when the level opens)
+        self._play: QWidget | None = None  # the play screen (built at the first "Start level")
+        self._other: QWidget | None = None  # the "coming soon" card
+        self._on_play = False  # which one is shown: play screen or intro
         ctx.state.changed.connect(self._refresh_stars)
 
     def _refresh_stars(self) -> None:
@@ -52,21 +61,66 @@ class LevelScreen(BaseScreen):
         self.header.set_title(level.title)
         self.header.set_badge(level.number, level.accent)
         self.stars.set_stars(self.ctx.state.stars(level.id))
-        self._set_body(level.play_screen(self.ctx, level) if level.is_playable
-                       else self._coming_soon(level))
+        self._clear()  # a level always opens fresh (also "Next level" from the result card)
+        if not level.is_playable:
+            self._other = self._add(self._coming_soon(level))
+            self.header.set_back_text("Back to the levels")
+        elif level.intro is None:
+            self.show_play()
+        else:
+            self.show_intro()
 
     def on_leave(self) -> None:
-        self._set_body(None)
+        self._clear()
 
-    def _set_body(self, widget: QWidget | None) -> None:
-        if self._body is not None:
-            self._body.setParent(None)
-            self._body.deleteLater()
-        self._body = widget
-        if widget is not None:
-            self._body_host.addWidget(widget)
-            if hasattr(widget, "navigate"):
-                widget.navigate.connect(self.navigate)
+    def go_back(self) -> None:
+        """From the play screen back to the intro; from the intro to the level select."""
+        if self._on_play and self._intro is not None:
+            self.show_intro()
+        else:
+            super().go_back()
+
+    # --- intro and play screen -----------------------------------------------------------
+    def show_intro(self) -> None:
+        level = self.level
+        if self._intro is None:
+            self._intro = self._add(LevelIntroWidget(level, load_level_data(level.id)))
+            self._intro.start.connect(self.show_play)
+        if self._play is not None and hasattr(self._play, "playback"):
+            self._play.playback.pause()  # don't keep replaying behind the intro
+        self._show(self._intro)
+        self._on_play = False
+        self.header.set_back_text("Back to the levels")
+
+    def show_play(self) -> None:
+        if self._play is None:
+            self._play = self._add(self.level.play_screen(self.ctx, self.level))
+        self._show(self._play)
+        self._on_play = True
+        self.header.set_back_text("Back to the level intro" if self._intro is not None
+                                  else "Back to the levels")
+
+    def _add(self, widget: QWidget) -> QWidget:
+        widget.hide()
+        self._body_host.addWidget(widget)
+        if hasattr(widget, "navigate"):
+            widget.navigate.connect(self.navigate)
+        return widget
+
+    def _show(self, widget: QWidget) -> None:
+        for w in (self._intro, self._play, self._other):
+            if w is not None and w is not widget:
+                w.hide()
+        widget.show()
+
+    def _clear(self) -> None:
+        for w in (self._intro, self._play, self._other):
+            if w is not None:
+                w.hide()
+                w.setParent(None)
+                w.deleteLater()
+        self._intro = self._play = self._other = None
+        self._on_play = False
 
     # --- placeholder until the level is playable ---------------------------------------
     def _coming_soon(self, level: LevelInfo) -> QWidget:

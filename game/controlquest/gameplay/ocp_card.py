@@ -32,14 +32,15 @@ class OcpSpec:
 
 
 class OcpCard(QWidget):
-    def __init__(self, spec: OcpSpec, title: str = "The OCP your MPC solves",
+    def __init__(self, spec: OcpSpec, title: str | None = "The OCP your MPC solves",
                  knob_colors: dict | None = None, parent: QWidget | None = None):
         super().__init__(parent)
         self._knob_colors = knob_colors or {}
         self.body = QVBoxLayout(self)
         self.body.setContentsMargins(0, 0, 0, 0)
         self.body.setSpacing(8)
-        self.body.addWidget(label(title, "subheading"))
+        if title:  # None: the caller shows its own title (e.g. the level intro's eyebrow)
+            self.body.addWidget(label(title, "subheading"))
         self._content = QWidget()
         self.body.addWidget(self._content)
         self.set_spec(spec)

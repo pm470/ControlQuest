@@ -91,6 +91,9 @@ KNOB_COLORS = [
 ]
 
 
+NEW_GLOW = "#FFEAA6"  # soft highlighter behind OCP parts that are new in a level (level intro)
+
+
 def knob_color(index: int) -> KnobColor:
     return KNOB_COLORS[index % len(KNOB_COLORS)]
 

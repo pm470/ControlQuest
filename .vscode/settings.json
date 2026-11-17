@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "D:/UFR/5. WiSe ´2026/MPCRL/Project/acados"
+    "cmake.sourceDirectory": "D:/UFR/5. WiSe ´2026/MPCRL/Project/acados",
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }

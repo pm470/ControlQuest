@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QVBoxLayout
 
 from ..gameplay.budget_bar import BudgetBar
 from ..gameplay.level_data import load_level_data
+from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
 from ..gameplay.ocp_card import OcpSpec
 from ..ui.widgets import label
@@ -62,32 +63,8 @@ class CrosswindWidget(LevelPlayWidget):
     # --- the OCP --------------------------------------------------------------------------------
     def ocp_spec(self) -> OcpSpec:
         d = self.data
-        n, lk = d.N, d.locked
         v = self.knobs.values() if hasattr(self, "knobs") else {k.name: k.default for k in d.knobs}
-        k, m = int(v["k"]), v["margin"]
-        (x0, y0), (x1, y1) = d.workspace
-        return OcpSpec(
-            objective=[
-                rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
-                rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2",
-                rf"\ell(x,u) = {lk['q_p']:g}\,\|p-p_{{\star}}\|^2 + {lk['q_v']:g}\,\|v\|^2 "
-                rf"+ {lk['r']:g}\,\|u\|^2",
-                rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad \mathrm{{solve\ every}}\ "
-                rf"\knob{{k}}{{k = {k}}}\ \mathrm{{samples}}",
-            ],
-            constraints=[
-                r"x_0 = \hat{x}",
-                r"x_{k+1} = f(x_k,\,u_k)\quad \mathrm{(no\ wind\ in\ the\ model)}",
-                rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
-                rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
-                rf"(p_k-c_j)^{{T}} E_j(\knob{{margin}}{{m}})\, (p_k-c_j) \geq 1,\quad "
-                rf"\knob{{margin}}{{m = {m:.2g}\ \mathrm{{m}}}}",
-            ],
-            notes=(f"Solved only every {k} sample(s) ({k * d.dt:g} s) from the measured state; in between "
-                   f"the ball gets u₁, u₂, … of the last plan, open-loop. {n} steps ({n * d.dt:g} s) ahead."),
-            legend=["E_j(m): ellipse around block j, each semi-axis enlarged by the margin m · "
-                    "the wind acts on the real ball only"],
-        )
+        return ocp(d, int(v["k"]), v["margin"])
 
     def result_rows(self, result):
         m, d = result.metrics, self.data
@@ -99,8 +76,57 @@ class CrosswindWidget(LevelPlayWidget):
         ]
 
 
+def ocp(d, k: int, m: float, intro: bool = False) -> OcpSpec:
+    """The OCP with re-plan interval k and obstacle margin m. intro=True: the level intro's
+    version (the re-plan interval and "no wind in the model" marked as new)."""
+    n, lk = d.N, d.locked
+    (x0, y0), (x1, y1) = d.workspace
+    if intro:  # touching highlights read as one: no gaps between the new parts
+        replan = (rf"\new{{\mathrm{{solve\ every}}}}\newknob{{k}}{{k = {k}}}"
+                  rf"\new{{\mathrm{{samples}}}}")
+        no_wind = r"\new{\mathrm{(no\ wind\ in\ the\ model)}}"
+    else:
+        replan = rf"\mathrm{{solve\ every}}\ \knob{{k}}{{k = {k}}}\ \mathrm{{samples}}"
+        no_wind = r"\mathrm{(no\ wind\ in\ the\ model)}"
+    return OcpSpec(
+        objective=[
+            rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
+            rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2",
+            rf"\ell(x,u) = {lk['q_p']:g}\,\|p-p_{{\star}}\|^2 + {lk['q_v']:g}\,\|v\|^2 "
+            rf"+ {lk['r']:g}\,\|u\|^2",
+            rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad {replan}",
+        ],
+        constraints=[
+            r"x_0 = \hat{x}",
+            rf"x_{{k+1}} = f(x_k,\,u_k)\quad {no_wind}",
+            rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
+            rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
+            rf"(p_k-c_j)^{{T}} E_j(\knob{{margin}}{{m}})\, (p_k-c_j) \geq 1,\quad "
+            rf"\knob{{margin}}{{m = {m:.2g}\ \mathrm{{m}}}}",
+        ],
+        notes=(f"Solved only every {k} sample(s) ({k * d.dt:g} s) from the measured state; in between "
+               f"the ball gets u₁, u₂, … of the last plan, open-loop. {n} steps ({n * d.dt:g} s) ahead."),
+        legend=["E_j(m): ellipse around block j, each semi-axis enlarged by the margin m · "
+                "the wind acts on the real ball only"],
+    )
+
+
 def build(ctx, level: LevelInfo) -> CrosswindWidget:
     return CrosswindWidget(ctx, level, load_level_data(level.id))
+
+
+def intro(d) -> LevelIntro:
+    """The level intro's numbers and math."""
+    lk, knobs = d.locked, {k.name: k.default for k in d.knobs}
+    return LevelIntro(
+        goal=(f"Get through the gap and stop on the star within {d.t_limit:g} s, using at most "
+              f"{d.budget['solves']:g} solves."),
+        stars=("reach the star", f"within {d.pars['time']:g} s",
+               f"also ≤ {d.pars['solves']:g} solves"),
+        ocp=ocp(d, int(knobs["k"]), knobs["margin"], intro=True),
+        fixed=(f"q_p = {lk['q_p']:g}, q_v = {lk['q_v']:g}, r = {lk['r']:g}, "
+               f"P = {d.raw.get('terminal_factor', 10):g}·Q, N = {d.N}"),
+    )
 
 
 LEVEL = LevelInfo(
@@ -110,8 +136,16 @@ LEVEL = LevelInfo(
     topic="Feedback",
     briefing=("It's windy. You have a limited compute budget: every re-plan uses one "
               "solve. Get through the gap."),
-    concept=("MPC is feedback because it re-plans from the measured state. Re-plan too "
-             "rarely and the ball runs open-loop while the wind pushes it off its plan."),
+    concept=("MPC is feedback: it re-plans from the measured state, so it corrects disturbances "
+             "its model does not know about (here, the wind). Between two re-plans the "
+             "controller runs open-loop. Re-planning costs computation, so how often to re-plan "
+             "is a trade-off between robustness and compute."),
+    teaching=("The default re-plans every sample (k = 1). That is perfect, but the 60 solves run "
+              "out before the target: budget exceeded. Re-plan less often and the wind pushes the "
+              "ball off its plan between re-plans, towards the blocks. Find a k that is cheap "
+              "enough but still corrects the wind, and give the ball room with the margin m. The "
+              "budget bar counts the solves; the solid part of the plan on the map is what runs "
+              "open-loop."),
     hints=(
         "Between two re-plans, who corrects for the wind?",
         "Re-planning every step is perfect, but too expensive. Watch the budget bar.",
@@ -120,4 +154,5 @@ LEVEL = LevelInfo(
     accent="sun",
     icon="wind",
     play_screen=build,
+    intro=intro,
 )

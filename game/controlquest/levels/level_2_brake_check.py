@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QVBoxLayout
 
 from ..gameplay.brake_gauge import BrakeGauge
 from ..gameplay.level_data import load_level_data
+from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
 from ..gameplay.ocp_card import OcpSpec
 from .base import LevelInfo
@@ -68,31 +69,9 @@ class BrakeCheckWidget(LevelPlayWidget):
 
     # --- the OCP with the chosen N and terminal stop ------------------------------------------
     def ocp_spec(self) -> OcpSpec:
-        d, lk = self.data, self.data.locked
+        d = self.data
         knobs = self.knobs.values() if hasattr(self, "knobs") else {k.name: k.default for k in d.knobs}
-        n, stop = int(knobs["N"]), knobs["stop"] >= 0.5
-        (x0, y0), (x1, y1) = d.workspace
-        constraints = [
-            r"x_0 = \hat{x}",
-            r"x_{k+1} = f(x_k,\,u_k)",
-            rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
-            rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
-        ]
-        if stop:
-            constraints.append(rf"\knob{{stop}}{{v_{{{n}}} = 0}}\quad \mathrm{{(terminal\ stop)}}")
-        return OcpSpec(
-            objective=[
-                rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
-                rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2",
-                rf"\ell(x,u) = {lk['q_p']:g}\,\|p-p_{{\star}}\|^2 + {lk['q_v']:g}\,\|v\|^2 "
-                rf"+ {lk['r']:g}\,\|u\|^2",
-                rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad \mathrm{{horizon}}\ \knob{{N}}{{N = {n}}}",
-            ],
-            constraints=constraints,
-            notes=(f"Re-solved every Δt = {d.dt:g} s, N = {n} steps ({n * d.dt:g} s) ahead"
-                   + ("; every plan must end at rest." if stop else ".")),
-            legend=["x = (p, v): position, velocity · u = a: acceleration · p★: target"],
-        )
+        return ocp(d, int(knobs["N"]), knobs["stop"] >= 0.5)
 
     def result_rows(self, result):
         m, d = result.metrics, self.data
@@ -105,8 +84,52 @@ class BrakeCheckWidget(LevelPlayWidget):
         ]
 
 
+def ocp(d, n: int, stop: bool, intro: bool = False) -> OcpSpec:
+    """The OCP with horizon n and the terminal stop on/off. intro=True: the level intro's
+    version (the horizon and the terminal stop marked as new, the stop shown as optional)."""
+    lk = d.locked
+    knob = r"\newknob" if intro else r"\knob"
+    (x0, y0), (x1, y1) = d.workspace
+    constraints = [
+        r"x_0 = \hat{x}",
+        r"x_{k+1} = f(x_k,\,u_k)",
+        rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
+        rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
+    ]
+    if stop or intro:
+        what = r"terminal\ stop,\ optional" if intro else r"terminal\ stop"
+        constraints.append(rf"{knob}{{stop}}{{v_{{{n}}} = 0}}\quad \mathrm{{({what})}}")
+    return OcpSpec(
+        objective=[
+            rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
+            rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2",
+            rf"\ell(x,u) = {lk['q_p']:g}\,\|p-p_{{\star}}\|^2 + {lk['q_v']:g}\,\|v\|^2 "
+            rf"+ {lk['r']:g}\,\|u\|^2",
+            rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad \mathrm{{horizon}}\ {knob}{{N}}{{N = {n}}}",
+        ],
+        constraints=constraints,
+        notes=(f"Re-solved every Δt = {d.dt:g} s, N = {n} steps ({n * d.dt:g} s) ahead"
+               + ("; every plan must end at rest." if stop else ".")),
+        legend=["x = (p, v): position, velocity · u = a: acceleration · p★: target"],
+    )
+
+
 def build(ctx, level: LevelInfo) -> BrakeCheckWidget:
     return BrakeCheckWidget(ctx, level, load_level_data(level.id))
+
+
+def intro(d) -> LevelIntro:
+    """The level intro's numbers and math."""
+    lk, n = d.locked, int(next(k.default for k in d.knobs if k.name == "N"))
+    return LevelIntro(
+        goal=(f"Stop on the star, {d.workspace[1][0] - d.target[0]:g} m in front of the wall, "
+              f"within {d.t_limit:g} s."),
+        stars=("stop on the star", f"within {d.pars['time']:g} s",
+               f"also N ≤ {d.pars['max_N']:g}"),
+        ocp=ocp(d, n, False, intro=True),
+        fixed=(f"q_p = {lk['q_p']:g}, q_v = {lk['q_v']:g}, r = {lk['r']:g}, "
+               f"P = {d.raw.get('terminal_factor', 10):g}·Q"),
+    )
 
 
 LEVEL = LevelInfo(
@@ -116,9 +139,17 @@ LEVEL = LevelInfo(
     topic="Horizon & feasibility",
     briefing=("New, faster ball, weaker brakes. The target is right in front of the "
               "wall. Stop on it."),
-    concept=("The horizon has to cover the braking distance, or the controller sees the "
-             "problem too late and runs out of feasible plans. A terminal constraint "
-             "restores safety, but makes the controller conservative."),
+    concept=("The horizon has to see far enough. An MPC that plans N steps ahead notices the "
+             "wall only once the wall is inside its horizon. If braking takes longer than that, "
+             "it notices too late and no feasible plan is left: recursive feasibility is lost. "
+             "A terminal constraint (every plan must end at rest) guarantees that a way to stop "
+             "always exists, at the price of a more cautious controller."),
+    teaching=("With the default N = 10 (1 s, about 4 m at full speed) the ball rushes at the "
+              "wall. Braking from 4 m/s needs 8 m, so the OCP eventually has no solution: "
+              "controller failure. Two ideas: a longer horizon (fast and safe, but bigger "
+              "solves), or a short horizon plus the terminal stop (always safe, but slower). The "
+              "brake check under the map compares the distance to the wall, the braking "
+              "distance, and how far the plan looks."),
     hints=(
         "Watch the brake check under the map: when does \"braking needs\" become longer than "
         "\"wall ahead\"? How far does the plan look at that moment?",
@@ -130,4 +161,5 @@ LEVEL = LevelInfo(
     accent="sky",
     icon="wall",
     play_screen=build,
+    intro=intro,
 )

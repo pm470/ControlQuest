@@ -12,6 +12,10 @@ e.g. r"\\ell = \\knob{q_p}{q_p}\\,\\|p\\|^2". With knob_colors={"q_p": KnobColor
 that part is drawn in the knob's colour on a tinted chip (same colour as its slider);
 without colours it is drawn like the rest. Only at the top level of a line (not
 inside {...}, e.g. not in a subscript).
+
+New parts (level intros): \\new{tex} draws the part on a soft yellow highlight
+(theme.NEW_GLOW); \\newknob{name}{tex} is a knob part that is also new (knob chip on
+the highlight). Same rule: top level of a line only.
 """
 
 from __future__ import annotations
@@ -35,42 +39,71 @@ _cache: dict[tuple, QPixmap] = {}
 _mathtext = None  # lazily imported matplotlib.mathtext (slow import)
 PAD_PX = 3  # transparent margin around each formula (logical px)
 KNOB = "\\knob{"
+NEW = "\\new{"
+NEWKNOB = "\\newknob{"
+MARKS = (KNOB, NEW, NEWKNOB)
 SEGMENT_GAP_EM = 0.12  # space between a coloured chip and its neighbours
 CHIP_PAD_EM = 0.12  # extra room for the chip's rounded background
+GLOW_PAD_EM = 0.3  # extra room for the soft highlight behind a new part
 
 
-def split_knobs(tex: str) -> list[tuple[str, str | None]]:
-    """'a \\knob{q}{b} c' -> [('a', None), ('b', 'q'), ('c', None)] (empty parts dropped)."""
-    parts: list[tuple[str, str | None]] = []
+def _group(tex: str, start: int) -> int:
+    """Index of the '}' that closes the brace group opening at tex[start] ('{'); -1 if none."""
+    depth = 0
+    for k in range(start, len(tex)):
+        depth += {"{": 1, "}": -1}.get(tex[k], 0)
+        if depth == 0:
+            return k
+    return -1
+
+
+def split_marks(tex: str) -> list[tuple[str, str | None, bool]]:
+    """Split a line at its markup into (tex, knob name or None, new?) parts, e.g.
+    'a \\knob{q}{b} \\new{c} \\newknob{N}{d}' ->
+    [('a', None, False), ('b', 'q', False), ('c', None, True), ('d', 'N', True)].
+    Empty parts are dropped; malformed markup is rendered as it is."""
+    parts: list[tuple[str, str | None, bool]] = []
     i = 0
     while True:
-        j = tex.find(KNOB, i)
-        if j < 0:
+        found = [(tex.find(m, i), m) for m in MARKS]
+        found = [(j, m) for j, m in found if j >= 0]
+        if not found:
             break
-        name_end = tex.find("}", j + len(KNOB))
-        if name_end < 0 or name_end + 1 >= len(tex) or tex[name_end + 1] != "{":
-            break  # malformed: render the rest as it is
-        depth, k = 0, name_end + 1
-        while k < len(tex):
-            depth += {"{": 1, "}": -1}.get(tex[k], 0)
-            if depth == 0:
+        j, mark = min(found)
+        name, body_open = None, j + len(mark) - 1  # index of the '{' after the command
+        if mark != NEW:  # \knob / \newknob: {name}{tex}
+            name_end = _group(tex, body_open)
+            if name_end < 0 or name_end + 1 >= len(tex) or tex[name_end + 1] != "{":
                 break
-            k += 1
-        parts.append((tex[i:j], None))
-        parts.append((tex[name_end + 2:k], tex[j + len(KNOB):name_end]))
-        i = k + 1
-    parts.append((tex[i:], None))
+            name, body_open = tex[body_open + 1:name_end], name_end + 1
+        body_end = _group(tex, body_open)
+        if body_end < 0:
+            break
+        parts.append((tex[i:j], None, False))
+        parts.append((tex[body_open + 1:body_end], name, mark != KNOB))
+        i = body_end + 1
+    parts.append((tex[i:], None, False))
 
     def clean(t: str) -> str:  # trim, but keep an escaped space ("\ ") at the end intact
         s = t.strip()
         return s + " " if s.endswith("\\") and not s.endswith("\\\\") else s
 
-    return [(clean(t), n) for t, n in parts if t.strip()]
+    return [(clean(t), n, new) for t, n, new in parts if t.strip()]
+
+
+def has_marks(tex: str) -> bool:
+    return any(m in tex for m in MARKS)
+
+
+def split_knobs(tex: str) -> list[tuple[str, str | None]]:
+    """'a \\knob{q}{b} c' -> [('a', None), ('b', 'q'), ('c', None)] (empty parts dropped)."""
+    return [(t, n) for t, n, _new in split_marks(tex)]
 
 
 def plain_tex(tex: str) -> str:
-    """The line without knob markup (e.g. for tooltips or a text fallback)."""
-    return " ".join(t for t, _n in split_knobs(tex))
+    """The line without markup (e.g. for tooltips or a text fallback)."""
+    return " ".join(t for t, _n, _new in split_marks(tex))
+
 
 
 def _backend():
@@ -90,9 +123,9 @@ def render_tex(tex: str, size_px: float = 15, color: str = theme.INK, dpr: float
                knob_colors: dict | None = None) -> QPixmap | None:
     """Render one line of math (without $...$) to a transparent QPixmap; None if impossible.
     knob_colors: {knob name: theme.KnobColor} for the \\knob{name}{...} parts."""
-    parts = split_knobs(tex) if KNOB in tex else [(tex, None)]
+    parts = split_marks(tex) if has_marks(tex) else [(tex, None, False)]
     colors = knob_colors or {}
-    used = tuple(sorted((n, colors[n]) for _t, n in parts if n in colors))
+    used = tuple(sorted((n, colors[n]) for _t, n, _new in parts if n in colors))
     key = (tex, round(size_px, 1), color, round(dpr, 2), used)
     if key in _cache:
         return _cache[key]
@@ -107,26 +140,39 @@ def render_tex(tex: str, size_px: float = 15, color: str = theme.INK, dpr: float
         dpi = 72 * dpr
         fig = Figure(figsize=(0.01, 0.01), dpi=dpi)
         canvas = FigureCanvasAgg(fig)
-        if len(parts) == 1 and parts[0][1] not in colors:
+        if len(parts) == 1 and parts[0][1] not in colors and not parts[0][2]:
             fig.text(0, 0, f"${parts[0][0]}$", fontsize=size_px, color=color)
         else:
-            # one text per part, side by side on the same baseline; coloured parts on a chip.
-            # Positions in figure fractions (transFigure), which follow the tight bbox crop.
+            # one text per part, side by side on the same baseline; coloured parts on a chip,
+            # new parts on a soft highlight (a copy of the text with an invisible face and a
+            # wider bbox, drawn behind it). Positions in figure fractions (transFigure), which
+            # follow the tight bbox crop.
             renderer = canvas.get_renderer()
             em = size_px * dpr
             x = 0.0
-            for i, (part, name) in enumerate(parts):
+            prev_new = False
+            for i, (part, name, new) in enumerate(parts):
                 kc = colors.get(name)
-                pad = CHIP_PAD_EM * em if kc else 0.0
-                x += (SEGMENT_GAP_EM * em if i else 0.0) + pad
-                t = fig.text(x / fig.bbox.width, 0, f"${part}$", fontsize=size_px,
-                             color=kc.ink if kc else color, va="baseline", ha="left")
+                pad = GLOW_PAD_EM * em if new else CHIP_PAD_EM * em if kc else 0.0
+                gap = 0.0 if i == 0 or (new and prev_new) else SEGMENT_GAP_EM * em
+                x += gap + pad
+                pos = (x / fig.bbox.width, 0)
+                t = fig.text(*pos, f"${part}$", fontsize=size_px, color=kc.ink if kc else color,
+                             va="baseline", ha="left", zorder=2)
                 if kc:
                     t.set_bbox(dict(boxstyle="round,pad=0.1,rounding_size=0.3", fc=kc.tint, ec="none"))
+                if new:
+                    fig.text(*pos, f"${part}$", fontsize=size_px, color=(0, 0, 0, 0), va="baseline",
+                             ha="left", zorder=1,
+                             bbox=dict(boxstyle=f"round,pad={GLOW_PAD_EM},rounding_size=0.45",
+                                       fc=theme.NEW_GLOW, ec="none"))
                 x = t.get_window_extent(renderer).x1 + pad
+                prev_new = new
         buf = io.BytesIO()
+        # the tight crop only sees the glyphs, not the highlight boxes: leave room for them
+        glow = GLOW_PAD_EM * size_px + 1 if any(new for _t, _n, new in parts) else 0.0
         fig.savefig(buf, format="png", dpi=dpi, transparent=True,
-                    bbox_inches="tight", pad_inches=PAD_PX / 72)
+                    bbox_inches="tight", pad_inches=(PAD_PX + glow) / 72)
     except Exception as exc:  # matplotlib missing or invalid math: caller shows plain text
         print(f"[math] could not render {tex!r}: {exc}")
         return None
