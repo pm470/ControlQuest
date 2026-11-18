@@ -33,6 +33,9 @@ class LevelInfo:
     hints: tuple[str, ...] = ()  # PRD 5.8: from "points at the concept" to "almost the answer"
     accent: str = "coral"  # colour key in ui.theme.ACCENTS
     icon: str = ""  # tile icon in the level select (ui.painting.draw_level_icon): bolt, wall, ...
+    # a tutorial (Level 0): no stars, always open, never locks the next level, never the
+    # suggested "next level" in the level select, a "Tutorial" tag instead of stars
+    tutorial: bool = False
     # builds the gameplay widget: play_screen(ctx, level) -> QWidget; None = not built yet
     play_screen: Optional[Callable[[AppContext, LevelInfo], QWidget]] = None
     # the intro's numbers and math: intro(data) -> LevelIntro (goal, stars, OCP with the new

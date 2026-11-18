@@ -80,30 +80,32 @@ class RunInfoCard(QWidget):
         grid.setColumnStretch(1, 1)
         body.addLayout(grid)
 
-        self.run_line = label("Press Run to see the numbers.", "caption", wrap=True)
+        self._k = 0  # the shown solve
+        self._hide_solve = self._hide_run = False  # see show_parts()
+        self._run_text, self._run_tip = "Press Run to see the numbers.", ""
+        self.run_line = label(self._run_text, "caption", wrap=True)
         self.run_line.setStyleSheet("font-weight: 700;")
         body.addWidget(self.run_line)
 
     def set_result(self, result: RunResult | None) -> None:
         self._result = result
-        for stat in (self.cost, self.time, self.iter, self.status):
-            stat.set("–")
-        self.solve_title.setText("")
+        self._blank_solve()
         if result is None:
-            self.run_line.setText("Press Run to see the numbers.")
+            self._run_text, self._run_tip = "Press Run to see the numbers.", ""
+            self._show_run_line()
             return
         m = result.metrics
         needed = ("solves", "max_solve_ms", "total_solve_ms", "mean_iterations", "closed_loop_cost")
         if not (all(k in m for k in needed) and result.trajectory.costs):
             # an engine running older code does not send these values
-            self.run_line.setText("Some values are missing: the MPC engine runs older code. "
-                                  "Restart it (Ctrl+C, then start_engine) and run again.")
-            self.run_line.setToolTip("")
+            self._run_text = ("Some values are missing: the MPC engine runs older code. "
+                              "Restart it (Ctrl+C, then start_engine) and run again.")
+            self._run_tip = ""
         else:
             parts = [f"{m['solves']} solves", f"{m['mean_solve_ms']:.2f} ms avg",
                      f"total cost {_sci(m['closed_loop_cost'])}"]
-            self.run_line.setText("Whole run: " + " · ".join(parts))
-            self.run_line.setToolTip(
+            self._run_text = "Whole run: " + " · ".join(parts)
+            self._run_tip = (
                 f"Solve time: {m['mean_solve_ms']:.2f} ms avg, {m['max_solve_ms']:.2f} ms max, "
                 f"{m['total_solve_ms']:.0f} ms in total\n"
                 f"SQP iterations: {m['mean_iterations']:.1f} avg, {m['max_iterations']} max\n"
@@ -111,11 +113,35 @@ class RunInfoCard(QWidget):
                 "with your weights (compare it only between runs with the same weights)"
                 + (f"\nEngine time for the whole run: {m['compute_time_s']:.2f} s"
                    if "compute_time_s" in m else ""))
+        self._show_run_line()
         self.set_solve(0)
 
+    def show_parts(self, solve: bool = True, run: bool = True) -> None:
+        """Show the numbers of "This solve" / the "Whole run" line, or keep them at "–"
+        (Level 0's tour fills them in as its story goes: the solve at step "Optimise", the
+        whole run once it has been watched). Other levels always show both."""
+        self._hide_solve, self._hide_run = not solve, not run
+        self._show_run_line()
+        self.set_solve(self._k)
+
+    def _show_run_line(self) -> None:
+        hidden = self._hide_run
+        self.run_line.setText("Whole run: –" if hidden else self._run_text)
+        self.run_line.setToolTip("" if hidden else self._run_tip)
+
+    def _blank_solve(self) -> None:
+        for stat in (self.cost, self.time, self.iter, self.status):
+            stat.set("–")
+        self.status.caption.setText("acados status")
+        self.solve_title.setText("")
+
     def set_solve(self, k: int) -> None:
+        self._k = k
         tr = self._result.trajectory if self._result is not None else None
         if tr is None or not tr.n_solves:
+            return
+        if self._hide_solve:
+            self._blank_solve()
             return
         k = max(0, min(k, tr.n_solves - 1))
         self.solve_title.setText(f"{k + 1} of {tr.n_solves} · t = {tr.time_of_solve(k):.1f} s")

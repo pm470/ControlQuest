@@ -49,6 +49,7 @@ game can stay open.
 ```
 game/
 ├── level_data/                  ONE JSON PER LEVEL, read by BOTH game and engine
+│   ├── hello_mpc.json               Level 0 (tutorial): 20 m field, moving start, no knobs, no pars
 │   ├── price_of_speed.json          start, target, limits, time limit, battery, pars, knobs, checks
 │   ├── brake_check.json             Level 2: horizon choices, terminal-stop toggle, pars, checks.cases
 │   ├── dead_end.json                + blocks (4 corners each), locked weights/margin, waypoint rules
@@ -63,12 +64,15 @@ game/
 │   ├── screens/                     title, level select, how to play, settings, level screen
 │   ├── levels/                      one file per level: LevelInfo (+ play_screen when playable,
 │   │                                    + intro texts/numbers for the level intro)
+│   │   ├── level_0_hello_mpc.py         Level 0 (tutorial, no stars): guided tour of the MPC loop,
+│   │   │                                    map/OCP highlights per step, then "Tour complete"
 │   │   ├── level_1_price_of_speed.py    Level 1's goal text, battery bar, result rows
 │   │   ├── level_2_brake_check.py       Level 2's goal, brake-check gauge, OCP with v_N = 0, result rows
 │   │   ├── level_3_dead_end.py          Level 3: fix selector, N / waypoint controls, OCP per fix
 │   │   ├── level_4_heavy_ball.py        Level 4: margin + g knobs, test drive, OCP with g
 │   │   └── level_5_crosswind.py         Level 5: re-plan interval k + margin, compute-budget bar
 │   ├── gameplay/                    reusable parts of a playable level
+│   │   ├── loop_diagram.py              the drawn MPC loop (Level 0's intro)
 │   │   ├── level_intro.py               the level intro shown before the play screen: story, what
 │   │   │                                    you learn / how / control, goal, stars, OCP (new parts
 │   │   │                                    highlighted: \new{...}), "Start level"
@@ -100,6 +104,7 @@ game/
     ├── calibrate.py                 check / tune a level from the command line
     ├── level_rules/                 game rules per level (stop rules, stars, explanations)
     │   ├── common.py                    load level file, knobs -> weights, result JSON
+    │   ├── hello_mpc.py                 Level 0: plain closed loop from a moving start, no stars
     │   ├── price_of_speed.py            Level 1: battery, stars, "what happened"
     │   ├── brake_check.py               Level 2: terminal stop, point of no return, stars, "what happened"
     │   ├── dead_end.py                  Level 3: the chosen fix (none / horizon N / waypoints),

@@ -119,14 +119,16 @@ class LevelSelectScreen(BaseScreen):
             self.message.setText("")
         # the next level to play: the first unlocked one without stars
         nxt = next((c.level for c in self.cards if state.is_unlocked(c.level, levels)
-                    and state.stars(c.level.id) == 0 and c.level.is_playable), None)
+                    and state.stars(c.level.id) == 0 and c.level.is_playable
+                    and not c.level.tutorial), None)  # the tutorial is never the suggested level
         for card in self.cards:
             level = card.level
             locked = not state.is_unlocked(level, levels)
             prev = self.ctx.previous_level(level)
             hint = f"Finish level {prev.number} to unlock" if prev else ""
             card.set_progress(state.stars(level.id), locked, hint, is_next=level is nxt)
-        self.total_label.setText(f"{state.total_stars()} / {MAX_STARS * len(levels)}")
+        rated = [lvl for lvl in levels if not lvl.tutorial]  # the tutorial has no stars
+        self.total_label.setText(f"{state.total_stars()} / {MAX_STARS * len(rated)}")
 
     def _open(self, card: LevelCard) -> None:
         if card.locked:

@@ -50,11 +50,12 @@ class GameState(QObject):
             self.changed.emit()
 
     def is_unlocked(self, level: LevelInfo, levels: list[LevelInfo]) -> bool:
-        """PRD 5.1: level 1 is open; each passed level unlocks the next; free mode opens all."""
-        if self._free_mode:
+        """PRD 5.1: the first level is open; each passed level unlocks the next; free mode
+        opens all. Tutorials (Level 0) are always open and do not lock the level after them."""
+        if self._free_mode or level.tutorial:
             return True
-        index = levels.index(level)
-        return index == 0 or self.stars(levels[index - 1].id) > 0
+        before = [lvl for lvl in levels[:levels.index(level)] if not lvl.tutorial]
+        return not before or self.stars(before[-1].id) > 0
 
     # --- preferences -----------------------------------------------------------
     @property

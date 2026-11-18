@@ -58,13 +58,23 @@ class ResultPanel(Card):
         self._retry.clicked.connect(self.try_again)
         self._next.clicked.connect(self.next_level)
 
+    def set_watch_text(self, text: str) -> None:
+        """Label of the replay button (Level 0: "Replay tour")."""
+        self._watch.setText(text)
+
+    def set_retry_visible(self, visible: bool) -> None:
+        """Level 0 has nothing to change, so no "Retry"."""
+        self._retry.setVisible(visible)
+
     def show_result(self, result: RunResult, rows: list[tuple[str, str, str]],
-                    can_go_next: bool) -> None:
-        """rows: (name, value, note) per metric, e.g. ("Time", "26.8 s", "★★ ≤ 30 s")."""
+                    can_go_next: bool, show_stars: bool = True) -> None:
+        """rows: (name, value, note) per metric, e.g. ("Time", "26.8 s", "★★ ≤ 30 s").
+        show_stars=False for a tutorial (no stars)."""
         title, color_name = OUTCOMES.get(result.outcome, (result.outcome, "NEUTRAL"))
         self._dot.set_color(getattr(theme, color_name))
         self._title.setText(title)
         self._stars.set_stars(result.stars)
+        self._stars.setVisible(show_stars)
 
         _clear(self._rows)
         for i, (name, value, note) in enumerate(rows):

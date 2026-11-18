@@ -5,7 +5,8 @@
     ├──────────────┤
     │ Brake Check  │   title, topic
     │ Horizon & …  │
-    │ ★ ★ ☆  / Play│   stars, or a Play pill on the next level to play
+    │ ★ ★ ☆  / Play│   stars, a Play pill on the next level to play, or a
+                       "Tutorial" tag (Level 0, no stars)
     └──────────────┘   stands on a lip like every tile; the next level is lifted
                        and ringed in its colour (no mascot on this screen).
 """
@@ -139,7 +140,16 @@ class LevelCard(QAbstractButton):
 
         # bottom: a Play pill on the next level, stars otherwise
         bottom = rect.bottom() - 22
-        if self._next and self._stars == 0:
+        if self.level.tutorial:  # no stars: a tag instead
+            p.setFont(theme.font(12, QFont.Weight.Bold))
+            text = "Tutorial"
+            tag = QRectF(left, bottom - 13, p.fontMetrics().horizontalAdvance(text) + 22, 26)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(theme.SURFACE_ALT))
+            p.drawRoundedRect(tag, 13, 13)
+            p.setPen(QColor(theme.INK_SOFT))
+            p.drawText(tag, Qt.AlignmentFlag.AlignCenter, text)
+        elif self._next and self._stars == 0:
             pill = QRectF(left, bottom - 17, 78, 34)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(theme.PRIMARY_PRESSED))

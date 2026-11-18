@@ -110,6 +110,9 @@ invalid → controller failure. The timeline warning is not built yet.)*
 ### 5.1 Flow
 `Title → Level select → Level intro → Level screen (tune → run → result) → next level's intro`
 
+- **Level 0 "Hello, MPC"** (added 2026-11-17) is an optional tutorial before Level 1: a
+  guided tour of the MPC loop, without stars (section 7).
+
 - **Level intro** (added 2026-11-17), shown every time a level opens: the briefing
   (story), what the level teaches (the concept), how it teaches it (how the default
   controller fails and the ideas to fix it), what the player controls (each knob with its
@@ -229,6 +232,28 @@ All coordinates in metres. Maps are first proposals **(calibrate)**.
 
 **Priority:** Levels 1, 2, 4 and 5 are must-have. Level 3 is should-have, because it
 needs the most extra work (waypoints and their UI).
+
+---
+
+### Level 0: "Hello, MPC" (tutorial: the MPC loop) (added 2026-11-17)
+
+**Concept:** model predictive control in one sentence: predict, optimise, apply the first
+move, repeat. Measure the state → predict with a model → pick the lowest-cost input
+sequence within the limits → apply only its first input → start again from the new
+measurement.
+
+**Briefing:** *"Meet your new co-pilot. Before you design controllers yourself, watch one at
+work: step by step, the way it thinks."*
+
+| Item | Value |
+|---|---|
+| Type | **tutorial**: optional, **no stars** (not counted in the total), always open, does not lock Level 1, never the suggested level in the level select ("Tutorial" tag on its tile). Rose accent, loop icon |
+| Map | **small open field 20 m × 20 m** (agreed exception to the 50 m field, so the plans are easy to see), start (3, 8) with the ball **already moving up at 2 m/s** (`start_velocity`), target (17, 10), a_max = v_max = 2, time limit 20 s |
+| Locked | everything: q_p = q_v = r = 1, P = 10·Q, N = 30 (run ≈ 10 s, 100 solves; calibrated) |
+| Knobs | **none** (2026-11-18): Level 0 only introduces MPC; changing N is Level 2's topic |
+| Intro | as every level, plus a drawn **loop diagram** (1 Measure → 2 Predict → 3 Optimise → 4 Apply, "repeat every Δt") |
+| Play screen | the run is computed automatically; the controls tile is a **guided tour** of 7 steps (You are not steering · ① Measure · ② Predict · ③ Optimise · ④ Apply the first input · ⑤ Repeat · Watch it run), ‹ Back / Next ›. The map highlights the step (ring on the measured ball; a faint fan of example predictions; the plan with its end x_N; the first input u₀; 1 s later, the first plan in grey behind the current one) and the OCP highlights the matching line (x₀ = x̂; the dynamics; the cost + limits). Then the replay plays to the end; the result card has no stars and "Replay tour" / "Next level ›"; the tile becomes **"Tour complete"** (a short summary + "Replay the tour"); no Run, Reset or Retry |
+| Check | `engine_server/calibrate.py hello_mpc` (the run succeeds) |
 
 ---
 

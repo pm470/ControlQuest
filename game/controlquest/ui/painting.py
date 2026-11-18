@@ -239,7 +239,7 @@ def draw_pill(p: QPainter, rect: QRectF, text: str, font_px: float = 13) -> None
 
 
 def draw_level_icon(p: QPainter, kind: str, center: QPointF, size: float, color: str) -> None:
-    """Small line icons for the level tiles: bolt, wall, trap, weight, wind."""
+    """Small line icons for the level tiles: loop, bolt, wall, trap, weight, wind."""
     p.save()
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     pen = QPen(QColor(color), max(2.0, size * 0.09), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
@@ -251,7 +251,11 @@ def draw_level_icon(p: QPainter, kind: str, center: QPointF, size: float, color:
     def pt(x: float, y: float) -> QPointF:
         return QPointF(cx + x * s, cy + y * s)
 
-    if kind == "bolt":
+    if kind == "loop":  # the MPC loop: a circle with an arrow head (Level 0)
+        p.drawArc(QRectF(pt(4, 4), pt(20, 20)), 100 * 16, 290 * 16)
+        p.drawPolyline([pt(9, 2.5), pt(13, 4.2), pt(9.6, 7)])
+        p.drawEllipse(pt(12, 12), 1.6 * s, 1.6 * s)
+    elif kind == "bolt":
         p.drawPolygon(QPolygonF([pt(13, 2), pt(4, 14), pt(11, 14), pt(10, 22), pt(19, 10), pt(12, 10)]))
     elif kind == "wall":
         p.drawLine(pt(20, 3), pt(20, 21))

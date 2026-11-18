@@ -61,6 +61,7 @@ ACCENTS = {
     "lilac": "#A98BEB",
     "mint": "#43B581",
     "sun": "#F2B51D",
+    "rose": "#F27BA1",  # Level 0 (tutorial)
 }
 # darker shade of each accent: the lip under level badges and tiles
 ACCENT_LIPS = {
@@ -69,6 +70,7 @@ ACCENT_LIPS = {
     "lilac": "#8667D0",
     "mint": "#2F9461",
     "sun": "#CF9412",
+    "rose": "#D9587F",
 }
 
 

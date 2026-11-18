@@ -19,6 +19,7 @@ new parts of the OCP with \\new{...}, or \\newknob{name}{...} for a knob part th
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import Callable, Optional
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
@@ -38,10 +39,14 @@ MAX_WIDTH = 1240  # content width on very wide windows (lines stay readable)
 @dataclass(frozen=True)
 class LevelIntro:
     goal: str  # one or two sentences, with the level's numbers
-    stars: tuple[str, str, str]  # what ★, ★★, ★★★ need, e.g. ("reach the star", "within 30 s", ...)
     ocp: OcpSpec  # the OCP at the default knob values; new parts marked with \new / \newknob
+    stars: tuple[str, ...] = ()  # what ★, ★★, ★★★ need ("reach the star", "within 30 s", ...);
+    #                              empty for a tutorial (no stars)
     fixed: str = ""  # what the player cannot change, e.g. "N = 30, P = 10·Q"
     notes: tuple[str, ...] = ()  # extra lines under the knobs (Level 3: what each fix changes)
+    ocp_title: str = "What changes in the OCP"  # Level 0: "The OCP your MPC solves"
+    # a drawing under "What you learn" (Level 0: the MPC loop diagram); builds a QWidget
+    illustration: Optional[Callable[[], QWidget]] = None
 
 
 class _Content(QWidget):
@@ -72,11 +77,15 @@ class LevelIntroWidget(QWidget):
         learn.body.addWidget(label(f"“{level.briefing}”", "quote", wrap=True))
         learn.body.addSpacing(SECTION_GAP + 4)
         self._section(learn.body, "What you learn", level.concept)
+        if intro.illustration is not None:
+            learn.body.addSpacing(8)
+            learn.body.addWidget(intro.illustration())
         learn.body.addSpacing(SECTION_GAP)
         self._section(learn.body, "How this level teaches it", level.teaching)
-        learn.body.addSpacing(SECTION_GAP)
-        learn.body.addWidget(label("What you control", "eyebrow"))
         colors = knob_colors(data.knobs)  # same colours as the knob parts of the OCP
+        if data.knobs or intro.notes or intro.fixed:  # Level 0 has nothing to control
+            learn.body.addSpacing(SECTION_GAP)
+            learn.body.addWidget(label("What you control", "eyebrow"))
         knobs = QVBoxLayout()
         knobs.setContentsMargins(0, 4, 0, 0)
         knobs.setSpacing(10)
@@ -107,11 +116,12 @@ class LevelIntroWidget(QWidget):
             row.addWidget(StarRow(n, 3, star_radius=8))
             row.addWidget(label(text, "body", wrap=True), 1)
             stars.addLayout(row)
-        play.body.addLayout(stars)
+        if intro.stars:  # a tutorial has none
+            play.body.addLayout(stars)
         play.body.addSpacing(SECTION_GAP)
 
         heading = QHBoxLayout()
-        heading.addWidget(label("What changes in the OCP", "eyebrow"))
+        heading.addWidget(label(intro.ocp_title, "eyebrow"))
         heading.addStretch(1)
         if _has_new(intro.ocp):  # the key for the highlight, right of the heading
             heading.addLayout(self._new_legend())

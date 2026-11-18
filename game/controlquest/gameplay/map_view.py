@@ -11,6 +11,7 @@ solver sees (dashed), waypoints, the ball, its trail, the current MPC plan
     view.set_trajectory(traj)       # a RunResult.trajectory (or None to clear)
     view.set_time(t)                # replay position in seconds (interpolated)
     view.to_world(pos), view.to_screen(x, y)   # pixel <-> metre (e.g. for mouse editing)
+    view.set_tour(focus, fan)       # Level 0's guided tour: what to highlight (see TOUR_FOCUS)
 """
 
 from __future__ import annotations
@@ -29,6 +30,15 @@ from .obstacles import Ellipse, level_ellipses
 # room around the field: axis numbers left and below, a little air top and right
 MARGIN_LEFT, MARGIN_BOTTOM, MARGIN_TOP, MARGIN_RIGHT = 30, 24, 10, 14
 BALL_RADIUS_M = 0.9
+# Level 0's guided tour: what the map shows and highlights in each step
+#   start    ball and star only (no plan, no input yet)
+#   measure  + a ring and a label on the ball (the measured state)
+#   predict  + a faint fan of example predictions (set_tour(..., fan=paths))
+#   plan     + the plan, its last point labelled (N steps ahead)
+#   apply    the plan faint, its first step and the input arrow highlighted
+#   repeat   the plan, with an earlier solve's plan faint behind it (set_tour(..., earlier=k))
+TOUR_FOCUS = ("start", "measure", "predict", "plan", "apply", "repeat")
+_SUBSCRIPT = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 
 
 class MapView(QWidget):
@@ -45,6 +55,9 @@ class MapView(QWidget):
         self.show_ellipses = True
         self.show_ghost = False
         self.show_wind = False
+        self._tour: str | None = None  # Level 0: one of TOUR_FOCUS, None = normal map
+        self._fan: list[list[tuple[float, float]]] = []
+        self._earlier: int | None = None  # tour step "repeat": which earlier plan is drawn grey
 
     # --- data -------------------------------------------------------------------------
     def set_level(self, data: LevelData) -> None:
@@ -73,6 +86,15 @@ class MapView(QWidget):
 
     def set_time(self, t: float) -> None:
         self._t = t
+        self.update()
+
+    def set_tour(self, focus: str | None, fan=None, earlier: int | None = None) -> None:
+        """Level 0's guided tour: highlight one part of the MPC loop (TOUR_FOCUS), or None
+        for the normal map. fan: example predicted paths [[(x, y), ...], ...] (step predict).
+        earlier: the solve whose plan is drawn grey in step repeat (default: the previous one)."""
+        self._tour = focus
+        self._fan = [list(path) for path in (fan or [])]
+        self._earlier = earlier
         self.update()
 
     # --- world <-> screen ----------------------------------------------------------------
@@ -199,15 +221,29 @@ class MapView(QWidget):
         # current plan (receding horizon): the plan being executed. Normally it was computed at
         # this sample; with a re-plan interval > 1 it was computed earlier, and the ball runs
         # open-loop along it until the next solve: that open-loop part is drawn solid (PRD 5.3).
-        if self.show_plan and tr.plans:
+        tour = self._tour
+        plan_pts: list[QPointF] = []
+        if self.show_plan and tr.plans and tour not in ("start", "measure", "predict"):
             steps = tr.steps
             s = tr.solve_at(self._t)
             plan, m = tr.plans[s], k - steps[s]
             nxt = steps[s + 1] if s + 1 < len(steps) else len(tr.x) - 1
             at_end = k >= len(tr.x) - 1 and steps[s] != k
             width = max(2.0, r_px * 0.22)
+            old = self._earlier if self._earlier is not None else s - 1
+            if tour == "repeat" and 0 <= old < s:  # an earlier plan, faint, behind the new one
+                p.save()
+                p.setOpacity(0.45)
+                painting.draw_plan(p, [to_px(q[0], q[1]) for q in tr.plans[old]],
+                                   color=theme.MUTED, width=width)
+                p.restore()
             if not at_end and 0 <= m < len(plan):
-                painting.draw_plan(p, [to_px(q[0], q[1]) for q in plan[m:]], width=width)
+                plan_pts = [to_px(q[0], q[1]) for q in plan[m:]]
+                p.save()
+                if tour == "apply":
+                    p.setOpacity(0.35)
+                painting.draw_plan(p, plan_pts, width=width)
+                p.restore()
                 if nxt - steps[s] > 1:  # open-loop stretch until the next re-plan
                     seg = [to_px(q[0], q[1]) for q in plan[m:min(nxt - steps[s], len(plan) - 1) + 1]]
                     if len(seg) > 1:
@@ -228,8 +264,22 @@ class MapView(QWidget):
             p.setBrush(theme.qcolor(theme.BALL, 45))
             p.drawEllipse(ghost, r_px, r_px)
 
-        # applied acceleration (arrow length ~ |a|)
-        if k < len(tr.u):
+        # Level 0's tour: a faint fan of example predictions (step "predict")
+        if tour == "predict":
+            for path in self._fan:
+                pts = [to_px(*q) for q in path]
+                p.save()
+                p.setOpacity(0.55)
+                painting.draw_plan(p, pts, color=theme.INK_SOFT, width=max(1.6, r_px * 0.15))
+                p.restore()
+        # the applied input's first step (step "apply")
+        if tour == "apply" and len(plan_pts) > 1:
+            p.setPen(QPen(QColor(theme.PRIMARY), max(3.0, r_px * 0.32), Qt.PenStyle.SolidLine,
+                          Qt.PenCapStyle.RoundCap))
+            p.drawLine(plan_pts[0], plan_pts[1])
+
+        # applied acceleration (arrow length ~ |a|); in the tour only once it is applied
+        if k < len(tr.u) and tour not in ("start", "measure", "predict", "plan"):
             ax, ay = tr.u[k]
             mag = math.hypot(ax, ay)
             if mag > 1e-3:
@@ -247,6 +297,36 @@ class MapView(QWidget):
         speed = math.hypot(x[2], x[3])
         look = QPointF(x[2], -x[3]) if speed > 0.05 else QPointF(0.4, 0.2)
         painting.draw_ball(p, ball, r_px, look=look)
+
+        # Level 0's tour: ring + labels on what the current step is about
+        if tour == "measure":
+            p.setPen(QPen(QColor(theme.PRIMARY), 3, Qt.PenStyle.SolidLine))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawEllipse(ball, r_px * 1.7, r_px * 1.7)
+            self._tag(p, field, ball + QPointF(0, -r_px * 1.7 - 22), "measured: position & speed")
+        elif tour == "plan" and plan_pts:
+            n = len(plan_pts) - 1
+            end = plan_pts[-1]
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(theme.PRIMARY))
+            p.drawEllipse(end, r_px * 0.35, r_px * 0.35)
+            self._tag(p, field, end + QPointF(0, -r_px - 18),
+                      f"x{str(n).translate(_SUBSCRIPT)}: {n * tr.dt:g} s ahead")
+        elif tour == "repeat" and plan_pts and tr.plans:
+            # receding horizon: the end of the first (grey) plan vs where the plan ends now
+            old = self._earlier if self._earlier is not None else tr.solve_at(self._t) - 1
+            if 0 <= old < tr.solve_at(self._t):
+                q = tr.plans[old][-1]
+                end_old, end_new = to_px(q[0], q[1]), plan_pts[-1]
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(QColor(theme.MUTED))
+                p.drawEllipse(end_old, r_px * 0.35, r_px * 0.35)
+                p.setBrush(QColor(theme.PRIMARY))
+                p.drawEllipse(end_new, r_px * 0.35, r_px * 0.35)
+                self._tag(p, field, end_old + QPointF(0, r_px + 18), "first plan ended here")
+                self._tag(p, field, end_new + QPointF(0, -r_px - 18), "now it reaches here")
+        elif tour == "apply" and k < len(tr.u):
+            self._tag(p, field, ball + QPointF(0, r_px * 1.6 + 20), f"u₀: applied for {tr.dt:g} s")
 
         # crash marker once the replay reaches the crash
         if tr.crash_point and self._t >= tr.duration - 1e-9:
@@ -284,6 +364,15 @@ class MapView(QWidget):
         p.setFont(theme.font(13, QFont.Weight.ExtraBold))
         tw = p.fontMetrics().horizontalAdvance(text) + 26
         painting.draw_pill(p, QRectF(field.left() + 12, field.top() + 12, tw, 28), text)
+
+    @staticmethod
+    def _tag(p: QPainter, field: QRectF, centre: QPointF, text: str) -> None:
+        """A small label pill centred at `centre`, kept inside the field."""
+        p.setFont(theme.font(12, QFont.Weight.ExtraBold))
+        w, h = p.fontMetrics().horizontalAdvance(text) + 22, 26
+        x = min(max(centre.x() - w / 2, field.left() + 6), field.right() - w - 6)
+        y = min(max(centre.y() - h / 2, field.top() + 6), field.bottom() - h - 9)
+        painting.draw_pill(p, QRectF(x, y, w, h), text, font_px=12)
 
     def _draw_waypoints(self, p: QPainter, to_px, start: QPointF, target: QPointF, r_px: float,
                         active: int | None) -> None:

@@ -1,0 +1,26 @@
+{
+  "id": "hello_mpc",
+  "comment": "Level 0 (tutorial, no stars): a guided tour of the MPC loop, nothing for the player to change (no knobs). Small 20 m field and a moving start (start_velocity) so the plans and inputs are easy to see (an agreed exception to the 50 m field). Read by BOTH the game (controlquest/gameplay/level_data.py) and the engine (engine_server/level_rules/common.py). Calibrated with engine_server/calibrate.py.",
+
+  "dt": 0.1,
+  "N": 30,
+  "terminal_factor": 10.0,
+
+  "workspace": {"min": [0.0, 0.0], "max": [20.0, 20.0]},
+  "start": [3.0, 8.0],
+  "start_velocity": [0.0, 2.0],
+  "target": [17.0, 10.0],
+  "limits": {"a_max": 2.0, "v_max": 2.0},
+  "tolerance": {"position": 0.05, "speed": 0.05},
+
+  "t_limit": 20.0,
+  "pars": {},
+
+  "locked": {"q_p": 1.0, "q_v": 1.0, "r": 1.0},
+  "knobs": [],
+
+  "checks": {
+    "default_outcome": "success",
+    "reference": {"knobs": {}, "stars": 0}
+  }
+}

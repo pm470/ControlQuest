@@ -61,6 +61,7 @@ class LevelScreen(BaseScreen):
         self.header.set_title(level.title)
         self.header.set_badge(level.number, level.accent)
         self.stars.set_stars(self.ctx.state.stars(level.id))
+        self.stars.setVisible(not level.tutorial)  # the tutorial has no stars
         self._clear()  # a level always opens fresh (also "Next level" from the result card)
         if not level.is_playable:
             self._other = self._add(self._coming_soon(level))

@@ -285,7 +285,8 @@ class LevelPlayWidget(QWidget):
             self.ctx.state.record_result(self.level.id, r.stars)
         nxt = self.ctx.next_level(self.level)
         can_next = nxt is not None and self.ctx.state.is_unlocked(nxt, self.ctx.levels)
-        self.result_panel.show_result(r, self.result_rows(r), can_next)
+        self.result_panel.show_result(r, self.result_rows(r), can_next,
+                                      show_stars=not self.level.tutorial)
 
     def _watch_again(self) -> None:
         self.result_panel.hide()

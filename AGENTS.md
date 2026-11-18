@@ -31,6 +31,7 @@ interface `acados_template`) and **CasADi**.
 - Players are classmates from the MPC course: use course notation (Q, R, P, N,
   x_k, u_k); explanations can be short and technical.
 - Planned: 5 levels (PRD section 7). Levels 1, 2, 4, 5 must-have; Level 3 should-have.
+  Plus Level 0 "Hello, MPC" (added 2026-11-17): an optional tutorial without stars.
 - **RL is out of scope for now** (stretch goal only, if time is left at the end).
 
 ## 3. Repository map
@@ -142,6 +143,9 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
   OCP, new level select). Game-side only: engine unchanged (still v0.9.0).
 - Done (2026-11-17, branch `gui`): **level intro** before every level (`gameplay/level_intro.py`,
   `LevelInfo.teaching` + `LevelInfo.intro`; section 10). Game-side only.
+- Done (2026-11-17, branch `gui`): **Level 0 "Hello, MPC"**, an optional tutorial (guided tour
+  of the MPC loop, no stars; `levels/level_0_hello_mpc.py`, `level_data/hello_mpc.json`,
+  `level_rules/hello_mpc.py`, `calibrate.py hello_mpc`). Engine v0.10.0 (new level id).
 - Not yet: speed/acceleration plots (PRD 5.6),
   saving progress to disk (progress resets on restart, intentionally for now).
 - Next planned work: the MPC side of levels 2, 4, 5 (horizon N per level, terminal
@@ -207,7 +211,8 @@ Feasibility spike results (engine only, default map):
 - (2026-10-21) Stars per level (PRD 6): ★ reach the target; ★★ also within the time par;
   ★★★ also the level's second par. Level N unlocks when level N−1 has at least ★.
   "Free mode" (switch in the level select) unlocks all levels for demos.
-- (2026-10-19) Workspace 50 m × 50 m, start/target scaled accordingly.
+- (2026-10-19) Workspace 50 m × 50 m, start/target scaled accordingly. (2026-11-17: the
+  tutorial Level 0 is the one agreed exception, 20 m × 20 m; see below.)
 - (2026-10-22) Level 1 battery (energy budget): **the run stops immediately when the
   budget is used up** (outcome `battery_empty`), it does not just fail at the end.
 - (2026-10-22) Level 1 numbers were calibrated with real runs (PRD guesses were not
@@ -348,6 +353,34 @@ Feasibility spike results (engine only, default map):
     (Level 3 keeps "find out which one works"). No map preview. Level 1 marks nothing new.
     Level 3 shows the no-fix OCP plus one note per fix. Level 2 shows the terminal stop as
     "(terminal stop, optional)". The texts were drafted by the agent and approved by the user.
+- (2026-11-17) **Level 0 "Hello, MPC": an introduction to MPC itself** (the user found Level 1
+  starts with a finished MPC, too much for a first-time player). Decisions:
+  - concept **A: guided tour** (no puzzle, nothing can fail); **optional, no stars** (not in
+    the total "x / 15"), always open, Level 1 is open from the start; the tile shows a
+    **"Tutorial" tag** (no done state); the lifted "next level" is **never** Level 0;
+  - title "Hello, MPC", accent **rose** (`ACCENTS["rose"]`), icon "loop"; open field;
+    everything locked (q_p = q_v = r = 1, N = 30). **(2026-11-18) No knobs at all**: the
+    user removed the N knob of the first version ("Your turn"): Level 0 is only an intro to
+    MPC, and changing N is Level 2's topic (no redundancy). After the tour the controls
+    tile says "Tour complete" (+ "Replay the tour"); no Run, Reset or Retry;
+  - **exception to the 50 m field**: Level 0 uses a **20 m × 20 m** field and the ball starts
+    **already moving** (`"start_velocity": [0, 2]` in its JSON, used by its engine rules), so
+    the plans curve and are big enough to read (on 50 m from rest they were a 6 m blob next to
+    the ball, with the arrow on top). Run ≈ 10 s;
+  - the intro has a drawn **loop diagram** (`gameplay/loop_diagram.py`) under "What you learn";
+    no star rows; OCP titled "The OCP your MPC solves" (nothing marked new);
+  - play screen: the run **starts automatically**; the **controls tile is the tour panel**
+    (Step k of 7, title, text, ‹ Back / Next ›); the **map highlights** each step
+    (`MapView.set_tour`, incl. a faint **fan of example predictions** in "Predict", and in
+    "Repeat" the run **1 s (10 rounds) later with the first plan in grey**) and the
+    **OCP highlights the matching line** (same soft yellow as "new" parts); then the replay
+    plays, the result card has no stars and "Replay tour" (no Retry); then "Tour complete".
+    Texts drafted by the agent, approved by the user;
+  - the intro shows no "What you control" section (nothing to control), no star rows.
+  - (2026-11-18) **The solver tile follows the story**: the run is computed before the tour,
+    but "This solve" shows "–" until step ③ Optimise (no OCP is solved before that) and then
+    follows the shown solve; the "Whole run" line shows "–" until the replay has been watched
+    to the end (`RunInfoCard.show_parts(solve, run)`; other levels always show both).
 
 ## 9. Gotchas already hit (don't repeat them)
 
@@ -461,7 +494,8 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
    buttons Play (big, coral) / How to play / Settings / Quit, an "MPC engine
    online/offline/outdated" pill bottom-left, version bottom-right.
 2. **Level select** (`ui/level_card.py`): "Choose a level" + subtitle, Free mode switch,
-   total stars pill "x / 15", one chunky tile per level: top block in the level's accent
+   total stars pill "x / 15" (Level 0 has no stars), one chunky tile per level (Level 0:
+   rose, loop icon, a "Tutorial" tag instead of stars, always open, never the lifted one): top block in the level's accent
    colour with the big number and the level icon (`LevelInfo.icon`: bolt, wall, trap,
    weight, wind; `painting.draw_level_icon`), then title, topic, 3 stars. The next level
    to play (first unlocked one without stars) is lifted, ringed in its colour and shows a
@@ -487,6 +521,11 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
    `LevelInfo.intro(data) -> LevelIntro` (goal, stars, OCP, fixed, notes); each level file
    builds its OCP in a module function `ocp(..., intro=False)` used by both screens.
    Back (button or Esc) on the play screen returns to the intro (play state kept).
+   **Level 0 (tutorial)**: no stars anywhere (header, intro, result card); the intro adds the
+   loop diagram; on the play screen the controls tile is the **guided tour** (computed
+   automatically; Step k of 7 · title · text · ‹ Back / Next ›, map + OCP highlights per step),
+   after the replay **"Tour complete"** (a short summary + "Replay the tour"). No knobs, no
+   Run/Reset: the player only watches.
    **Playable level** (`gameplay/level_play_widget.py`), three tiles on wide windows:
    - left, **map tile**: the **map** (soft 50 m board without outline, grid every 5 m,
      numbers every 10 m with one shared 0 at the origin, start ring, target star, ball
