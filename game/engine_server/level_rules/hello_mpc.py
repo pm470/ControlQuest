@@ -1,7 +1,7 @@
 """Rules of Level 0, "Hello, MPC" (tutorial): a guided tour of the MPC loop.
 
-A small open field (20 m) with the ball already moving at the start (level
-"start_velocity"), so plans and inputs are easy to see. Everything is fixed (no knobs:
+A small open field (20 m), so plans and inputs are easy to see; the start velocity comes
+from the level file ("start_velocity", now at rest). Everything is fixed (no knobs:
 the tutorial only shows the loop; changing N is Level 2's topic). The run is the plain
 closed loop: measure -> solve the OCP -> apply u_0 -> repeat. Nothing to fail on purpose
 and no stars (the game shows this level as a tutorial).
@@ -22,7 +22,7 @@ def run(level: dict, knobs: dict, cache: SolverCache) -> dict:
     knobs = clean_knobs(level, knobs)
     N = int(level["N"])  # no knobs: the tutorial only shows the loop
     mpc = configured_controller(cache, level, knobs, N=N)
-    v0 = level.get("start_velocity", [0.0, 0.0])  # the ball is already moving (easier to see plans)
+    v0 = level.get("start_velocity", [0.0, 0.0])  # start velocity from the level file
     sim = simulate(mpc, [*level["start"], *v0], [*level["target"], 0.0, 0.0],
                    dt=level["dt"], t_limit=level["t_limit"],
                    p_min=level["workspace"]["min"], p_max=level["workspace"]["max"],
@@ -57,7 +57,7 @@ def explain(level, outcome, detail, m) -> list[str]:
     N, T = m["N"], m["horizon_s"]
     if outcome == "success":
         return [f"Arrived in {m['time']:.1f} s. The MPC solved its OCP {m.get('solves', 0)} times, "
-                f"once every {level['dt']:g} s, each time planning N = {N} steps ({T:g} s) ahead "
+                f"once every {level['dt']:g} s, each time planning $N = {N}$ steps ({T:g} s) ahead "
                 "from the measured state, and applied only the first input of each plan."]
     if outcome == "time_out":
         return [f"Time is up after {m['time']:.0f} s: the ball is still {m['distance_left']:.2f} m "

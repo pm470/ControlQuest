@@ -110,14 +110,14 @@ def explain(level, knobs, sim, m, err, M, stars) -> list[str]:
             x, y = sim.crash_point
             msgs.append(f"The ball hit a block at ({x:.1f}, {y:.1f}) after {m['time']:.1f} s.")
         else:
-            msgs.append(f"The solver found no valid plan at t = {m['time']:.1f} s: the ball was "
+            msgs.append(f"The solver found no valid plan at $t = {m['time']:.1f}$ s: the ball was "
                         "already too close to (or inside) an obstacle ellipse.")
         if mismatch:
             pred, real = sim.plans[k - M][M][:2], sim.x[k][:2]
-            msgs.append(f"At t = {k * level['dt']:.1f} s the plan from {M * level['dt']:g} s earlier "
+            msgs.append(f"At $t = {k * level['dt']:.1f}$ s the plan from {M * level['dt']:g} s earlier "
                         f"predicted the ball at ({pred[0]:.2f}, {pred[1]:.2f}); it actually was at "
                         f"({real[0]:.2f}, "
-                        f"{real[1]:.2f}). The model (g = {g:g}) assumes the ball reacts more "
+                        f"{real[1]:.2f}). The model ($g = {g:g}$) assumes the ball reacts more "
                         "strongly than it does, so it brakes too late.")
         if knobs["margin"] > 0.2:
             msgs.append(f"The {knobs['margin']:g} m margin did not help: it keeps plans away from "

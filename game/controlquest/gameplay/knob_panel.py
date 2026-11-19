@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLineEdit, QSlider, QTool
 
 from ..ui import theme
 from ..ui.math_render import MathChip
+from ..ui.math_text import to_plain
 from ..ui.widgets import ToggleSwitch, label
 from .level_data import KnobSpec
 
@@ -35,10 +36,10 @@ def name_row(spec: KnobSpec, color: theme.KnobColor) -> QHBoxLayout:
     row.setContentsMargins(0, 0, 0, 0)
     row.setSpacing(8)
     chip = MathChip(spec.symbol, color)
-    chip.setToolTip(spec.help)
+    chip.setToolTip(to_plain(spec.help))
     name = label(spec.label, "body")
     name.setStyleSheet(f"font-weight: 700; color: {theme.INK};")
-    name.setToolTip(spec.help)
+    name.setToolTip(to_plain(spec.help))
     row.addWidget(chip)
     row.addWidget(name, 1)
     return row
@@ -85,7 +86,7 @@ class KnobRow(QWidget):
         else:
             self.slider.setRange(0, 1000)
         col.addWidget(self.slider)
-        self.slider.setToolTip(spec.help)
+        self.slider.setToolTip(to_plain(spec.help))
         self.slider.valueChanged.connect(self._on_slider)
         self.edit.editingFinished.connect(self._on_edit)
         self.set_value(spec.default)
@@ -169,7 +170,7 @@ class ChoiceRow(QWidget):
         top = name_row(spec, color)
         self.combo = QComboBox()
         self.combo.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.combo.setToolTip(spec.help)
+        self.combo.setToolTip(to_plain(spec.help))
         for c in spec.choices:
             self.combo.addItem(format_value(c), c)
         top.addWidget(self.combo)
@@ -199,7 +200,7 @@ class ToggleRow(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
         top = name_row(spec, color)
         self.switch = ToggleSwitch(bool(spec.default))
-        self.switch.setToolTip(spec.help)
+        self.switch.setToolTip(to_plain(spec.help))
         top.addWidget(self.switch)
         row.addLayout(top)
         self.switch.toggled.connect(lambda _on: self.changed.emit())

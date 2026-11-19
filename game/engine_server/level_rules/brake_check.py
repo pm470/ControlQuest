@@ -104,7 +104,7 @@ def explain(level, sim, m, stars) -> list[str]:
     if sim.outcome in ("controller_failure", "crash_wall"):
         if pnr is not None:
             v, stop_s = pnr["speed"], pnr["speed"] / a_max
-            msgs.append(f"At t = {pnr['t']:.1f} s the ball was {pnr['wall_ahead']:.1f} m from the wall at "
+            msgs.append(f"At $t = {pnr['t']:.1f}$ s the ball was {pnr['wall_ahead']:.1f} m from the wall at "
                         f"{v:.1f} m/s; braking needs {pnr['braking']:.1f} m and {stop_s:.1f} s.")
             if pnr["reach"] < pnr["braking"] - 0.05:
                 msgs.append(f"Your horizon covered {T:g} s (≈ {pnr['reach']:.1f} m), less than the braking "
@@ -114,26 +114,26 @@ def explain(level, sim, m, stars) -> list[str]:
                             "distance: the wall came into view only when braking already had to start, with "
                             f"no margin. A {T:g} s plan cannot even contain a full stop from {v:.1f} m/s.")
         msgs.append(("From then on no plan could stop before the wall, so the OCP had no solution "
-                     f"(at t = {m['time']:.1f} s): the controller lost recursive feasibility."
+                     f"(at $t = {m['time']:.1f}$ s): the controller lost recursive feasibility."
                      if sim.outcome == "controller_failure" else "The ball hit the wall."))
-        msgs.append("Look further ahead (a longer N), or require every plan to end at rest "
+        msgs.append("Look further ahead (a longer $N$), or require every plan to end at rest "
                     "(terminal stop).")
     elif sim.outcome == "time_out":
         if stop:
             msgs.append(f"Time is up: with the terminal stop every plan must end at rest within {T:g} s, "
-                        f"so the ball may drive at most ≈ {v_cap:.1f} m/s (a_max · N·Δt). Safe, but "
-                        f"too slow with N = {N}.")
+                        f"so the ball may drive at most ≈ {v_cap:.1f} m/s ($a_{{\\max}}\\, N\\, \\Delta t$). Safe, but "
+                        f"too slow with $N = {N}$.")
         else:
             msgs.append(f"Time is up after {m['time']:.0f} s: the ball is still "
                         f"{m['distance_left']:.1f} m from the target.")
     else:
-        msgs.append(f"Arrived in {m['time']:.1f} s with N = {N} ({T:g} s ahead), terminal stop "
+        msgs.append(f"Arrived in {m['time']:.1f} s with $N = {N}$ ({T:g} s ahead), terminal stop "
                     f"{'on' if stop else 'off'}; it overshot the star by {m['overshoot']:.2f} m.")
         if stars < 2:
             msgs.append(f"For ★★, arrive within {pars['time']:g} s. With the terminal stop the ball may only "
                         f"drive ≈ {v_cap:.1f} m/s here: a longer horizon allows more speed.")
         elif stars < 3:
-            msgs.append(f"For ★★★, use N ≤ {pars['max_N']}: smaller, faster solves "
+            msgs.append(f"For ★★★, use $N \\leq {pars['max_N']}$: smaller, faster solves "
                         f"({m['mean_solve_ms']:.2f} ms each now). A short horizon alone sees the wall "
                         "too late, so it needs something that keeps a way to stop in every plan.")
         else:

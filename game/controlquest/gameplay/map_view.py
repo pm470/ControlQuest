@@ -24,6 +24,8 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..engine.protocol import Trajectory
 from ..ui import painting, theme
+from ..ui.math_render import _DPR_EVENTS
+from ..ui.math_text import MATH, MATH_SCALE, inline_image, to_plain
 from .level_data import LevelData
 from .obstacles import Ellipse, level_ellipses
 
@@ -38,7 +40,8 @@ BALL_RADIUS_M = 0.9
 #   apply    the plan faint, its first step and the input arrow highlighted
 #   repeat   the plan, with an earlier solve's plan faint behind it (set_tour(..., earlier=k))
 TOUR_FOCUS = ("start", "measure", "predict", "plan", "apply", "repeat")
-_SUBSCRIPT = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+HUD_SPEED_TEX = r"|v|\,="  # the speed pill: |v| in the LaTeX font, the number in the game font
+HUD_SPEED = f"${HUD_SPEED_TEX}$"
 
 
 class MapView(QWidget):
@@ -58,10 +61,13 @@ class MapView(QWidget):
         self._tour: str | None = None  # Level 0: one of TOUR_FOCUS, None = normal map
         self._fan: list[list[tuple[float, float]]] = []
         self._earlier: int | None = None  # tour step "repeat": which earlier plan is drawn grey
+        self._math: dict = {}  # formula -> (image, depth) for the pills (see _prepare_math)
+        self._math_dpr = 0.0
 
     # --- data -------------------------------------------------------------------------
     def set_level(self, data: LevelData) -> None:
         self._data = data
+        self._prepare_math()
         self._ellipses = level_ellipses(data.blocks, data.margin)
         self.update()
 
@@ -82,6 +88,7 @@ class MapView(QWidget):
     def set_trajectory(self, traj: Trajectory | None) -> None:
         self._traj = traj
         self._t = 0.0
+        self._prepare_math()  # e.g. x_N for this run's horizon
         self.update()
 
     def set_time(self, t: float) -> None:
@@ -303,15 +310,14 @@ class MapView(QWidget):
             p.setPen(QPen(QColor(theme.PRIMARY), 3, Qt.PenStyle.SolidLine))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawEllipse(ball, r_px * 1.7, r_px * 1.7)
-            self._tag(p, field, ball + QPointF(0, -r_px * 1.7 - 22), "measured: position & speed")
+            self._tag(p, field, ball + QPointF(0, -r_px * 1.7 - 22), r"measured state $\hat{x}$")
         elif tour == "plan" and plan_pts:
             n = len(plan_pts) - 1
             end = plan_pts[-1]
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(theme.PRIMARY))
             p.drawEllipse(end, r_px * 0.35, r_px * 0.35)
-            self._tag(p, field, end + QPointF(0, -r_px - 18),
-                      f"x{str(n).translate(_SUBSCRIPT)}: {n * tr.dt:g} s ahead")
+            self._tag(p, field, end + QPointF(0, -r_px - 18), f"$x_{{{n}}}$: {n * tr.dt:g} s ahead")
         elif tour == "repeat" and plan_pts and tr.plans:
             # receding horizon: the end of the first (grey) plan vs where the plan ends now
             old = self._earlier if self._earlier is not None else tr.solve_at(self._t) - 1
@@ -326,7 +332,7 @@ class MapView(QWidget):
                 self._tag(p, field, end_old + QPointF(0, r_px + 18), "first plan ended here")
                 self._tag(p, field, end_new + QPointF(0, -r_px - 18), "now it reaches here")
         elif tour == "apply" and k < len(tr.u):
-            self._tag(p, field, ball + QPointF(0, r_px * 1.6 + 20), f"u₀: applied for {tr.dt:g} s")
+            self._tag(p, field, ball + QPointF(0, r_px * 1.6 + 20), f"$u_0$: applied for {tr.dt:g} s")
 
         # crash marker once the replay reaches the crash
         if tr.crash_point and self._t >= tr.duration - 1e-9:
@@ -359,20 +365,78 @@ class MapView(QWidget):
             p.drawText(QRectF(c.x() - 34, c.y() + 18, 68, 14), Qt.AlignmentFlag.AlignHCenter,
                        f"wind {mag:.1f}")
 
-        # HUD: the speed in a pill (the time is in the replay bar)
-        text = f"|v| = {speed:.2f} m/s"
-        p.setFont(theme.font(13, QFont.Weight.ExtraBold))
-        tw = p.fontMetrics().horizontalAdvance(text) + 26
-        painting.draw_pill(p, QRectF(field.left() + 12, field.top() + 12, tw, 28), text)
+        # HUD: the speed in a pill (the time is in the replay bar); |v| in the LaTeX font
+        self._math_pill(p, QPointF(field.left() + 12, field.top() + 12), HUD_SPEED + f" {speed:.2f} m/s",
+                        13, 28, align_left=True)
 
-    @staticmethod
-    def _tag(p: QPainter, field: QRectF, centre: QPointF, text: str) -> None:
-        """A small label pill centred at `centre`, kept inside the field."""
-        p.setFont(theme.font(12, QFont.Weight.ExtraBold))
-        w, h = p.fontMetrics().horizontalAdvance(text) + 22, 26
+    def _tag(self, p: QPainter, field: QRectF, centre: QPointF, text: str) -> None:
+        """A small label pill centred at `centre`, kept inside the field ($...$ allowed)."""
+        w = self._pill_width(p, text, 12)
         x = min(max(centre.x() - w / 2, field.left() + 6), field.right() - w - 6)
-        y = min(max(centre.y() - h / 2, field.top() + 6), field.bottom() - h - 9)
-        painting.draw_pill(p, QRectF(x, y, w, h), text, font_px=12)
+        y = min(max(centre.y() - 13, field.top() + 6), field.bottom() - 26 - 9)
+        self._math_pill(p, QPointF(x, y), text, 12, 26, align_left=True)
+
+    # --- pills with LaTeX parts (images prepared outside paintEvent: AGENTS.md gotchas) ------
+    def _pieces(self, text: str):
+        """[('text', str) | ('math', image, depth)] for a pill text with $...$ parts."""
+        out = []
+        for i, part in enumerate(MATH.split(text)):
+            if i % 2 == 0:
+                if part:
+                    out.append(("text", part))
+            elif part in self._math:
+                out.append(("math", *self._math[part]))
+            else:  # not prepared (yet): readable Unicode instead, never render while painting
+                out.append(("text", to_plain(f"${part}$")))
+        return out
+
+    def _pill_width(self, p: QPainter, text: str, font_px: int) -> float:
+        p.setFont(theme.font(font_px, QFont.Weight.ExtraBold))
+        fm = p.fontMetrics()
+        w = 0.0
+        for piece in self._pieces(text):
+            w += (fm.horizontalAdvance(piece[1]) if piece[0] == "text"
+                  else piece[1].width() / piece[1].devicePixelRatio())
+        return w + 22
+
+    def _math_pill(self, p: QPainter, top_left: QPointF, text: str, font_px: int, h: float,
+                   align_left: bool = True) -> None:
+        w = self._pill_width(p, text, font_px)
+        rect = QRectF(top_left.x(), top_left.y(), w, h)
+        painting.draw_pill(p, rect, "", font_px=font_px)  # the pill only
+        p.setFont(theme.font(font_px, QFont.Weight.ExtraBold))
+        p.setPen(QColor(theme.INK))
+        fm = p.fontMetrics()
+        baseline = rect.center().y() + (fm.ascent() - fm.descent()) / 2
+        x = rect.left() + 11
+        for piece in self._pieces(text):
+            if piece[0] == "text":
+                p.drawText(QPointF(x, baseline), piece[1])
+                x += fm.horizontalAdvance(piece[1])
+            else:
+                img, depth = piece[1], piece[2]
+                dpr = img.devicePixelRatio()
+                p.drawImage(QPointF(x, baseline - img.height() / dpr + depth), img)
+                x += img.width() / dpr
+
+    def _prepare_math(self) -> None:
+        """Typeset the formulas the map's pills use, for this display's pixel ratio."""
+        dpr = self.devicePixelRatioF() or 1.0
+        self._math_dpr = dpr
+        wanted = {HUD_SPEED_TEX, r"\hat{x}", "u_0"}
+        if self._traj is not None and self._traj.plans:
+            wanted.add(f"x_{{{len(self._traj.plans[0]) - 1}}}")
+        self._math = {}
+        for tex in wanted:
+            got = inline_image(tex, 13 * MATH_SCALE, theme.INK, dpr)
+            if got is not None:
+                self._math[tex] = got
+
+    def event(self, e) -> bool:
+        if e.type() in _DPR_EVENTS and abs(self.devicePixelRatioF() - self._math_dpr) > 1e-6:
+            self._prepare_math()  # display scaling changed: re-typeset (never inside paintEvent)
+            self.update()
+        return super().event(e)
 
     def _draw_waypoints(self, p: QPainter, to_px, start: QPointF, target: QPointF, r_px: float,
                         active: int | None) -> None:

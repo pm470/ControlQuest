@@ -248,7 +248,7 @@ work: step by step, the way it thinks."*
 | Item | Value |
 |---|---|
 | Type | **tutorial**: optional, **no stars** (not counted in the total), always open, does not lock Level 1, never the suggested level in the level select ("Tutorial" tag on its tile). Rose accent, loop icon |
-| Map | **small open field 20 m × 20 m** (agreed exception to the 50 m field, so the plans are easy to see), start (3, 8) with the ball **already moving up at 2 m/s** (`start_velocity`), target (17, 10), a_max = v_max = 2, time limit 20 s |
+| Map | **small open field 20 m × 20 m** (agreed exception to the 50 m field, so the plans are easy to see), start (3, 8) **at rest** (2026-11-18; first version: moving up at 2 m/s, `start_velocity`), target (17, 10), a_max = v_max = 2, time limit 20 s |
 | Locked | everything: q_p = q_v = r = 1, P = 10·Q, N = 30 (run ≈ 10 s, 100 solves; calibrated) |
 | Knobs | **none** (2026-11-18): Level 0 only introduces MPC; changing N is Level 2's topic |
 | Intro | as every level, plus a drawn **loop diagram** (1 Measure → 2 Predict → 3 Optimise → 4 Apply, "repeat every Δt") |

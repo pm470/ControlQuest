@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QWidget
 from ..core.config import MAX_STARS
 from ..engine.protocol import OUTCOMES, RunResult
 from ..ui import theme
+from ..ui.math_text import math_text
 from ..ui.widgets import Button, Card, ColorDot, StarRow, divider, label
 
 
@@ -78,14 +79,15 @@ class ResultPanel(Card):
 
         _clear(self._rows)
         for i, (name, value, note) in enumerate(rows):
-            self._rows.addWidget(label(name, "body"), i, 0)
-            self._rows.addWidget(label(value, "subheading"), i, 1)
-            self._rows.addWidget(label(note, "caption"), i, 2)
+            # $...$ in the LaTeX font (e.g. "$N = 20$ (2 s)")
+            self._rows.addWidget(math_text(name, "body", wrap=False), i, 0)
+            self._rows.addWidget(math_text(value, "subheading", wrap=False), i, 1)
+            self._rows.addWidget(math_text(note, "caption", wrap=False), i, 2)
         self._rows.setColumnStretch(2, 1)
 
         _clear(self._messages_layout)
         for i, msg in enumerate(result.messages):
-            self._messages_layout.addWidget(label(msg, "body", wrap=True), i, 0)
+            self._messages_layout.addWidget(math_text(msg, "body"), i, 0)
 
         self._next.setVisible(result.success and can_go_next)
         self.show()

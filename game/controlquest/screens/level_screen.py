@@ -22,6 +22,7 @@ from ..core.navigation import ScreenId
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntroWidget
 from ..levels.base import LevelInfo
+from ..ui.math_text import math_text
 from ..ui.widgets import Button, Card, ScreenHeader, StarRow, StepIcon, divider, label, scrollable
 from .base_screen import BaseScreen
 
@@ -135,7 +136,7 @@ class LevelScreen(BaseScreen):
         card.body.addWidget(label(f"“{level.briefing}”", "quote", wrap=True))
         card.body.addSpacing(6)
         card.body.addWidget(label("What this level is about", "subheading"))
-        card.body.addWidget(label(level.concept, "body", wrap=True))
+        card.body.addWidget(math_text(level.concept, "body"))
         card.body.addSpacing(6)
         card.body.addWidget(divider())
 

@@ -24,6 +24,12 @@ from PySide6.QtWidgets import (
 from . import painting, theme
 
 
+def star_subscript(text: str) -> str:
+    """'p★' / 'x★' -> rich text with the star as a subscript, as in the typeset OCP (p_★).
+    Use for plain-text lines that name the target (OCP legends, notes, tooltips)."""
+    return text.replace("p★", "p<sub>★</sub>").replace("x★", "x<sub>★</sub>")
+
+
 def label(text: str, role: str = "body", wrap: bool = False,
           align: Qt.AlignmentFlag | None = None) -> QLabel:
     """A QLabel styled by its text role (see theme.stylesheet)."""

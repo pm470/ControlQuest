@@ -28,8 +28,8 @@ def show(label: str, result: dict) -> None:
           f"E={m['energy']:5.2f}  max|a|={m['max_accel']:.2f}  knobs={result['knobs']}"
           + (f"  waypoints={result['waypoints']}" if result.get("waypoints") else "")
           + (f"  fix={result['fix']}  mean solve {m['mean_solve_ms']:.2f} ms" if result.get("fix") else ""))
-    for msg in result["messages"]:
-        print(f"{'':<10} - {msg}")
+    for msg in result["messages"]:  # the game typesets $...$; plain enough for the console
+        print(f"{'':<10} - {msg.replace('$', '')}")
 
 
 KNOB_MAX_FLOOR, KNOB_MAX_FACTOR = 50.0, 3.0  # team rule for slider ranges (AGENTS.md)

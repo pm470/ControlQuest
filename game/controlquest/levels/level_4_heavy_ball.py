@@ -17,7 +17,8 @@ from ..engine.protocol import TestDrive
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
-from ..gameplay.ocp_card import OcpSpec
+from ..gameplay.ocp_card import STATE_LEGEND, OcpSpec
+from ..ui.math_text import math_text
 from ..ui.widgets import Button, label
 from .base import LevelInfo
 
@@ -35,16 +36,16 @@ class HeavyBallWidget(LevelPlayWidget):
     # --- controls: knobs (margin, g) + test drive ---------------------------------------------
     def add_controls(self, layout: QVBoxLayout) -> None:
         td = self.data.raw["test_drive"]
-        layout.addWidget(label(f"Test drive: push with a_x = {td['accel']:g} m/s² for "
-                               f"{td['duration']:g} s from rest and compare what your model (g) "
-                               "predicts with what the real ball does.", "caption", wrap=True))
+        layout.addWidget(math_text(f"Test drive: push with $a_x = {td['accel']:g}$ m/s² for "
+                                   f"{td['duration']:g} s from rest and compare what your model ($g$) "
+                                   "predicts with what the real ball does.", "caption"))
         row = QHBoxLayout()
         self.drive_button = Button("Test drive", variant="default")
         self.drive_button.setToolTip("No MPC involved: a constant push on an empty field")
         row.addWidget(self.drive_button)
         row.addStretch(1)
         layout.addLayout(row)
-        self.drive_result = label("", "body", wrap=True)
+        self.drive_result = math_text("", "body")
         self.drive_result.hide()
         layout.addWidget(self.drive_result)
         self.drive_button.clicked.connect(self._test_drive)
@@ -69,7 +70,7 @@ class HeavyBallWidget(LevelPlayWidget):
     def _on_test_drive(self, r: TestDrive) -> None:
         self.drive_button.setEnabled(True)
         self.drive_button.setText("Test drive")
-        self.drive_result.setText(f"Your model (g = {r.g:g}) predicts <b>{r.predicted_m:.2f} m</b>; "
+        self.drive_result.setText(f"Your model ($g = {r.g:g}$) predicts <b>{r.predicted_m:.2f} m</b>; "
                                   f"the real ball went <b>{r.measured_m:.2f} m</b>.")
         self.drive_result.show()
 
@@ -99,7 +100,7 @@ class HeavyBallWidget(LevelPlayWidget):
         return [
             ("Time", f"{m['time']:.1f} s",
              f"★★ ≤ {d.pars['time']:g} s · ★★★ ≤ {d.pars['time_best']:g} s"),
-            ("Model gain g", f"{m.get('g', 0):g}", f"margin {m.get('margin', 0):g} m"),
+            ("Model gain $g$", f"{m.get('g', 0):g}", f"margin $m = {m.get('margin', 0):g}$ m"),
             ("Prediction error", f"{m.get('max_prediction_error', 0):.2f} m",
              f"max, {m.get('prediction_lookahead_s', 1):g} s ahead"),
         ]
@@ -128,10 +129,11 @@ def ocp(d, g: float, m: float, intro: bool = False) -> OcpSpec:
             rf"(p_k-c_j)^{{T}} E_j({knob}{{margin}}{{m}})\, (p_k-c_j) \geq 1,\quad "
             rf"{knob}{{margin}}{{m = {m:.2g}\ \mathrm{{m}}}}",
         ],
-        notes=(f"Re-solved every Δt = {d.dt:g} s, {n} steps ({n * d.dt:g} s) ahead. The model "
-               "uses YOUR gain g; the real ball has its own."),
-        legend=["g: model actuator gain (1 = the ball does exactly what is commanded) · "
-                "E_j(m): ellipse around block j, each semi-axis enlarged by the margin m"],
+        notes=(rf"Re-solved every $\Delta t = {d.dt:g}$ s, $N = {n}$ steps ({n * d.dt:g} s) ahead. "
+               "The model uses YOUR gain $g$; the real ball has its own."),
+        legend=[("g", "model actuator gain (1: the ball does exactly what is commanded)"),
+                ("E_j(m)", "ellipse around block $j$, each half axis enlarged by the margin $m$"),
+                *STATE_LEGEND],
     )
 
 
@@ -148,8 +150,8 @@ def intro(d) -> LevelIntro:
         stars=("park on the star", f"within {d.pars['time']:g} s",
                f"within {d.pars['time_best']:g} s"),
         ocp=ocp(d, knobs["g"], knobs["margin"], intro=True),
-        fixed=(f"q_p = {lk['q_p']:g}, q_v = {lk['q_v']:g}, r = {lk['r']:g}, "
-               f"P = {d.raw.get('terminal_factor', 10):g}·Q, N = {d.N}"),
+        fixed=(f"$q_p = {lk['q_p']:g}$, $q_v = {lk['q_v']:g}$, $r = {lk['r']:g}$, "
+               rf"$P = {d.raw.get('terminal_factor', 10):g}\,Q$, $N = {d.N}$"),
     )
 
 
@@ -164,15 +166,15 @@ LEVEL = LevelInfo(
              "(model mismatch), plans that are safe on paper fail in reality. There are two "
              "cures: robustness (a safety margin that leaves room for the error: safe, but "
              "slower) or a better model (identify the real parameter with an experiment)."),
-    teaching=("The model assumes the ball does exactly what it is told (g = 1), but the real "
+    teaching=("The model assumes the ball does exactly what it is told ($g = 1$), but the real "
               "ball reacts less. The controller brakes too late in the bay and ends up in an "
-              "obstacle ellipse: controller failure. Fix it with a larger margin m, or measure "
-              "the real gain with the Test drive and set g. The dashed ghost ball shows where "
+              "obstacle ellipse: controller failure. Fix it with a larger margin $m$, or measure "
+              "the real gain with the Test drive and set $g$. The dashed ghost ball shows where "
               "the plan expected the ball to be."),
     hints=(
         "Watch the dashed ghost ball: where the plan said the ball would be, and where it is.",
         "A test drive tells you how strongly the real ball responds.",
-        "Set the model gain to what you measured: predicted distance = g · ½ · a · t².",
+        r"Set the model gain to what you measured: predicted distance $= g\, \frac{1}{2}\, a\, t^2$.",
     ),
     accent="mint",
     icon="weight",

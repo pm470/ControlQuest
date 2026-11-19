@@ -26,6 +26,7 @@ from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from ..levels.base import LevelInfo
 from ..ui.math_render import MathLabel
+from ..ui.math_text import math_text
 from ..ui.widgets import Button, Card, StarRow, label, scrollable
 from .knob_panel import knob_colors, name_row
 from .level_data import LevelData
@@ -42,7 +43,7 @@ class LevelIntro:
     ocp: OcpSpec  # the OCP at the default knob values; new parts marked with \new / \newknob
     stars: tuple[str, ...] = ()  # what ★, ★★, ★★★ need ("reach the star", "within 30 s", ...);
     #                              empty for a tutorial (no stars)
-    fixed: str = ""  # what the player cannot change, e.g. "N = 30, P = 10·Q"
+    fixed: str = ""  # what the player cannot change, e.g. "$N = 30$, $P = 10\,Q$"
     notes: tuple[str, ...] = ()  # extra lines under the knobs (Level 3: what each fix changes)
     ocp_title: str = "What changes in the OCP"  # Level 0: "The OCP your MPC solves"
     # a drawing under "What you learn" (Level 0: the MPC loop diagram); builds a QWidget
@@ -93,15 +94,14 @@ class LevelIntroWidget(QWidget):
             one = QVBoxLayout()
             one.setSpacing(3)
             one.addLayout(name_row(spec, colors[spec.name]))
-            one.addWidget(label(spec.help, "caption", wrap=True))
+            one.addWidget(math_text(spec.help, "caption"))
             knobs.addLayout(one)
         learn.body.addLayout(knobs)
         for note in intro.notes:
-            learn.body.addWidget(label(note, "caption", wrap=True))
+            learn.body.addWidget(math_text(note, "caption"))
         if intro.fixed:
-            fixed = label(f"<b>Fixed:</b> {intro.fixed}", "caption", wrap=True)
-            fixed.setContentsMargins(0, 4, 0, 0)
-            learn.body.addWidget(fixed)
+            learn.body.addSpacing(4)
+            learn.body.addWidget(math_text(f"<b>Fixed:</b> {intro.fixed}", "caption"))
         learn.body.addStretch(1)
 
         # --- right tile: goal, stars, the OCP with what is new, Start ---
@@ -114,7 +114,7 @@ class LevelIntroWidget(QWidget):
             row = QHBoxLayout()
             row.setSpacing(10)
             row.addWidget(StarRow(n, 3, star_radius=8))
-            row.addWidget(label(text, "body", wrap=True), 1)
+            row.addWidget(math_text(text, "body"), 1)
             stars.addLayout(row)
         if intro.stars:  # a tutorial has none
             play.body.addLayout(stars)
@@ -153,7 +153,7 @@ class LevelIntroWidget(QWidget):
     @staticmethod
     def _section(layout: QVBoxLayout, eyebrow: str, text: str, role: str = "body") -> None:
         layout.addWidget(label(eyebrow, "eyebrow"))
-        layout.addWidget(label(text, role, wrap=True))
+        layout.addWidget(math_text(text, role))  # $...$ in the LaTeX font
 
     @staticmethod
     def _new_legend() -> QHBoxLayout:

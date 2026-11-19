@@ -18,13 +18,13 @@
 
   "knobs": [
     {"name": "q_p", "label": "Position weight", "symbol": "q_p",
-     "help": "How much being away from the target costs. Q = diag(q_p, q_p, q_v, q_v).",
+     "help": "How much being away from the target costs. $Q = \\mathrm{diag}(q_p, q_p, q_v, q_v)$.",
      "default": 10.0, "min": 0.001, "max": 50.0, "scale": "log"},
     {"name": "q_v", "label": "Velocity weight", "symbol": "q_v",
-     "help": "How much moving fast costs (the target velocity is 0).",
+     "help": "How much moving fast costs (the target velocity is $v = 0$).",
      "default": 1.0, "min": 0.001, "max": 50.0, "scale": "log"},
     {"name": "r", "label": "Input weight", "symbol": "r",
-     "help": "How much accelerating costs. R = r * I.",
+     "help": "How much accelerating costs. $R = r\\, I$.",
      "default": 0.1, "min": 0.001, "max": 50.0, "scale": "log"}
   ],
 

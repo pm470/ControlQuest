@@ -49,7 +49,7 @@ game can stay open.
 ```
 game/
 ├── level_data/                  ONE JSON PER LEVEL, read by BOTH game and engine
-│   ├── hello_mpc.json               Level 0 (tutorial): 20 m field, moving start, no knobs, no pars
+│   ├── hello_mpc.json               Level 0 (tutorial): 20 m field, no knobs, no pars
 │   ├── price_of_speed.json          start, target, limits, time limit, battery, pars, knobs, checks
 │   ├── brake_check.json             Level 2: horizon choices, terminal-stop toggle, pars, checks.cases
 │   ├── dead_end.json                + blocks (4 corners each), locked weights/margin, waypoint rules
@@ -60,7 +60,8 @@ game/
 │   ├── app.py, main_window.py       start-up, screen switching (Esc = back)
 │   ├── core/                        config, ScreenId, GameState (stars/unlocks), AppContext
 │   ├── ui/                          theme (colours, stylesheet), painting (ball, stars...), widgets,
-│   │                                math_render (LaTeX-style formulas via matplotlib mathtext)
+│   │                                math_render (LaTeX-style formulas via matplotlib mathtext),
+│   │                                math_text (text with inline $...$ math in the LaTeX font)
 │   ├── screens/                     title, level select, how to play, settings, level screen
 │   ├── levels/                      one file per level: LevelInfo (+ play_screen when playable,
 │   │                                    + intro texts/numbers for the level intro)
@@ -90,7 +91,7 @@ game/
 │   │   ├── playback.py                  replay clock + play/pause/scrub/speed (in the replay well)
 │   │   ├── result_panel.py              outcome, stars, metrics, "what happened"
 │   │   ├── ocp_card.py                  "The OCP your MPC solves" (typeset math, knob colours)
-│   │   ├── run_info_card.py             "This solve": J*, solve time, iterations, status + whole run
+│   │   ├── run_info_card.py             "Whole run": total cost, avg solve time, avg SQP iterations, solved count
 │   │   ├── solve_selector.py            "‹ k /n ›": inspect one MPC solve's plan
 │   │   ├── budget_bar.py                one-row budget bar (battery, compute budget)
 │   │   └── level_data.py                reads level_data/<id>.json
@@ -104,7 +105,7 @@ game/
     ├── calibrate.py                 check / tune a level from the command line
     ├── level_rules/                 game rules per level (stop rules, stars, explanations)
     │   ├── common.py                    load level file, knobs -> weights, result JSON
-    │   ├── hello_mpc.py                 Level 0: plain closed loop from a moving start, no stars
+    │   ├── hello_mpc.py                 Level 0: plain closed loop, no stars
     │   ├── price_of_speed.py            Level 1: battery, stars, "what happened"
     │   ├── brake_check.py               Level 2: terminal stop, point of no return, stars, "what happened"
     │   ├── dead_end.py                  Level 3: the chosen fix (none / horizon N / waypoints),
@@ -189,6 +190,10 @@ python calibrate.py dead_end fix=horizon N=100
    in one module function `ocp(..., intro=False)` that both `ocp_spec()` and `intro()` use;
    with `intro=True` wrap what is new in this level in `\new{...}` (or `\newknob{name}{...}`
    for a knob part). Knob explanations come from the knobs' `help` texts in the JSON.
+   Symbols in any text (level texts, JSON help, engine sentences): write them as `$...$`
+   (`$N = 30$`, `$\hat{x}$`), they are typeset in the LaTeX font; use `rf"..."` strings with
+   doubled TeX braces, and `\\` for a backslash in JSON. OCP legend entries are tuples
+   `(symbol tex, words)`; the common ones are `ocp_card.STATE_LEGEND`.
    Knob ranges: `max ≤ max(50, 3 × reference value)` (team rule, see AGENTS.md).
    Obstacles: add `"blocks"` (4 corners each, at most 6) to the level file; the engine
    and the map pick them up. Fixed values that are not knobs go into `"locked"`.

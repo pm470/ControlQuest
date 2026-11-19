@@ -114,18 +114,18 @@ def explain(level, knobs, sim, m, d, stars) -> list[str]:
     pars, dt, k = level["pars"], level["dt"], m["k"]
     msgs = []
     if sim.outcome == "solve_budget":
-        msgs.append(f"The compute budget ({m['solve_budget']} solves) ran out at t = {m['time']:.1f} s, "
+        msgs.append(f"The compute budget ({m['solve_budget']} solves) ran out at $t = {m['time']:.1f}$ s, "
                     f"{m['distance_left']:.1f} m before the target.")
-        msgs.append(f"Re-planning every {k} sample(s) = every {k * dt:g} s costs about "
+        msgs.append(f"Re-planning every $k = {k}$ sample(s) = every {k * dt:g} s costs about "
                     f"{m['time'] / (k * dt):.0f} solves for this stretch alone: re-plan less often.")
     elif sim.outcome in ("crash_block", "controller_failure", "crash_wall"):
         what = {"crash_block": "The ball hit a block", "crash_wall": "The ball left the field",
                 "controller_failure": "The solver found no valid plan"}[sim.outcome]
-        msgs.append(f"{what} at t = {m['time']:.1f} s.")
+        msgs.append(f"{what} at $t = {m['time']:.1f}$ s.")
         if k > 1:
             msgs.append(f"Between re-plans the ball ran open-loop for {k * dt:g} s and the wind pushed "
                         f"it up to {m['max_drift']:.2f} m off the plan. Re-plan more often, or give it "
-                        "more room (margin).")
+                        "more room (margin $m$).")
         elif sim.outcome == "controller_failure":
             msgs.append(f"({sim.detail})")
     elif sim.outcome == "time_out":

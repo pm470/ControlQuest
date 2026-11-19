@@ -1,6 +1,6 @@
 """Level 0: "Hello, MPC" (tutorial, no stars): a guided tour of the MPC loop.
 
-Numbers (small open field, moving start, fixed weights and horizon) live in
+Numbers (small open field, start at rest, fixed weights and horizon) live in
 game/level_data/hello_mpc.json, shared with the engine. The engine's rules are in
 engine_server/level_rules/hello_mpc.py.
 
@@ -17,35 +17,50 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QEvent, QTimer
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
 from ..gameplay.loop_diagram import LoopDiagram
-from ..gameplay.ocp_card import OcpSpec
+from ..gameplay.ocp_card import STATE_LEGEND, OcpSpec
+from ..ui.math_text import math_text
 from ..ui.widgets import Button, label
 from .base import LevelInfo
 
 
 # --- the OCP, with the line of the current tour step highlighted -------------------------------
 def ocp(d, n: int, focus: str | None = None) -> OcpSpec:
-    """The OCP with horizon n. focus: the tour step whose OCP line is highlighted
-    ("measure", "predict", "optimise") or None."""
+    """The OCP with horizon n, written as simply as possible for a first look (2026-11-18):
+    weights of 1 are left out, and the terminal cost P = 10·Q is written as its number
+    (Q = diag(q_p, q_p, q_v, q_v) = I here). focus: the tour step whose OCP line is
+    highlighted ("measure", "predict", "optimise") or None."""
     lk = d.locked
+    tf = d.raw.get("terminal_factor", 10)
 
     def hl(line: str, key: str) -> str:
         return rf"\new{{{line}}}" if focus == key else line
 
+    def w(value: float) -> str:  # a weight in front of a term; 1 is left out
+        return "" if value == 1 else rf"{value:g}\,"
+
+    terminal = rf"\|x_{{{n}}}-x_{{\star}}\|"
+    objective_extra = []
+    if lk["q_p"] == lk["q_v"]:  # Q = q·I, so P = 10·q·I: write the number
+        terminal = rf"{w(tf * lk['q_p'])}{terminal}^2"
+    else:  # Q is not a multiple of I: keep P and say what it is
+        terminal = rf"{terminal}_P^2"
+        objective_extra = [rf"P = {tf:g}\,\mathrm{{diag}}({lk['q_p']:g},{lk['q_p']:g},"
+                           rf"{lk['q_v']:g},{lk['q_v']:g})"]
     (x0, y0), (x1, y1) = d.workspace
     return OcpSpec(
         objective=[
             hl(rf"\min_{{u_0,\,\ldots,\,u_{{{n - 1}}}}}\;\; \sum_{{k=0}}^{{{n - 1}}} \Delta t\,"
-               rf"\ell(x_k,u_k) \;+\; \|x_{{{n}}}-x_{{\star}}\|_P^2", "optimise"),
-            hl(rf"\ell(x,u) = {lk['q_p']:g}\,\|p-p_{{\star}}\|^2 + {lk['q_v']:g}\,\|v\|^2 "
-               rf"+ {lk['r']:g}\,\|u\|^2", "optimise"),
-            rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad \mathrm{{horizon}}\ N = {n}",
+               rf"\ell(x_k,u_k) \;+\; {terminal}", "optimise"),
+            hl(rf"\ell(x,u) = {w(lk['q_p'])}\|p-p_{{\star}}\|^2 + {w(lk['q_v'])}\|v\|^2 "
+               rf"+ {w(lk['r'])}\|u\|^2", "optimise"),
+            *objective_extra,
         ],
         constraints=[
             hl(r"x_0 = \hat{x}", "measure"),
@@ -53,9 +68,9 @@ def ocp(d, n: int, focus: str | None = None) -> OcpSpec:
             hl(rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}", "optimise"),
             rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
         ],
-        notes=(f"Re-solved every Δt = {d.dt:g} s from the measured state x̂, N = {n} steps "
-               f"({n * d.dt:g} s) ahead; only u₀ is applied."),
-        legend=["x = (p, v): position, velocity · u = a: acceleration · p★: target"],
+        notes=(rf"Re-solved every $\Delta t = {d.dt:g}$ s from the measured state $\hat{{x}}$, "
+               rf"$N = {n}$ steps ({n * d.dt:g} s) ahead; only $u_0$ is applied."),
+        legend=STATE_LEGEND,
     )
 
 
@@ -63,7 +78,7 @@ def ocp(d, n: int, focus: str | None = None) -> OcpSpec:
 @dataclass(frozen=True)
 class TourStep:
     title: str
-    text: str  # rich text (subscripts as <sub>)
+    text: str  # rich text; symbols as $...$ (LaTeX font, ui/math_text.py)
     focus: str  # what the map highlights (gameplay/map_view.py TOUR_FOCUS)
     solve: int = 0  # which MPC solve the map shows
     ocp: str | None = None  # which OCP line is highlighted ("measure", "predict", "optimise")
@@ -78,32 +93,38 @@ def tour_steps(d, result) -> list[TourStep]:
     later = min(REPEAT_SOLVE, tr.n_solves - 1)  # step "Repeat": this many rounds later
     return [
         TourStep("You are not steering",
-                 f"An MPC controller drives this ball. Every Δt = {dt:g} s it runs the same loop: "
-                 "measure, predict, optimise, apply. Let's walk through the first round.", "start"),
+                 "An MPC controller drives this ball. "
+                 rf"Every $\Delta t = {dt:g}$ s it runs the same loop: measure, predict, optimise, "
+                 "apply. Let's walk through the first round.", "start"),
         TourStep("① Measure",
-                 "First it measures the state x̂: where the ball is and how fast it moves. Right "
-                 f"now p = ({x[0]:g}, {x[1]:g}) m and v = ({x[2]:g}, {x[3]:g}) m/s: the ball is "
-                 "already moving.", "measure", ocp="measure"),
+                 r"First it measures the state $\hat{x}$: where the ball is and how fast it moves."
+                 "<br><br><b>Current state:</b>"
+                 f"<br>$p = ({x[0]:g},\\, {x[1]:g})$ m"
+                 f"<br>$v = ({x[2]:g},\\, {x[3]:g})$ m/s", "measure", ocp="measure"),
         TourStep("② Predict",
-                 "Its model x<sub>k+1</sub> = f(x<sub>k</sub>, u<sub>k</sub>) says how the ball "
+                 r"Its model $x_{k+1} = f(x_k,\, u_k)$ says how the ball "
                  "moves (velocity changes position, acceleration changes velocity). With it, the "
                  "controller can predict where any sequence of accelerations would take the ball "
-                 f"over the next N = {n} steps ({T:g} s). The faint lines are a few examples.",
+                 f"over the next $N = {n}$ steps ({T:g} s). The faint lines are a few examples.",
                  "predict", ocp="predict"),
         TourStep("③ Optimise",
-                 f"Of all input sequences that respect the limits (|a| ≤ {d.a_max:g} m/s², "
-                 f"|v| ≤ {d.v_max:g} m/s), it picks the one with the lowest cost: being far from "
-                 "the star, moving fast and accelerating all cost something. That best sequence is "
-                 "the plan: the dashed line, its dots the predicted positions, ending "
-                 f"{T:g} s ahead (x<sub>N</sub>).", "plan", ocp="optimise"),
+                 "Now it picks the best input sequence: the one with the lowest cost that "
+                 "respects the limits."
+                 "<br><br><b>Cost:</b> being far from the star, moving fast, accelerating"
+                 rf"<br><b>Limits:</b> $|a| \leq {d.a_max:g}$ m/s², $|v| \leq {d.v_max:g}$ m/s"
+                 "<br><b>Result:</b> the plan, the dashed line on the map, ending "
+                 f"{T:g} s ahead ($x_N$)", "plan", ocp="optimise"),
         TourStep("④ Apply the first input",
-                 f"Only the first input u<sub>0</sub> (the arrow) is sent to the motors, for "
+                 "Only the first input $u_0$ (the arrow) is sent to the motors, for "
                  f"{dt:g} s. The rest of the plan is not used.", "apply"),
         TourStep("⑤ Repeat",
-                 f"Every {dt:g} s the loop starts again from the new measurement: a new plan, a new "
-                 f"first input. Here we are {later * dt:g} s ({later} rounds) later (grey: the first "
-                 "plan). The plan always reaches N steps ahead and moves with the ball: a receding "
-                 "horizon. Re-planning from measurements is also what corrects for anything the "
+                 rf"Every $\Delta t = {dt:g}$ s the whole loop runs again from the new measurement: "
+                 "a new plan, a new first input."
+                 f"<br><br><b>On the map:</b> {later * dt:g} s ({later} rounds) later. Grey: the "
+                 "first plan, coral: the current one."
+                 f"<br><b>Receding horizon:</b> the plan always reaches $N = {n}$ steps ahead, so it "
+                 "moves with the ball."
+                 "<br><b>Why it matters:</b> re-planning from measurements corrects anything the "
                  "model gets wrong.", "repeat", solve=later, ocp="measure"),
         TourStep("Watch it run",
                  f"Press Play to watch the remaining {max(0, tr.n_solves - later - 1)} rounds. With "
@@ -112,8 +133,9 @@ def tour_steps(d, result) -> list[TourStep]:
 
 
 GOAL = "Follow the tour through one round of the MPC loop, then watch the whole run."
+WATCHING = (r"Every $\Delta t = {dt:g}$ s: measure, plan, apply the first input. "
+            "Watch the dashed plan move along with the ball.")  # while the rest of the run plays
 REPEAT_SOLVE = 10  # step "Repeat" shows the solve 1 s (10 rounds) after the first one
-UNSOLVED = ("start", "measure", "predict")  # tour steps before the OCP is solved: no solver numbers
 
 
 def example_predictions(d, n: int, x0) -> list[list[tuple[float, float]]]:
@@ -154,10 +176,22 @@ class HelloMpcWidget(LevelPlayWidget):
         box.setSpacing(6)
         self.step_count = label("", "caption")
         self.step_title = label("", "subheading", wrap=True)
-        self.step_text = label("Computing the run...", "body", wrap=True)
+        self.step_text = math_text("Computing the run...", "body")
         box.addWidget(self.step_count)
-        box.addWidget(self.step_title)
-        box.addWidget(self.step_text)
+        # title + text in an area as tall as the longest step, so Back / Next stay in place
+        # when the text gets shorter or longer (decided 2026-11-19)
+        self.step_area = QWidget()
+        area = self._area_layout = QVBoxLayout(self.step_area)
+        area.setContentsMargins(0, 0, 0, 0)
+        area.setSpacing(6)
+        area.addWidget(self.step_title)
+        area.addWidget(self.step_text)
+        area.addStretch(1)
+        self.step_area.installEventFilter(self)
+        self._measure_title = label("", "subheading", wrap=True)  # never shown: measures texts
+        self._measure_text = math_text("", "body")
+        self._area_width = -1
+        box.addWidget(self.step_area)
         row = QHBoxLayout()
         row.setContentsMargins(0, 8, 0, 0)
         row.setSpacing(10)
@@ -173,26 +207,63 @@ class HelloMpcWidget(LevelPlayWidget):
         done.setContentsMargins(0, 0, 0, 0)
         done.setSpacing(6)
         done.addWidget(label("That's MPC", "subheading"))
-        self.done_text = label("", "body", wrap=True)
+        self.done_text = math_text("", "body")
         done.addWidget(self.done_text)
+        # like the tour's Back / Next: a tonal button on the left, the main action on the right
         replay_row = QHBoxLayout()
-        self.replay_tour_button = Button("Replay the tour", variant="link")
+        replay_row.setContentsMargins(0, 8, 0, 0)
+        replay_row.setSpacing(10)
+        self.replay_tour_button = Button("Replay tour", scale="tall")
+        self.replay_tour_button.setToolTip("Walk through the MPC loop again")
+        self.next_level_button = Button("Next level  ›", variant="primary", scale="large")
+        nxt = self.ctx.next_level(self.level)
+        if nxt is not None:
+            self.next_level_button.setToolTip(f"Level {nxt.number}: {nxt.title}")
+        self.next_level_button.setVisible(nxt is not None)
         replay_row.addWidget(self.replay_tour_button)
-        replay_row.addStretch(1)
+        replay_row.addWidget(self.next_level_button, 1)
         done.addLayout(replay_row)
         layout.addWidget(self.done_box)
 
         self.back_button.clicked.connect(lambda: self._go(self._step - 1))
         self.next_button.clicked.connect(self._next)
         self.replay_tour_button.clicked.connect(self._replay_tour)
+        self.next_level_button.clicked.connect(self._go_next)  # Level 1's intro
         self.result_panel.set_watch_text("Replay tour")
         self.result_panel.set_retry_visible(False)  # nothing to change in this level
         self.ctx.engine.status_changed.connect(lambda _s: self._try_start())
         # the Run/Reset buttons are built after this hook: switch modes once the widget is complete
         QTimer.singleShot(0, self, self._begin)
 
+    # --- a steady panel: the text area is as tall as the longest step -----------------------------
+    def eventFilter(self, obj, event) -> bool:
+        if obj is self.step_area and event.type() == QEvent.Type.Resize:
+            if event.size().width() != self._area_width:  # re-measure only when the width changes
+                self._area_width = event.size().width()
+                self._fix_step_height()
+        return super().eventFilter(obj, event)
+
+    def _fix_step_height(self) -> None:
+        """Make the title + text area as tall as the tallest of all tour texts at this width,
+        so the Back / Next buttons under it never move while stepping through the tour."""
+        w = self.step_area.width()
+        if w <= 0:
+            return
+        texts = [(s.title, s.text) for s in self._steps]
+        texts += [("Getting ready", "The MPC is computing the run..."),
+                  ("Watching the run", WATCHING.format(dt=self.data.dt))]
+        self._measure_title.ensurePolished()
+        spacing = self._area_layout.spacing()
+        tallest = 0
+        for title, text in texts:
+            self._measure_title.setText(title)
+            self._measure_text.setText(text)
+            tallest = max(tallest, self._measure_title.heightForWidth(w) + spacing
+                          + self._measure_text.heightForWidth(w))
+        self.step_area.setMinimumHeight(tallest)
+
     def _begin(self) -> None:
-        self.run_info.show_parts(solve=False, run=False)  # "–" until the story gets there
+        self.run_info.set_hidden(True)  # "–" until the run has been watched
         self._set_mode(tour=True)
         self.back_button.setEnabled(False)
         self.next_button.setEnabled(False)
@@ -225,18 +296,19 @@ class HelloMpcWidget(LevelPlayWidget):
         if not tour and self.result is not None:
             n = self.result.trajectory.n_solves
             self.done_text.setText(
-                f"Measure, predict, optimise, apply the first input, repeat: every {self.data.dt:g} s, "
+                rf"Measure, predict, optimise, apply the first input, repeat: every $\Delta t = {self.data.dt:g}$ s, "
                 f"{n} times in this run. From Level 1 on you design this controller yourself: its "
                 "cost, its horizon, its constraints.")
 
     # --- the run -------------------------------------------------------------------------------
     def _on_result(self, result) -> None:
-        if self._touring:  # the solver tile follows the story (see _go)
-            self.run_info.show_parts(solve=False, run=False)
+        if self._touring:  # whole-run numbers only once the run has been watched
+            self.run_info.set_hidden(True)
         super()._on_result(result)  # loads the replay and starts playing
         if self._touring:
             self.playback.pause()
             self._steps = tour_steps(self.data, result)
+            self._fix_step_height()
             self._go(0)
 
     def _on_failed(self, reason: str) -> None:
@@ -248,7 +320,7 @@ class HelloMpcWidget(LevelPlayWidget):
 
     def _on_replay_end(self) -> None:
         super()._on_replay_end()  # the result card (no stars)
-        self.run_info.show_parts(solve=True, run=True)  # the whole run has been watched
+        self.run_info.set_hidden(False)  # the whole run has been watched
         if self._touring and self._step == len(self._steps) - 1:
             self._end_tour()
 
@@ -267,8 +339,7 @@ class HelloMpcWidget(LevelPlayWidget):
         self.map.set_tour(step.focus, fan, earlier=0)  # step "repeat": the first plan in grey
         self._ocp_focus = step.ocp
         self.refresh_ocp()
-        # solver tile: no solve before step "Optimise"; the whole run only once it is watched
-        self.run_info.show_parts(solve=step.focus not in UNSOLVED, run=False)
+        self.run_info.set_hidden(True)  # whole-run numbers only after the replay
         self.step_count.setText(f"Step {i + 1} of {len(self._steps)}")
         self.step_title.setText(step.title)
         self.step_text.setText(step.text)
@@ -286,10 +357,8 @@ class HelloMpcWidget(LevelPlayWidget):
         self._ocp_focus = None
         self.refresh_ocp()
         self.next_button.setEnabled(False)
-        self.run_info.show_parts(solve=True, run=False)  # follows the replay; totals at the end
         self.step_title.setText("Watching the run")
-        self.step_text.setText(f"Every {self.data.dt:g} s: measure, plan, apply the first input. "
-                               "Watch the dashed plan move along with the ball.")
+        self.step_text.setText(WATCHING.format(dt=self.data.dt))
         self.playback.play()
 
     def _end_tour(self) -> None:
@@ -303,6 +372,7 @@ class HelloMpcWidget(LevelPlayWidget):
             return
         self._set_mode(tour=True)
         self._steps = tour_steps(self.data, self.result)
+        self._fix_step_height()
         self._go(0)
 
     def _watch_again(self) -> None:  # the result card's "Replay tour"
@@ -318,8 +388,8 @@ class HelloMpcWidget(LevelPlayWidget):
         m = result.metrics
         return [
             ("Time", f"{m['time']:.1f} s", ""),
-            ("Horizon", f"N = {m['N']} ({m['horizon_s']:g} s)", ""),
-            ("MPC solves", f"{m.get('solves', 0)}", f"one every {self.data.dt:g} s"),
+            ("Horizon", f"$N = {m['N']}$ ({m['horizon_s']:g} s)", ""),
+            ("MPC solves", f"{m.get('solves', 0)}", rf"one every $\Delta t = {self.data.dt:g}$ s"),
         ]
 
 
@@ -346,7 +416,7 @@ LEVEL = LevelInfo(
               "step by step, the way it thinks."),
     concept=("Model predictive control in one sentence: predict, optimise, apply the first move, "
              "repeat. At every step the controller measures the state, uses a model to predict "
-             "where different input sequences would take the ball over the next N steps, picks "
+             "where different input sequences would take the ball over the next $N$ steps, picks "
              "the sequence with the lowest cost that respects the limits, applies only its first "
              "input, and starts again from the new measurement."),
     teaching=("A guided tour walks you through the first round of the loop on the map. The "

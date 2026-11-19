@@ -19,7 +19,7 @@ from ..gameplay.brake_gauge import BrakeGauge
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
-from ..gameplay.ocp_card import OcpSpec
+from ..gameplay.ocp_card import STATE_LEGEND, OcpSpec
 from .base import LevelInfo
 
 
@@ -40,7 +40,7 @@ class BrakeCheckWidget(LevelPlayWidget):
         return (f"Stop on the star, {d.workspace[1][0] - d.target[0]:g} m in front of the wall, within "
                 f"{d.t_limit:g} s. The ball is fast ({d.v_max:g} m/s) but brakes weakly "
                 f"({d.a_max:g} m/s²): stopping from full speed takes {brake_s:g} s and {brake_m:g} m. "
-                f"★★: within {pars['time']:g} s; ★★★: also with a short horizon, N ≤ {pars['max_N']:g} "
+                f"★★: within {pars['time']:g} s; ★★★: also with a short horizon, " rf"$N \leq {pars['max_N']:g}$ "
                 "(cheaper solves).")
 
     def controls_title(self) -> str:
@@ -78,7 +78,7 @@ class BrakeCheckWidget(LevelPlayWidget):
         pars = d.pars
         return [
             ("Time", f"{m['time']:.1f} s", f"limit {d.t_limit:g} s · ★★ ≤ {pars['time']:g} s"),
-            ("Horizon", f"N = {m['N']} ({m['horizon_s']:g} s)", f"★★★ N ≤ {pars['max_N']:g}"),
+            ("Horizon", f"$N = {m['N']}$ ({m['horizon_s']:g} s)", rf"★★★ $N \leq {pars['max_N']:g}$"),
             ("Terminal stop", "on" if m.get("terminal_stop") else "off", ""),
             ("Overshoot", f"{m['overshoot']:.2f} m", "past the star, towards the wall"),
         ]
@@ -108,9 +108,9 @@ def ocp(d, n: int, stop: bool, intro: bool = False) -> OcpSpec:
             rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad \mathrm{{horizon}}\ {knob}{{N}}{{N = {n}}}",
         ],
         constraints=constraints,
-        notes=(f"Re-solved every Δt = {d.dt:g} s, N = {n} steps ({n * d.dt:g} s) ahead"
+        notes=(rf"Re-solved every $\Delta t = {d.dt:g}$ s, $N = {n}$ steps ({n * d.dt:g} s) ahead"
                + ("; every plan must end at rest." if stop else ".")),
-        legend=["x = (p, v): position, velocity · u = a: acceleration · p★: target"],
+        legend=STATE_LEGEND,
     )
 
 
@@ -125,10 +125,10 @@ def intro(d) -> LevelIntro:
         goal=(f"Stop on the star, {d.workspace[1][0] - d.target[0]:g} m in front of the wall, "
               f"within {d.t_limit:g} s."),
         stars=("stop on the star", f"within {d.pars['time']:g} s",
-               f"also N ≤ {d.pars['max_N']:g}"),
+               rf"also $N \leq {d.pars['max_N']:g}$"),
         ocp=ocp(d, n, False, intro=True),
-        fixed=(f"q_p = {lk['q_p']:g}, q_v = {lk['q_v']:g}, r = {lk['r']:g}, "
-               f"P = {d.raw.get('terminal_factor', 10):g}·Q"),
+        fixed=(f"$q_p = {lk['q_p']:g}$, $q_v = {lk['q_v']:g}$, $r = {lk['r']:g}$, "
+               rf"$P = {d.raw.get('terminal_factor', 10):g}\,Q$"),
     )
 
 
@@ -139,12 +139,12 @@ LEVEL = LevelInfo(
     topic="Horizon & feasibility",
     briefing=("New, faster ball, weaker brakes. The target is right in front of the "
               "wall. Stop on it."),
-    concept=("The horizon has to see far enough. An MPC that plans N steps ahead notices the "
+    concept=("The horizon has to see far enough. An MPC that plans $N$ steps ahead notices the "
              "wall only once the wall is inside its horizon. If braking takes longer than that, "
              "it notices too late and no feasible plan is left: recursive feasibility is lost. "
              "A terminal constraint (every plan must end at rest) guarantees that a way to stop "
              "always exists, at the price of a more cautious controller."),
-    teaching=("With the default N = 10 (1 s, about 4 m at full speed) the ball rushes at the "
+    teaching=("With the default $N = 10$ (1 s, about 4 m at full speed) the ball rushes at the "
               "wall. Braking from 4 m/s needs 8 m, so the OCP eventually has no solution: "
               "controller failure. Two ideas: a longer horizon (fast and safe, but bigger "
               "solves), or a short horizon plus the terminal stop (always safe, but slower). The "
@@ -156,7 +156,7 @@ LEVEL = LevelInfo(
         "A longer horizon sees the wall in time. Or force every plan to end at rest (terminal "
         "stop): then a way to stop always exists, but the ball may only go as fast as it can "
         "stop within the horizon.",
-        "For three stars: N = 20 with the terminal stop on.",
+        "For three stars: $N = 20$ with the terminal stop on.",
     ),
     accent="sky",
     icon="wall",

@@ -67,12 +67,12 @@ def explain(level, knobs, outcome, detail, m, stars) -> list[str]:
     budget, pars, a_max = level["budget"]["energy"], level["pars"], level["limits"]["a_max"]
     msgs = []
     if outcome == "battery_empty":
-        msgs.append(f"The battery ran out at t = {m['time']:.1f} s, {m['distance_left']:.1f} m "
+        msgs.append(f"The battery ran out at $t = {m['time']:.1f}$ s, {m['distance_left']:.1f} m "
                     f"before the target.")
         if m["max_accel"] >= 0.99 * a_max:
             msgs.append("The controller accelerated and braked at full power: inputs are cheap "
                         "compared with being away from the target. Make inputs more expensive "
-                        "(higher r) or being far away cheaper (lower q_p).")
+                        "(higher $r$) or being far away cheaper (lower $q_p$).")
         else:
             msgs.append("Even gentle driving used too much energy over the whole trip.")
     elif outcome == "time_out":
@@ -80,10 +80,10 @@ def explain(level, knobs, outcome, detail, m, stars) -> list[str]:
                     f"{m['distance_left']:.2f} m from the target.")
         if m["distance_left"] < 1.0:
             msgs.append("It got close but crept in too slowly: near the target the pull towards "
-                        "it (q_p) is too weak compared with the cost of moving (r, q_v).")
+                        "it ($q_p$) is too weak compared with the cost of moving ($r$, $q_v$).")
         else:
             msgs.append(f"It never went faster than {m['max_speed']:.1f} m/s: moving is too "
-                        "expensive. Lower r or q_v, or raise q_p.")
+                        "expensive. Lower $r$ or $q_v$, or raise $q_p$.")
     elif outcome == "controller_failure":
         msgs.append(f"The solver found no valid plan ({detail}).")
     elif outcome == "crash_wall":
@@ -94,10 +94,10 @@ def explain(level, knobs, outcome, detail, m, stars) -> list[str]:
             msgs.append(f"For ★★, arrive within {pars['time']:g} s: make moving a bit cheaper.")
         elif stars < 3:
             msgs.append(f"For ★★★, also use at most {pars['energy']:g} energy. Hint: the velocity "
-                        "weight q_v acts like damping.")
+                        "weight $q_v$ acts like damping.")
         else:
             msgs.append("Perfect balance between fast and cheap!")
     if same_ratios_as_default(level, knobs):
         msgs.append("Note: you scaled all weights by the same factor. That does not change the "
-                    "optimal plan: only the ratios between Q and R matter.")
+                    "optimal plan: only the ratios between $Q$ and $R$ matter.")
     return msgs

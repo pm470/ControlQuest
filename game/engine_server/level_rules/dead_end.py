@@ -83,7 +83,7 @@ def run(level: dict, knobs: dict, cache: SolverCache, waypoints=(), fix: str = "
         "stars": stars,
         "metrics": metrics,
         "messages": explain(level, knobs, sim, metrics, stars)
-                    + ([f"(Building the solver for N = {N} took {compile_s:.1f} s, once: it is "
+                    + ([f"(Building the solver for $N = {N}$ took {compile_s:.1f} s, once: it is "
                         "cached now.)"] if compile_s else []),
         "knobs": {**knobs, "N": N},
         "waypoints": waypoints,
@@ -108,11 +108,11 @@ def explain(level, knobs, sim, m, stars) -> list[str]:
                 msgs.append(f"The horizon ({horizon:g} s) cannot see around the obstacle, and every "
                             "small step sideways first costs more. Pick a fix and try it.")
             elif fix == "horizon" and m["N"] <= level["N"]:
-                msgs.append(f"A horizon of {horizon:g} s (N = {m['N']}) sees even less than the "
+                msgs.append(f"A horizon of {horizon:g} s ($N = {m['N']}$) sees even less than the "
                             f"default {level['N'] * level['dt']:g} s: no way around the wall either. "
                             "Try a longer one.")
             elif fix == "horizon":
-                msgs.append(f"Even {horizon:g} s of foresight (N = {m['N']}) did not help: SQP is a "
+                msgs.append(f"Even {horizon:g} s of foresight ($N = {m['N']}$) did not help: SQP is a "
                             "local method, and warm-started from the previous plan every new plan "
                             "stays on the same side of the wall. The longer horizon only made each "
                             f"solve slower ({m['mean_solve_ms']:.2f} ms on average).")
@@ -131,13 +131,13 @@ def explain(level, knobs, sim, m, stars) -> list[str]:
     elif sim.outcome == "controller_failure":
         ell = level_ellipses(level, knobs)
         inside = [j for j, e in enumerate(ell) if e.h(p_end) < 1.0]
-        msgs.append(f"The solver found no valid plan at t = {m['time']:.1f} s ({sim.detail}).")
+        msgs.append(f"The solver found no valid plan at $t = {m['time']:.1f}$ s ({sim.detail}).")
         speed = float(np.linalg.norm(sim.x[-1][2:]))
         brake = speed**2 / (2 * level["limits"]["a_max"])
         gap = min(e.distance(p_end) for e in ell)
         if fix == "horizon" and brake > 0.5 * horizon * speed:
             msgs.append(f"The ball was {gap:.1f} m from an ellipse at {speed:.1f} m/s; stopping needs "
-                        f"{brake:.1f} m. Your horizon ({horizon:g} s, N = {m['N']}) saw the wall too "
+                        f"{brake:.1f} m. Your horizon ({horizon:g} s, $N = {m['N']}$) saw the wall too "
                         "late: once braking was needed, no plan could avoid the ellipse any more "
                         "(recursive feasibility: the horizon must cover the braking distance).")
         elif inside:
@@ -149,7 +149,7 @@ def explain(level, knobs, sim, m, stars) -> list[str]:
     elif sim.outcome == "crash_wall":
         msgs.append("The ball left the field.")
     else:
-        how = f"with {m['waypoints']} waypoint(s)" if fix == "waypoints" else f"with N = {m['N']}"
+        how = f"with {m['waypoints']} waypoint(s)" if fix == "waypoints" else f"with $N = {m['N']}$"
         msgs.append(f"Arrived in {m['time']:.1f} s {how}, {m['mean_solve_ms']:.2f} ms per solve; "
                     f"closest approach to a block {m['min_clearance']:.1f} m.")
         if stars < 2:

@@ -12,6 +12,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QWidget
 
+from ..ui.math_text import math_text, to_plain
 from ..ui.widgets import label
 from .level_data import FixSpec
 
@@ -29,10 +30,10 @@ class FixOption(QFrame):
         box.setSpacing(1)
         title = f"{number}. {spec.label}" if number else spec.label
         box.addWidget(label(f"<b>{title}</b>", "body"))
-        self._idea = label(spec.idea, "caption", wrap=True)  # shown for the chosen fix only
+        self._idea = math_text(spec.idea, "caption")  # shown for the chosen fix only
         box.addWidget(self._idea)
         if spec.idea:
-            self.setToolTip(spec.idea)
+            self.setToolTip(to_plain(spec.idea))
         self.set_selected(False)
 
     def set_selected(self, selected: bool) -> None:

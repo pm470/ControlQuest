@@ -146,6 +146,8 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
 - Done (2026-11-17, branch `gui`): **Level 0 "Hello, MPC"**, an optional tutorial (guided tour
   of the MPC loop, no stars; `levels/level_0_hello_mpc.py`, `level_data/hello_mpc.json`,
   `level_rules/hello_mpc.py`, `calibrate.py hello_mpc`). Engine v0.10.0 (new level id).
+- Done (2026-11-19): **all symbols in the LaTeX font** (`ui/math_text.py`, `$...$` in every
+  text incl. the engine sentences; section 8). Engine v0.11.0.
 - Not yet: speed/acceleration plots (PRD 5.6),
   saving progress to disk (progress resets on restart, intentionally for now).
 - Next planned work: the MPC side of levels 2, 4, 5 (horizon N per level, terminal
@@ -282,7 +284,8 @@ Feasibility spike results (engine only, default map):
   pauses the replay at that solve's time so the map shows exactly the plan computed
   in that solve; while playing, the selector follows the replay.
 - (2026-10-25) **Solver info card under the OCP card** (`gameplay/run_info_card.py`;
-  since 2026-11-14 shortened to four numbers + one "Whole run" line, see below):
+  since 2026-11-14 shortened to four numbers + one "Whole run" line, see below; since
+  2026-11-18 only whole-run numbers, see there):
   for the selected solve: optimal cost J*, solve time, SQP iterations, acados status;
   for the whole run: number of solves, solve time (avg/max/total), iterations,
   closed-loop cost, engine compute time. The engine sends per-solve `costs` and
@@ -316,7 +319,8 @@ Feasibility spike results (engine only, default map):
     map the level extras (battery etc.), then ONE replay well: ▶ · scrubber · time ·
     speed chip (click cycles 1×/2×/4×/8×) · "‹ k /n ›" MPC solve stepper.
   - **OCP + solver tile**: the OCP keeps the current matplotlib/Computer Modern font;
-    under it "This solve" as four big numbers (plan cost J*, solve time, SQP iterations,
+    under it (until 2026-11-18, now whole-run numbers only, see there) "This solve" as four
+    big numbers (plan cost J*, solve time, SQP iterations,
     acados status) and ONE "Whole run" line (solves · avg ms · total cost; max time,
     iterations and engine time in its tooltip). The user said this is enough: this
     replaces the longer Solver info list of 2026-10-25.
@@ -363,10 +367,11 @@ Feasibility spike results (engine only, default map):
     user removed the N knob of the first version ("Your turn"): Level 0 is only an intro to
     MPC, and changing N is Level 2's topic (no redundancy). After the tour the controls
     tile says "Tour complete" (+ "Replay the tour"); no Run, Reset or Retry;
-  - **exception to the 50 m field**: Level 0 uses a **20 m × 20 m** field and the ball starts
-    **already moving** (`"start_velocity": [0, 2]` in its JSON, used by its engine rules), so
-    the plans curve and are big enough to read (on 50 m from rest they were a 6 m blob next to
-    the ball, with the arrow on top). Run ≈ 10 s;
+  - **exception to the 50 m field**: Level 0 uses a **20 m × 20 m** field, so the plans are big
+    enough to read (on 50 m from rest they were a 6 m blob next to the ball, with the arrow on
+    top). Run ≈ 10 s. (2026-11-18) **The ball starts at rest** (`"start_velocity": [0, 0]`;
+    the user replaced the first version's moving start, v₀ = (0, 2)). On the 20 m field the
+    tour stays readable: straight fan, slightly curved plan, arrow above the plan;
   - the intro has a drawn **loop diagram** (`gameplay/loop_diagram.py`) under "What you learn";
     no star rows; OCP titled "The OCP your MPC solves" (nothing marked new);
   - play screen: the run **starts automatically**; the **controls tile is the tour panel**
@@ -377,10 +382,39 @@ Feasibility spike results (engine only, default map):
     plays, the result card has no stars and "Replay tour" (no Retry); then "Tour complete".
     Texts drafted by the agent, approved by the user;
   - the intro shows no "What you control" section (nothing to control), no star rows.
-  - (2026-11-18) **The solver tile follows the story**: the run is computed before the tour,
-    but "This solve" shows "–" until step ③ Optimise (no OCP is solved before that) and then
-    follows the shown solve; the "Whole run" line shows "–" until the replay has been watched
-    to the end (`RunInfoCard.show_parts(solve, run)`; other levels always show both).
+  - (2026-11-18) **Level 0's OCP is written as simply as possible**: weights equal to 1 are
+    left out (ℓ = ‖p − p★‖² + ‖v‖² + ‖u‖²), the terminal cost is written as its number
+    (10‖x_N − x★‖², since Q = I there), and the line "P = 10 Q, horizon N = 30" is gone (N is
+    visible in the sum and the note). Only valid while q_p = q_v; otherwise `ocp()` falls back
+    to ‖·‖²_P with "P = 10 diag(...)". Other levels are unchanged.
+  - (2026-11-19) **"Tour complete" has two buttons** (not the "Replay the tour" link): a tonal
+    "Replay tour" on the left and the coral "Next level ›" (→ Level 1's intro) on the right,
+    laid out like the tour's ‹ Back / Next.
+  - (2026-11-19) **The tour's ‹ Back / Next buttons never move**: the step title + text sit in
+    an area as tall as the longest tour text at the current width (re-measured when the width
+    changes), so the buttons stay at one height on every step instead of jumping with the text.
+  - (2026-11-18) **The solver section stays empty during the tour**: the run is computed before
+    the tour, but all its numbers show "–" until the replay has been watched to the end
+    (`RunInfoCard.set_hidden`; other levels show them as soon as the run is computed).
+- (2026-11-18) **Solver section = whole run, in every level** (replaces the per-solve "This
+  solve" numbers of 2026-10-25 / 2026-11-14; the user confirmed the change): title **"Whole
+  run"** with **"n solves · t = run time"** next to it, then four big numbers: **total cost**
+  (closed loop), **avg solve time**, **avg SQP iterations** (max in the tooltip) and **solved
+  count** "ok / n" with the caption "solved · acados status" (green if all solved, red
+  otherwise; failing solves listed in the tooltip). The separate one-line "Whole run" summary
+  is gone. The "‹ k /n ›" stepper only moves the map; no per-solve numbers are shown. The user
+  first wanted to drop the iterations ("always 1?"): measured, they are 1 in Levels 0–2 (no
+  obstacles: the OCP is a QP) but 2–6 per solve with obstacles (Levels 3–5), so they stay.
+- (2026-11-19) **Every symbol in the LaTeX font, everywhere** (the user disliked the game font's
+  "★" next to the OCP's \star and asked for "everything in the same font as LaTeX"; chose
+  "all math-like text", all at once). Design rule 7 (section 10) says how. Built:
+  `ui/math_text.py` (inline LaTeX in wrapping rich text, sharp at 175 %, aligned on the text
+  baseline, DPR-safe); OCP legends one symbol per line in Computer Modern (`STATE_LEGEND` in
+  `ocp_card.py`); `$...$` in all level texts (intro, goals, stars, "Fixed:", notes, hints,
+  captions, tour, result rows), the knob help / fix texts in the level JSON files, the engine's
+  "what happened" sentences (engine v0.11.0), the map pills (|v|, x̂, u₀, x_N) and the loop
+  diagram (Δt). Rule used: anything with a symbol is math; pure number comparisons next to
+  rating stars ("★★ ≤ 30 s") stay plain. Tooltips use plain Unicode (`to_plain`).
 
 ## 9. Gotchas already hit (don't repeat them)
 
@@ -426,6 +460,14 @@ Feasibility spike results (engine only, default map):
 - (2026-11-17) The `bbox_inches="tight"` crop of a formula only sees the glyphs, not text
   bbox patches (chips, the "new" highlight): `render_tex` adds the highlight's padding to
   `pad_inches`, otherwise the highlight is cut flat at the top and bottom.
+- (2026-11-19) Inline math (`ui/math_text.py`): a `QImage` with a device pixel ratio drawn with
+  QPainter into another image is drawn at its *logical* size; give the target image the same
+  ratio first (`setDevicePixelRatio`), or the formula shrinks by 1/1.75 and floats up. The
+  text widget is a QTextBrowser: it must ignore wheel events (else the scroll area around it
+  stops scrolling) and must not get `setContentsMargins` (eats its fixed height).
+- (2026-11-19) LaTeX in Python strings: `$\Delta t$` inside a plain `f"..."` is an invalid
+  escape (SyntaxWarning, breaks later): use `rf"..."` and double the TeX braces (`{{...}}`).
+  In the level JSON files a backslash is written `\\`.
 - A QSpinBox in a narrow fixed width clips its number to nothing (the hidden arrow buttons
   still take room): the solve stepper uses a QLineEdit + QIntValidator instead.
 - Don't override QWidget method names in subclasses (e.g. a `screen()` method on the main
@@ -474,6 +516,12 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
    `\newknob{name}{tex}` for a knob part that is also new (knob chip on the highlight).
 7. **Math keeps the textbook font** (matplotlib mathtext, Computer Modern) via
    `MathLabel`/`MathChip` (pixel-snapped, see gotchas). Never draw formulas as text.
+   **Every symbol a player reads is in that font too** (2026-11-19): write math-like parts of
+   any text as `$...$` (`$N = 30$`, `$\hat{x}$`, `$q_p$`, `$u_0$`) and show it with
+   `ui/math_text.py` (`math_text(text, role)`, a label-like widget with inline LaTeX; words
+   stay in the game font). OCP legends are `(symbol tex, words)` tuples, typeset fully in the
+   LaTeX font. Tooltips stay plain: pass texts through `to_plain()`. Painted widgets (map pills,
+   loop diagram) prepare their formula images with `inline_image()` outside `paintEvent`.
 8. **One header everywhere** (`ScreenHeader`): the lip back button (`IconButton`), on level
    screens the round level badge (`LevelBadge`, accent colour) + title, stars on the right.
 9. **Characters**: the flat blue ball mascot (`painting.draw_ball`; not on the level
@@ -540,8 +588,8 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
      "‹ k /n ›" MPC solve stepper (number typeable);
    - middle, **OCP tile**: **"The OCP your MPC solves"** (typeset math: min over u, stage
      cost ℓ, P, "s.t." constraints; knob parts in the knobs' colours; short notes and a
-     symbol legend), then **"This solve"** (k of n · t; four big numbers: plan cost J*,
-     solve time, SQP iterations, acados status) and one **"Whole run"** line;
+     symbol legend), then **"Whole run"** ("n solves · t = run time"; four big numbers:
+     total cost, avg solve time, avg SQP iterations, solved count "ok / n" · acados status);
    - right, **controls tile**: **Goal** (eyebrow + text), **Tune the weights** (eyebrow;
      one row per knob: coloured symbol chip + name, a typeable value field, a slider in
      the knob's colour; discrete knobs as a dropdown, toggles as a switch); Reset + wide

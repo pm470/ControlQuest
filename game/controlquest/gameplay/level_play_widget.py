@@ -30,11 +30,12 @@ from ..core.context import AppContext
 from ..core.navigation import ScreenId
 from ..engine.protocol import EngineStatus, RunRequest, RunResult
 from ..levels.base import LevelInfo
+from ..ui.math_text import math_text
 from ..ui.widgets import Button, Card, label, scrollable, well
 from .knob_panel import KnobPanel, knob_colors
 from .level_data import LevelData
 from .map_view import MapView
-from .ocp_card import OcpCard, OcpSpec
+from .ocp_card import STATE_LEGEND, OcpCard, OcpSpec
 from .playback import Playback, PlaybackBar
 from .result_panel import ResultPanel
 from .run_info_card import RunInfoCard
@@ -67,9 +68,9 @@ def standard_ocp(data: LevelData) -> OcpSpec:
             rf"|v_x|,\ |v_y| \leq {d.v_max:g}",
             rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
         ],
-        notes=(f"Re-solved every Δt = {d.dt:g} s from the measured state x̂, "
-               f"{n} steps ({n * d.dt:g} s) ahead; only u₀ is applied."),
-        legend=["x = (p, v): position, velocity · u = a: acceleration · p★: target"],
+        notes=(rf"Re-solved every $\Delta t = {d.dt:g}$ s from the measured state $\hat{{x}}$, "
+               rf"$N = {n}$ steps ({n * d.dt:g} s) ahead; only $u_0$ is applied."),
+        legend=STATE_LEGEND,
     )
 
 
@@ -140,7 +141,7 @@ class LevelPlayWidget(QWidget):
         goal = QVBoxLayout()
         goal.setSpacing(3)
         goal.addWidget(label("Goal", "eyebrow"))
-        goal.addWidget(label(self.goal_text(), "goal", wrap=True))
+        goal.addWidget(math_text(self.goal_text(), "goal"))  # $...$ in the LaTeX font
         tile.addLayout(goal)
 
         # the level's controls: title, knobs, and whatever add_controls() adds
@@ -161,7 +162,7 @@ class LevelPlayWidget(QWidget):
         buttons.addWidget(self.reset_button)
         buttons.addWidget(self.run_button, 1)
         tile.addLayout(buttons)
-        self.status = label("", "caption", wrap=True)
+        self.status = math_text("", "caption")
         tile.addWidget(self.status)
         self.add_side_cards(tile)  # level sections under the controls (e.g. a comparison table)
         tile.addStretch(1)
@@ -266,7 +267,6 @@ class LevelPlayWidget(QWidget):
         if self.result is not None:
             k = self.result.trajectory.solve_at(t)
             self.solve_selector.set_current(k)
-            self.run_info.set_solve(k)
             self.update_extras(t)
 
     def _show_solve(self, k: int) -> None:
@@ -313,7 +313,7 @@ class LevelPlayWidget(QWidget):
     def _show_hint(self) -> None:
         hints = self.level.hints
         if self._hints_shown < len(hints):
-            self.hint_box.addWidget(label(f"{self._hints_shown + 1}. {hints[self._hints_shown]}",
+            self.hint_box.addWidget(math_text(f"{self._hints_shown + 1}. {hints[self._hints_shown]}",
                                           "body", wrap=True))
             self._hints_shown += 1
         done = self._hints_shown >= len(hints)

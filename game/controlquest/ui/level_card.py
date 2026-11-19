@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QAbstractButton, QWidget
 from ..core.config import MAX_STARS
 from ..levels.base import LevelInfo
 from . import painting, theme
+from .math_text import to_plain
 from .widgets import is_keyboard_focus
 
 TILE_W, TILE_H, BLOCK_H = 200, 290, 132
@@ -53,7 +54,7 @@ class LevelCard(QAbstractButton):
         self._next = is_next and not locked
         # rich text, so Qt wraps the (several sentences long) concept
         self.setToolTip(lock_text if locked else
-                        f"<p><b>{self.level.topic}</b>: {self.level.concept}</p>")
+                        f"<p><b>{self.level.topic}</b>: {to_plain(self.level.concept)}</p>")
         self.update()
 
     @property

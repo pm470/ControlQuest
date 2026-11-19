@@ -18,7 +18,7 @@
   "locked": {"q_p": 10.0, "q_v": 1.0, "r": 0.1},
   "knobs": [
     {"name": "N", "label": "Horizon", "symbol": "N",
-     "help": "Steps the MPC plans ahead (Δt = 0.1 s each). A longer horizon sees the wall earlier, but every solve gets bigger.",
+     "help": "Steps the MPC plans ahead ($\\Delta t = 0.1$ s each). A longer horizon sees the wall earlier, but every solve gets bigger.",
      "default": 10, "min": 5, "max": 60, "choices": [5, 10, 20, 30, 40, 60], "scale": "choice"},
     {"name": "stop", "label": "Terminal stop", "symbol": "v_N = 0",
      "help": "Every plan must end at rest (terminal constraint). Then a way to stop always exists, but the ball may only drive as fast as it can stop within the horizon.",

@@ -20,8 +20,9 @@ from ..gameplay.fix_selector import FixSelector
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
-from ..gameplay.ocp_card import OcpSpec
+from ..gameplay.ocp_card import STATE_LEGEND, OcpSpec
 from ..gameplay.waypoint_editor import WaypointEditor
+from ..ui.math_text import math_text
 from ..ui.widgets import Button, label
 from .base import LevelInfo
 
@@ -65,7 +66,7 @@ class DeadEndWidget(LevelPlayWidget):
         layout.addWidget(self.wp_box)
 
         # horizon note (shown for the horizon fix only)
-        self.n_note = label("", "caption", wrap=True)
+        self.n_note = math_text("", "caption")
         layout.addWidget(self.n_note)
 
         self.editor = WaypointEditor(self.map, d.max_waypoints)
@@ -98,10 +99,10 @@ class DeadEndWidget(LevelPlayWidget):
     def _on_n_changed(self) -> None:
         n = int(self.knobs.values().get("N", self.data.N))
         k = next((k for k in self.data.knobs if k.name == "N"), None)
-        rng = f"Type any N from {k.min:g} to {k.max:g}. " if k else ""
-        self.n_note.setText(f"N = {n} steps = {n * self.data.dt:g} s ahead "
-                            f"({n * self.data.dt * self.data.v_max:g} m at full speed). {rng}A bigger N "
-                            "means a bigger OCP to solve at every step; a new N first builds its "
+        rng = f"Type any $N$ from {k.min:g} to {k.max:g}. " if k else ""
+        self.n_note.setText(f"$N = {n}$ steps = {n * self.data.dt:g} s ahead "
+                            f"({n * self.data.dt * self.data.v_max:g} m at full speed). {rng}A bigger $N$ "
+                            "means a bigger OCP to solve at every step; a new $N$ first builds its "
                             "solver (a few seconds, once).")
         if self.selector.current() == HORIZON:
             self.refresh_ocp()
@@ -120,7 +121,7 @@ class DeadEndWidget(LevelPlayWidget):
     def computing_text(self) -> str:
         n = int(self.knobs.values().get("N", self.data.N))
         if self.fix() == HORIZON and n not in self._built_ns:
-            return (f"The engine is building the solver for N = {n} (a few seconds, only the first "
+            return (f"The engine is building the solver for $N = {n}$ (a few seconds, only the first "
                     "time), then computing your run...")
         return super().computing_text()
 
@@ -159,7 +160,7 @@ class DeadEndWidget(LevelPlayWidget):
         rows = [
             ("Fix", self.selector.label_of(fix), ""),
             ("Time", f"{m['time']:.1f} s", f"limit {d.t_limit:g} s · ★★ ≤ {d.pars['time']:g} s"),
-            ("Solve time", f"{m.get('mean_solve_ms', 0):.2f} ms", f"per solve, N = {m.get('N', d.N)}"),
+            ("Solve time", f"{m.get('mean_solve_ms', 0):.2f} ms", f"per solve, $N = {m.get('N', d.N)}$"),
         ]
         if fix == WAYPOINTS:
             rows.append(("Waypoints", f"{m.get('waypoints', 0)}", f"★★★ ≤ {d.pars['waypoints']:g}"))
@@ -188,7 +189,7 @@ def ocp(d, fix: str, n: int, intro: bool = False) -> OcpSpec:
         objective.append(rf"P = {d.raw.get('terminal_factor', 10):g}\,Q")
     notes = {
         "none": "The default MPC.",
-        HORIZON: f"Fix: a longer horizon, N = {n}.",
+        HORIZON: f"Fix: a longer horizon, $N = {n}$.",
         WAYPOINTS: "Fix: waypoints; the reference switches from one to the next.",
     }[fix]
     ellipses = r"(p_k-c_j)^{T} E_j\, (p_k-c_j) \geq 1"
@@ -203,11 +204,12 @@ def ocp(d, fix: str, n: int, intro: bool = False) -> OcpSpec:
             rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
             rf"{ellipses},\quad j = 1,\ldots,{len(d.blocks)}",
         ],
-        notes=(f"{notes} Re-solved every Δt = {d.dt:g} s, {n} steps ({n * d.dt:g} s) ahead. "
-               "With obstacles the OCP is nonconvex: SQP finds a local optimum."),
-        legend=[f"c_j, E_j: ellipse around block j (dashed), {d.margin:g} m margin · "
-                + ("p_ref: the current waypoint · " if fix == WAYPOINTS else "") + "p★: target",
-                "The ellipse constraints are soft (large L1 penalty) so the QP stays solvable."],
+        notes=(rf"{notes} Re-solved every $\Delta t = {d.dt:g}$ s, $N = {n}$ steps ({n * d.dt:g} s) "
+               "ahead. With obstacles the OCP is nonconvex: SQP finds a local optimum."),
+        legend=[(r"c_j,\, E_j", f"ellipse around block $j$ (dashed), {d.margin:g} m margin"),
+                *([(r"p_{\mathrm{ref}}", "the current waypoint")] if fix == WAYPOINTS else []),
+                *STATE_LEGEND,
+                "The ellipse constraints are soft (large $L_1$ penalty) so the QP stays solvable."],
     )
 
 
@@ -223,11 +225,11 @@ def intro(d) -> LevelIntro:
         stars=("reach the star", f"within {d.pars['time']:g} s",
                f"also at most {d.pars['waypoints']:g} waypoint"),
         ocp=ocp(d, "none", d.N, intro=True),
-        notes=("① Longer horizon: the OCP above with a larger N.",
-               f"② Waypoints: p★ is replaced by the next waypoint p_ref (up to "
+        notes=("① Longer horizon: the OCP above with a larger $N$.",
+               r"② Waypoints: $p_\star$ is replaced by the next waypoint $p_{\mathrm{ref}}$ (up to "
                f"{d.max_waypoints} waypoints, placed on the map)."),
-        fixed=(f"q_p = {lk['q_p']:g}, q_v = {lk['q_v']:g}, r = {lk['r']:g}, "
-               f"P = {d.raw.get('terminal_factor', 10):g}·Q, margin {d.margin:g} m"),
+        fixed=(f"$q_p = {lk['q_p']:g}$, $q_v = {lk['q_v']:g}$, $r = {lk['r']:g}$, "
+               rf"$P = {d.raw.get('terminal_factor', 10):g}\,Q$, margin {d.margin:g} m"),
     )
 
 

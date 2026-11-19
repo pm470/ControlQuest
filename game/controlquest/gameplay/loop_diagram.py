@@ -16,6 +16,8 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..ui import theme
+from ..ui.math_render import _DPR_EVENTS
+from ..ui.math_text import MATH_SCALE, inline_image
 
 STEPS = [  # (title, subtitle)
     ("Measure", "position & speed"),
@@ -30,6 +32,7 @@ class LoopDiagram(QWidget):
     def __init__(self, dt: float = 0.1, parent: QWidget | None = None):
         super().__init__(parent)
         self._dt = dt
+        self._prepare_math()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(2 * CHIP_H + GAP_Y + 8)
         self.setToolTip("The MPC loop: it runs once every Δt, for the whole run")
@@ -67,11 +70,35 @@ class LoopDiagram(QWidget):
         self._arrow(p, QPointF(c.left() - 8, y_bot), QPointF(d.right() + 8, y_bot))
         self._arrow(p, QPointF(d.center().x(), d.top() - 6), QPointF(a.center().x(), a.bottom() + 6))
 
-        # in the middle: how often the loop runs
+        # in the middle: how often the loop runs ("repeat every Δt = 0.1 s", Δt in the LaTeX font)
         p.setPen(QColor(theme.INK_SOFT))
         p.setFont(theme.font(11, QFont.Weight.Bold))
+        fm = p.fontMetrics()
         mid = QRectF(a.left(), a.bottom(), c.right() - a.left(), GAP_Y)
-        p.drawText(mid, Qt.AlignmentFlag.AlignCenter, f"repeat every Δt = {self._dt:g} s")
+        before, after = "repeat every ", " s"
+        if self._math is None:  # not typeset (yet): plain text, never render while painting
+            p.drawText(mid, Qt.AlignmentFlag.AlignCenter, f"repeat every Δt = {self._dt:g} s")
+            return
+        img, depth = self._math
+        dpr = img.devicePixelRatio()
+        width = fm.horizontalAdvance(before) + img.width() / dpr + fm.horizontalAdvance(after)
+        x = mid.center().x() - width / 2
+        baseline = mid.center().y() + (fm.ascent() - fm.descent()) / 2
+        p.drawText(QPointF(x, baseline), before)
+        x += fm.horizontalAdvance(before)
+        p.drawImage(QPointF(x, baseline - img.height() / dpr + depth), img)
+        p.drawText(QPointF(x + img.width() / dpr, baseline), after)
+
+    def _prepare_math(self) -> None:
+        """Typeset Δt = ... for this display's pixel ratio (outside paintEvent)."""
+        self._dpr = self.devicePixelRatioF() or 1.0
+        self._math = inline_image(rf"\Delta t = {self._dt:g}", 11 * MATH_SCALE, theme.INK_SOFT, self._dpr)
+
+    def event(self, e) -> bool:
+        if e.type() in _DPR_EVENTS and abs(self.devicePixelRatioF() - self._dpr) > 1e-6:
+            self._prepare_math()
+            self.update()
+        return super().event(e)
 
     @staticmethod
     def _chip(p: QPainter, rect: QRectF, i: int, title: str, sub: str) -> None:
