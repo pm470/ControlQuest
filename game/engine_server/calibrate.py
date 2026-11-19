@@ -26,7 +26,8 @@ from level_rules.common import load_level
 
 def show(label: str, result: dict) -> None:
     m = result["metrics"]
-    extra = "".join(f"  {k}={m[k]:.2f}" for k in ("max_drift", "min_clearance") if k in m)
+    extra = "".join(f"  {k}={m[k]:.3f}" for k in ("max_drift", "mean_replan_deviation", "min_clearance")
+                    if m.get(k) is not None)
     print(f"{label:<10} {result['outcome']:<18} {result['stars']} stars  t={m['time']:5.1f} s  "
           f"E={m['energy']:5.2f}  max|a|={m['max_accel']:.2f}  left={m['distance_left']:.2f} m  "
           f"solves={m['solves']}  mean solve {m['mean_solve_ms']:.2f} ms{extra}  knobs={result['knobs']}"

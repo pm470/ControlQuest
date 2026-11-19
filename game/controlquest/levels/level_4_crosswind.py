@@ -81,7 +81,7 @@ class CrosswindWidget(LevelPlayWidget):
             ("Solves", f"{m.get('solves_used', 0)} / {m.get('solve_budget', 0)}",
              f"★★★ ≤ {d.pars['solves']:g} · $k = {m.get('k', 1)}$"),
             ("Off the plan", f"{m.get('max_drift', 0):.2f} m",
-             f"max between re-plans, margin $m = {m.get('margin', 0):g}$ m"),
+             f"max vs the plan in force, margin $m = {m.get('margin', 0):g}$ m"),
         ]
 
 

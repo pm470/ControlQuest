@@ -248,18 +248,18 @@ LEVEL = LevelInfo(
     topic="Local optima",
     briefing=("The direct route looks open... it isn't. Two ideas to get the controller out: "
               "let it look further ahead, or give it a route. Find out which one works."),
-    concept=("With obstacles the OCP is nonconvex and has several local optima. SQP starts from "
+    concept=("With obstacles the OCP is nonconvex and can have several local optima. SQP starts from "
              "the previous plan and only improves it locally, so the MPC is a local planner: it "
              "can drive into a trap and stay there, even when a way around exists."),
     teaching=("The default MPC aims straight at the star, drives into the U-shaped wall and stops "
               "in front of it: time out. You try two fixes, one at a time, and compare them under "
               "\"Your experiments\": ① a longer horizon (look further ahead) and ② waypoints "
-              "(give it a rough route). One gets the ball out; the other only costs computation. "
-              "Find out which one, and why."),
+              "(give it a rough route). On this map, in our tests, one got the ball out and the other "
+              "only cost computation. Find out which one, and why."),
     hints=(
         "Try a fix and watch the dashed plan: does the MPC ever plan a way around the wall?",
-        "A longer horizon sees further, but SQP starts from the previous plan and stays on the same "
-        "side. Compare the solve times in \"Your experiments\" too.",
+        "A longer horizon sees further, but SQP starts from the previous plan and tends to stay on "
+        "the same side. Compare the solve times in \"Your experiments\" too.",
         "Waypoints give the MPC a route out of the trap: one above the top-right corner of the U "
         "is enough for three stars.",
     ),

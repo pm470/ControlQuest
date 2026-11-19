@@ -18,8 +18,9 @@ RESEARCH = ResearchInfo(
                "strongly, and less often when it is safe."),
     shown=(r"With $k = 1$ the budget runs out after a few seconds. With a large $k$ the wind pushes "
            r"the ball off its plan into a block between re-plans. In between, a $k$ with enough "
-           r"obstacle margin reaches the star within the budget. The drift is measured against the "
-           r"plan being executed, so it is 0 at every re-plan."),
+           r"obstacle margin reaches the star within the budget. The drift is the distance between "
+           r"the ball and the prediction of the plan it follows, measured up to the moment that "
+           r"plan is replaced; it grows roughly with the square of the open-loop time."),
     limits=(r"$k$ is fixed for the whole run: this is not event- or self-triggered MPC. The budget "
             r"counts solves, not computing time; the wind is the same in every run (fixed seed); "
             r"and the margin is a heuristic buffer, not a robust (tube) MPC."),

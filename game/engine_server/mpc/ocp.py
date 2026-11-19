@@ -77,8 +77,13 @@ def build_ocp(N: int, dt: float, build_dir: Path) -> AcadosOcp:
     ocp.constraints.uh = np.full(MAX_OBSTACLES, H_MAX)
     ocp.constraints.lh_e = np.ones(MAX_OBSTACLES)
     ocp.constraints.uh_e = np.full(MAX_OBSTACLES, H_MAX)
-    # soft with an exact L1 penalty: the QP stays feasible when an ellipse constraint and
-    # the input bounds are active at once (hard constraints gave QP failures there)
+    # soft with an L1 (+ small quadratic) penalty: the QP stays feasible when an ellipse
+    # constraint and the input bounds are active at once (hard constraints gave QP failures
+    # there). acados multiplies these slack costs by cost_scaling too (dt on the stages), so the
+    # effective L1 weight is dt * SLACK_L1 on stages 0..N-1 and SLACK_L1 at N. The penalty is
+    # exact (= the hard constraint) only if that weight exceeds the constraint's multiplier;
+    # this is not guaranteed in general, which is why controller.solve rejects plans that enter
+    # an ellipse (h < 0.98), except converged plans in levels with ellipse_entry_fails = false.
     ocp.constraints.idxsh = np.arange(MAX_OBSTACLES)
     ocp.constraints.idxsh_e = np.arange(MAX_OBSTACLES)
     for suffix, n in (("", MAX_OBSTACLES), ("_e", MAX_OBSTACLES)):

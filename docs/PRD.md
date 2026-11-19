@@ -327,9 +327,9 @@ Dropdown values for N are **precompiled solvers** (see §9.3), so switching N is
 ### Level 3: "Dead End" (nonconvexity and local optima)
 
 **Concept:** with obstacles the OCP is nonconvex. The MPC is a *local* planner with
-a short horizon, so it can get trapped in a local optimum. More foresight (a longer
-horizon) does not get it out; a higher-level plan (waypoints) does; this is how MPC is
-used in practice.
+a short horizon, so it can get stuck in front of an obstacle (at a stationary plan of the
+nonconvex OCP). On this map, more foresight (horizons up to N = 150 were tested) did not get it
+out; a higher-level plan (waypoints) does; this is how MPC is used in practice.
 
 **Briefing:** *"The direct route looks open… it isn't. Two ideas to get the controller
 out: let it look further ahead, or give it a route. Find out which one works."*
@@ -343,14 +343,14 @@ out: let it look further ahead, or give it a route. Find out which one works."*
 | Locked | q_p = 1, q_v = 1, r = 0.1, P = 10·Q, margin 0.2 m; N = 30 except with fix ① |
 | Default | no fix (N = 30, no waypoints) |
 | Why the default fails | the ball drives into the U and stops 0.2 m before the back wall: the cost gradient points straight into the obstacle, the 3 s horizon sees no way around → **time out** (calibrated) |
-| Fix ① result (calibrated) | **never escapes**: N = 30/60/100/150 all time out at (29.8, 25); mean solve time 1.3 → 3.0 ms (2026-11-19, machine-specific; docs/RESEARCH.md). SQP warm-started from the previous plan stays on the same side of the wall |
+| Fix ① result (calibrated) | **none of the tested horizons escaped** (an observation, not a proof): N = 30/60/100/150 all time out at (29.8, 25); mean solve time 1.3 → 3.0 ms (2026-11-19, machine-specific; docs/RESEARCH.md). SQP warm-started from the previous plan stayed on the same side of the wall |
 | Intended fix | ② 1 waypoint above/right of the U (x ≥ 30, y ≥ 36), then the target; waypoints left of x ≈ 25 lead back into the top of the U (time out again) |
 | Waypoint rule | the MPC reference is the next waypoint (position only, velocity reference = 0). Within the *switch radius* of 2 m, the reference jumps to the next waypoint, so the ball doesn't brake at each waypoint. Waypoints inside an ellipse are rejected when placed (game and engine). |
 | ★★ time par | ≤ 28 s (calibrated: single good waypoints take 23.6–34 s) |
 | ★★★ secondary par | ≤ 1 waypoint (so only fix ② reaches ★★★). Reference: fix ②, one waypoint at (35, 40) → 25.2 s. Check with `engine_server/calibrate.py dead_end` (also checks that fix ① with N = 150 times out) |
 | Extra plot | distance to the current reference (shows switching) |
-| Teaching note | on time out near an obstacle: "The ball stopped 0.2 m from the block at (32, 20) with the target behind it: a local optimum. The horizon (3 s) cannot see around the obstacle…" |
-| Solver note | obstacle constraints are **soft** (exact L1 penalty) since 2026-10-26: hard ellipse constraints made the QP solver fail whenever braking at a_max to stop at an ellipse. Crashes are still checked against the real blocks. |
+| Teaching note | on time out near an obstacle: "The ball stopped 0.2 m from the block at (32, 20) with the target behind it: stuck. Every solve returned (status 0) practically the same plan, a stationary point of the nonconvex OCP, so the ball no longer moves. The horizon (3 s) cannot see around the obstacle…" |
+| Solver note | obstacle constraints are **soft** (L1 + small quadratic slack penalty, scaled by dt like the stage cost; not proven exact, measured in docs/RESEARCH.md) since 2026-10-26: hard ellipse constraints made the QP solver fail whenever braking at a_max to stop at an ellipse. Crashes are still checked against the real blocks. |
 
 **Cheaper fallback if we are short on time:** replace click-to-place with 2–3
 predefined waypoint candidates the player toggles on and off.
@@ -392,10 +392,10 @@ one solve. Get through the gap."*
 | Locked | q_p = 2, q_v = 0.5, r = 0.05, P = 10·Q, N = 30 |
 | Default | k = 1 (re-plan every sample), margin 0.1 m |
 | Why the default fails | the most feedback, but the 60 solves are used up after 6 s → **budget exceeded** |
-| What the player discovers (measured 2026-11-19, docs/RESEARCH.md) | k = 1, 2, 3 → budget used up; with margin 0.1 m, k = 5, 10, 20 crash into a block (drift up to 1.3 m between re-plans); with margin 0.3 m, k = 5 → ★★ (57 solves), **k = 10 → ★★★ (28.2 s, 29 solves; the reference)**, k = 20 still crashes |
+| What the player discovers (measured 2026-11-19, docs/RESEARCH.md) | k = 1, 2, 3 → budget used up; with margin 0.1 m, k = 5, 10, 20 crash into a block (deviation from the prediction up to 1.5 m between re-plans); with margin 0.3 m, k = 5 → ★★ (57 solves), **k = 10 → ★★★ (28.2 s, 29 solves; the reference)**, k = 20 still crashes |
 | ★★ time par | ≤ 30 s (calibrated) |
 | ★★★ secondary par | ≤ 35 solves (calibrated) |
-| Extra plot | built as a compute-budget bar under the map; the drift (distance between the plan being executed and the ball, 0 at every re-plan) is a result row |
+| Extra plot | built as a compute-budget bar under the map; the deviation from the prediction in force (measured up to and including the moment a plan is replaced; engine 0.14.0) is a result row |
 | Map extra | wind arrow; the open-loop segment of the plan being executed is drawn solid, the rest dashed |
 | Teaching note | "Between re-plans the ball ran open-loop for 2.0 s and the wind pushed it 1.8 m off the plan." |
 
@@ -540,7 +540,7 @@ These are generated from run data. A first set:
 |---|---|
 | controller failure near a wall/obstacle and `v²/(2a) > distance` | "At t = {t} s the ball was {d} m from {wall/obstacle} at {v} m/s; braking needs {b} m. Your horizon covered {T} s (≈ {T·v} m)." |
 | controller failure, other | "The solver found no valid plan at t = {t} s (acados status {s}: {reason})." |
-| time out with ball at rest near an obstacle | "The ball stopped {d} m from obstacle {j} with the target behind it: a local optimum. The horizon cannot see around it." |
+| time out with ball at rest near an obstacle | "The ball stopped {d} m from obstacle {j} with the target behind it: stuck (a stationary plan). The horizon cannot see around it." |
 | time out, ball moving slowly the whole time | "The ball never went faster than {v} m/s: your settings make moving expensive / the horizon too short to go faster safely." |
 | crash, with prediction error > 0.2 m | "The plan predicted the ball at {p_pred}, it was at {p_real}: the model does not match the real ball." |
 | crash in Crosswind with k > 1 | "Between re-plans the ball ran open-loop for {k·dt} s and the wind pushed it {drift} m off the plan." |

@@ -183,14 +183,23 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
   writes the sweep as CSV; the brief renamed to `docs/SCIENTIFIC_UPGRADE_BRIEF.md`; PRD and
   this file brought up to date. In the debrief, "Your latest run" moved under the takeaway.
 - All four reduced-scope phases are done. Open: nothing planned; ask the team before new scope.
+- Done (2026-11-19, final validation before the report): **Crosswind's drift redefined** as the
+  deviation from the prediction in force (up to and including the moment a plan is replaced),
+  new metric `mean_replan_deviation`, result row "max vs the plan in force"; **numerical
+  verification** `docs/results/verify_numerics.py` (+ log): Brake Check $|v_N| \le 10^{-11}$,
+  dynamics residuals $\le 4\cdot 10^{-11}$, bounds exact; Dead End stationary point (status 0,
+  KKT $\le 10^{-4}$), no local-minimum claim; obstacle penalty not claimed exact (measured
+  slacks instead). Dead End and obstacle wording corrected in game, engine and docs; all
+  calibrations re-run (pass; only the Crosswind deviation values changed). Engine v0.14.0.
 
 **Dropped (2026-11-19, reduced scope): fix ③ of Level 3 (a better terminal cost / cost-to-go).**
 Do not build it, nor the Dijkstra reference. Level 3 keeps fixes ① and ②. The spike results
 below stay as background (they may be mentioned in the research texts):
-- ① **Longer horizon N**: never escapes. N = 30/60/100/150 all time out at (29.8, 25);
+- ① **Longer horizon N**: none of the tested horizons escaped (an observation on this map, not a
+  proof). N = 30/60/100/150 all time out at (29.8, 25);
   mean solve time 0.95 → 2.67 ms (max 84 ms), run 1.0 → 2.9 s (2026-11-19 on another
-  machine: 1.3 → 3.0 ms; solve times are machine-specific). Lesson: foresight
-  doesn't fix a local optimum; SQP with a warm start stays in its homotopy class.
+  machine: 1.3 → 3.0 ms; solve times are machine-specific). Interpretation (not proven):
+  the warm-started SQP stays near its previous plan, a stationary point in front of the wall.
   Built as fix ① (it is the "doesn't work" lesson).
 - ② **Waypoints**: built as fix ②, 23.6–34 s with one good waypoint.
 - ③ **Better terminal cost**, as first planned (smooth RBF fit of the cost-to-go as a
@@ -333,6 +342,18 @@ below stay as background (they may be mentioned in the research texts):
   spec's order (problem → why it matters → what the level showed) or show the player's run
   first; the user told it to take its recommendation: the well "Your latest run" sits right
   under the takeaway, visible without scrolling at 1280×800.
+- (2026-11-19) Level 1's debrief: the second paper ([1B], Abtahi et al.) shows **only "Open the
+  paper ›"**, no "Free version (arXiv) ›" link (the user asked for it; `free_url` left empty in
+  `research/price_of_speed.py`). Other papers keep their arXiv links; docs/RESEARCH.md still cites
+  the preprint.
+- (2026-11-19) **Final validation** (the user approved the agent's recommendations A1, B, C, not
+  D): (A1) Crosswind's deviation is measured against the prediction in force, also at the
+  re-planning instant (the outgoing plan), so every $k$ is measured the same way; comparisons
+  between $k$ use the common window $t \le 6$ s (all runs last that long and see the same wind);
+  (B) `docs/results/verify_numerics.py` + its log are kept in the repo as the reproducible check;
+  (C) Dead End and obstacle statements corrected (stationary point, not a local minimum; "none of
+  the tested horizons", not "never"; slack penalty described as built, not as exact); (D) no
+  extra $v_N$ check in the controller (verified numerically instead).
 - (2026-11-19) **Phase 4 docs**: `docs/RESEARCH.md` uses only numbers from
   `calibrate.py` runs (raw log in `docs/results/`, with environment and commands) and labels
   them as our simulation data, separate from the papers (paraphrased abstracts). Times of
@@ -345,10 +366,12 @@ below stay as background (they may be mentioned in the research texts):
   "energy" is an effort measure $\sum \Delta t\,\|u\|^2$; the terminal stop keeps the OCP feasible
   **with an exact model and no disturbances**; a controller failure is "the solver found no
   valid plan (acados status ...)", the physics (braking distance vs room) is the evidence, not
-  the solver; Dead End's trap is "stuck: every solve converges to the same plan (a local
-  solution)", not a proven local optimum; obstacle ellipse constraints are **soft** (say so
-  wherever the OCP shows them); Crosswind's "off the plan" is measured against the plan being
-  executed, so it is 0 at every re-plan (and always 0 for $k = 1$).
+  the solver; Dead End's trap is "stuck: every solve returns (status 0) practically the same
+  plan, a stationary point", never a proven local minimum, and "none of the tested horizons
+  escaped", never "a longer horizon cannot help"; obstacle ellipse constraints are **soft** (say
+  so wherever the OCP shows them) with an L1 + small quadratic slack penalty that is **not**
+  claimed to be exact; Crosswind's "off the plan" is the deviation from the prediction in force,
+  measured up to and including the moment a plan is replaced (since engine 0.14.0).
 
 **MPC**
 - (2026-10-19) Obstacles: a block is given by 4 corners; the solver avoids the
@@ -594,7 +617,8 @@ below stay as background (they may be mentioned in the research texts):
 - Obstacles in acados (2026-10-26, Level 3 calibration): with **hard** ellipse constraints
   HPIPM failed (MINSTEP) whenever an ellipse and the input bounds were active together
   (braking at full a_max to stop at an ellipse). What made it robust: ellipse constraints
-  **soft** with an exact L1 penalty (`ocp.py`, `SLACK_L1`), `qp_tol` 1e-6 (not 1e-8),
+  **soft** with an L1 penalty (`ocp.py`, `SLACK_L1`; acados multiplies it by the cost scaling
+  dt, and it is exact only if larger than the multipliers), `qp_tol` 1e-6 (not 1e-8),
   NLP `tol` 1e-4, `hpipm_mode` ROBUST, a small upper bound on h (1e4, not 1e9), unused
   obstacle slots as a small circle far away (well scaled), and LM 1e-2 only when the
   level has obstacles. SQP can still cycle near ellipse tips: a solve that stops at the

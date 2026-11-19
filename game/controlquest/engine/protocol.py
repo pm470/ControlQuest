@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 PROTOCOL_VERSION = 1
-ENGINE_VERSION = "0.13.0"  # the engine_server version this game expects (engine_server/server.py)
+ENGINE_VERSION = "0.14.0"  # the engine_server version this game expects (engine_server/server.py)
 
 # outcome name -> (label for the player, ui.theme colour name)
 OUTCOMES = {
@@ -94,7 +94,7 @@ class Trajectory:
     crash_point: list[float] | None = None  # where the ball hit a block, if it did
     solve_steps: list[int] = field(default_factory=list)  # sample of each solve ([] = every sample)
     disturbance: list[list[float]] = field(default_factory=list)  # n applied wind accelerations
-    drift: list[float] = field(default_factory=list)  # Level 4 (Crosswind): per sample, distance from the plan [m]
+    drift: list[float] = field(default_factory=list)  # Level 4 (Crosswind): per sample, distance from the prediction in force [m]
     solve_budget: int = 0  # Level 4 (Crosswind): max solves (0 = none)
 
     @property

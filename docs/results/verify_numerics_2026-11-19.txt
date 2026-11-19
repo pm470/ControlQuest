@@ -1,0 +1,57 @@
+# ControlQuest: numerical verification (raw output of docs/results/verify_numerics.py)
+
+Recorded 2026-11-19 in the course Docker image (python 3.11.17, numpy 1.26.4, casadi 3.8.1,
+acados_template 0.5.1; host Intel Core i7-13700HX, Windows 11, Docker Desktop 29.4.0), engine
+0.14.0, branch `gui` (commit a7ab364 plus the uncommitted reduced-scope changes):
+
+    docker run --rm -v "<repo>:/workspace" -w /workspace/game/engine_server <image> \
+        python /workspace/docs/results/verify_numerics.py
+
+Units: metres (deviations), m/s (|v_N|), dimensionless (h: h >= 1 is outside an ellipse; slack:
+in units of h). "dyn res" is the largest |x_{k+1} - f(x_k, u_k)| over all stages of all accepted
+plans; "x viol"/"u viol" the largest bound violation (0 = none). KKT residuals are acados'
+own (stationarity, equality, inequality, complementarity), maximum over the accepted solves.
+Note: in Dead End the number of zero-iteration solves while stuck varies slightly between
+processes (e.g. 21 or 30 of 100 for "no fix"); positions and outcomes are identical.
+
+# acados documentation of the slack cost and the cost scaling
+cost.zl: :math:`z_l` - gradient wrt lower slack at intermediate shooting nodes (0 to N-1). Default: :code:`np.array([])`.
+cost.Zl: :math:`Z_l` - diagonal of Hessian wrt lower slack at intermediate shooting nodes (0 to N-1). Default: :code:`np.array([])`.
+opts.cost_scaling: Vector with cost scaling factors of length ``N_horizon`` + 1. If ``None`` set automatically to ``[time_steps, 1.0]``. Default: :code:`None`
+# 1. Crosswind: deviation from the prediction in force [m]
+k    m    outcome        t_end solves | max (run)  mean at re-plans | window t<=6 s: max  mean | previous definition: max | plans: min h  max slack
+1    0.1  solve_budget     6.0     60 |     0.004             0.002 |              0.004 0.002 |                    0.000 |        1.000    4.4e-11
+2    0.1  solve_budget    12.0     60 |     0.018             0.008 |              0.015 0.005 |                    0.005 |        0.983    1.7e-02
+3    0.1  solve_budget    18.0     60 |     0.040             0.017 |              0.035 0.010 |                    0.018 |        0.979    2.1e-02
+5    0.1  crash_block      9.1     19 |     0.097             0.053 |              0.097 0.023 |                    0.062 |        0.951    4.9e-02
+10   0.1  crash_block      9.2     10 |     0.388             0.210 |              0.388 0.081 |                    0.314 |        0.876    1.2e-01
+20   0.1  crash_block      9.1      5 |     1.465             0.889 |              1.465 0.392 |                    1.325 |        0.990    9.9e-03
+1    0.3  solve_budget     6.0     60 |     0.004             0.002 |              0.004 0.002 |                    0.001 |        1.000    2.4e-11
+2    0.3  solve_budget    12.0     60 |     0.018             0.008 |              0.015 0.005 |                    0.005 |        0.987    1.3e-02
+3    0.3  solve_budget    18.0     60 |     0.040             0.017 |              0.035 0.010 |                    0.018 |        0.977    2.3e-02
+5    0.3  success         28.1     57 |     0.111             0.049 |              0.097 0.023 |                    0.071 |        0.958    4.2e-02
+10   0.3  success         28.2     29 |     0.443             0.194 |              0.388 0.081 |                    0.359 |        0.881    1.2e-01
+20   0.3  crash_block     10.1      6 |     1.465             0.996 |              1.465 0.392 |                    1.325 |        0.357    6.4e-01
+# 2. Brake Check: accepted plans (max over all accepted solves of the run)
+N   stop outcome            accepted/total status       |v_N|      dyn res    x0 err     u viol     x viol     KKT residuals [stat, eq, ineq, comp]
+5   0    controller_failure  133/134       {0: 133, 4: 1} -          3.3e-11    0.0e+00    0.0e+00    0.0e+00    [8.96e-07 3.33e-11 0.00e+00 4.47e-07]
+    last solve rejected: acados status 4
+5   1    time_out            600/600       {0: 600}     2.5e-13    4.6e-13    0.0e+00    0.0e+00    0.0e+00    [5.14e-08 4.63e-13 2.48e-13 1.22e-07]
+10  0    controller_failure  130/131       {0: 130, 4: 1} -          3.8e-11    0.0e+00    0.0e+00    0.0e+00    [9.67e-07 3.77e-11 0.00e+00 5.09e-07]
+    last solve rejected: acados status 4
+10  1    success             499/499       {0: 499}     9.3e-12    8.8e-12    0.0e+00    0.0e+00    0.0e+00    [9.80e-07 8.83e-12 9.30e-12 8.91e-07]
+20  0    controller_failure  132/133       {0: 132, 4: 1} -          3.7e-11    0.0e+00    0.0e+00    0.0e+00    [9.37e-07 3.66e-11 0.00e+00 4.90e-07]
+    last solve rejected: acados status 4
+20  1    success             251/251       {0: 251}     9.5e-12    8.7e-12    0.0e+00    0.0e+00    0.0e+00    [9.93e-07 8.70e-12 9.46e-12 9.91e-07]
+30  0    success             172/172       {0: 172}     -          3.2e-11    0.0e+00    0.0e+00    0.0e+00    [8.29e-07 3.24e-11 0.00e+00 9.42e-07]
+30  1    success             193/193       {0: 193}     8.8e-12    8.9e-12    0.0e+00    0.0e+00    0.0e+00    [9.90e-07 8.92e-12 8.81e-12 9.57e-07]
+40  0    success             166/166       {0: 166}     -          2.7e-11    0.0e+00    0.0e+00    0.0e+00    [7.00e-07 2.73e-11 0.00e+00 8.85e-07]
+40  1    success             168/168       {0: 168}     3.9e-12    5.3e-12    0.0e+00    0.0e+00    0.0e+00    [5.91e-07 5.32e-12 3.92e-12 3.48e-07]
+60  0    success             172/172       {0: 172}     -          3.7e-11    0.0e+00    0.0e+00    0.0e+00    [9.39e-07 3.67e-11 0.00e+00 8.61e-07]
+60  1    success             172/172       {0: 172}     6.5e-12    6.8e-12    0.0e+00    0.0e+00    0.0e+00    [6.79e-07 6.80e-12 6.47e-12 9.38e-07]
+# 3. Dead End: solver behaviour while the ball is stuck (last 10 s = 100 solves)
+no fix             time_out  status {0: 450}; last 10 s: SQP iterations {0: 30, 1: 70}, plan change <= 7.5e-06 m, ball moved 0.0e+00 m, KKT residuals <= [6.00e-05 7.78e-05 0.00e+00 9.99e-07]; whole run: dyn res 9.5e-05, min h 1.0000, max slack 2.8e-10
+N = 60             time_out  status {0: 450}; last 10 s: SQP iterations {0: 60, 1: 40}, plan change <= 9.7e-06 m, ball moved 0.0e+00 m, KKT residuals <= [5.43e-05 9.83e-05 0.00e+00 6.31e-07]; whole run: dyn res 1.0e-04, min h 1.0000, max slack 4.9e-10
+N = 100            time_out  status {0: 450}; last 10 s: SQP iterations {0: 95, 1: 5}, plan change <= 6.9e-06 m, ball moved 0.0e+00 m, KKT residuals <= [8.34e-05 6.76e-05 0.00e+00 4.63e-07]; whole run: dyn res 9.9e-05, min h 1.0000, max slack 5.2e-10
+N = 150            time_out  status {0: 450}; last 10 s: SQP iterations {0: 97, 1: 3}, plan change <= 1.3e-05 m, ball moved 0.0e+00 m, KKT residuals <= [8.54e-05 9.67e-05 0.00e+00 7.24e-07]; whole run: dyn res 9.8e-05, min h 1.0000, max slack 5.3e-10
+waypoint (35, 40)  success   status {0: 252}; last 10 s: SQP iterations {1: 29, 2: 71}, plan change <= 2.0e-01 m, ball moved 1.8e+01 m, KKT residuals <= [9.50e-05 8.38e-12 0.00e+00 9.29e-07]; whole run: dyn res 8.4e-12, min h 1.8914, max slack 4.2e-10

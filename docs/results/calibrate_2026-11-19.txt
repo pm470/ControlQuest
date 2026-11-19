@@ -1,54 +1,59 @@
 # ControlQuest: calibration and comparison runs (raw output)
 
-Recorded 2026-11-19 for docs/RESEARCH.md. Everything below was printed by the existing
-game/engine_server/calibrate.py (commands start with "$"), run inside the course Docker image
-(`<image>` = vsc-mpcrl26-exercises-*), from game/engine_server:
+Recorded 2026-11-19 for docs/RESEARCH.md (final validation, engine 0.14.0). Everything below was
+printed by the existing game/engine_server/calibrate.py (commands start with "$"), run inside the
+course Docker image (`<image>` = vsc-mpcrl26-exercises-*), from game/engine_server:
 
     docker run --rm -v "<repo>:/workspace" -w /workspace/game/engine_server <image> python calibrate.py <args>
 
 Code: branch `gui`, commit a7ab364 plus the uncommitted reduced-scope changes (Heavy Ball
-removed, wording fixes, research debrief; engine 0.13.0). Host: Intel Core i7-13700HX,
-Windows 11 Home, Docker Desktop (engine 29.4.0). Software in the image: see "# environment".
+removed, wording fixes, research debrief, final validation; engine 0.14.0). Host: Intel Core
+i7-13700HX, Windows 11 Home, Docker Desktop (engine 29.4.0). Software in the image: see the
+section "environment" below.
 
 Notes: "t" is the time to the target for a success and the time until the run stopped for
 every other outcome. "E" is the effort measure sum(dt*|u|^2), not physical energy. "mean solve"
 is acados' own solver time per OCP (time_tot), without simulation and Python overhead; it
 depends on the machine and varies between runs. Each calibrate.py call is a new process that
 first builds its solvers (a few seconds; Dead End prints it); the solve times do not include that.
-"left" is the distance to the target when the run stopped.
+"left" is the distance to the target when the run stopped. Crosswind: "max_drift" is the largest
+distance between the ball and the prediction of the plan in force (up to and including the
+moment that plan is replaced), "mean_replan_deviation" its mean at the re-planning instants
+(engine 0.14.0; the definition before 0.14.0 missed the end of every open-loop stretch, see
+verify_numerics_2026-11-19.txt).
 
 # environment
 python 3.11.17 | numpy 1.26.4 | casadi 3.8.1
 Name: acados_template Version: 0.5.1 
-24:VERSION = "0.13.0"  # bump whenever the messages change (game: protocol.ENGINE_VERSION)
+24:VERSION = "0.14.0"  # bump whenever the messages change (game: protocol.ENGINE_VERSION)
 
 # 1. level checks
 $ python calibrate.py hello_mpc
 knob ranges ok (max <= max(50, 3 x reference))
-default    success            0 stars  t= 10.0 s  E= 6.54  max|a|=2.00  left=0.00 m  solves=100  mean solve 0.58 ms  knobs={}
+default    success            0 stars  t= 10.0 s  E= 6.54  max|a|=2.00  left=0.00 m  solves=100  mean solve 0.66 ms  knobs={}
            - Arrived in 10.0 s. The MPC solved its OCP 100 times, once every 0.1 s, each time planning N = 30 steps (3 s) ahead from the measured state, and applied only the first input of each plan.
-reference  success            0 stars  t= 10.0 s  E= 6.54  max|a|=2.00  left=0.00 m  solves=100  mean solve 0.55 ms  knobs={}
+reference  success            0 stars  t= 10.0 s  E= 6.54  max|a|=2.00  left=0.00 m  solves=100  mean solve 0.57 ms  knobs={}
            - Arrived in 10.0 s. The MPC solved its OCP 100 times, once every 0.1 s, each time planning N = 30 steps (3 s) ahead from the measured state, and applied only the first input of each plan.
 all checks passed
 
 $ python calibrate.py price_of_speed
 knob ranges ok (max <= max(50, 3 x reference))
-default    battery_empty      0 stars  t= 20.3 s  E= 5.22  max|a|=2.00  left=0.51 m  solves=203  mean solve 0.78 ms  knobs={'q_p': 10.0, 'q_v': 1.0, 'r': 0.1}
+default    battery_empty      0 stars  t= 20.3 s  E= 5.22  max|a|=2.00  left=0.51 m  solves=203  mean solve 0.81 ms  knobs={'q_p': 10.0, 'q_v': 1.0, 'r': 0.1}
            - The battery ran out at t = 20.3 s, 0.5 m before the target.
            - The controller accelerated and braked at full power: inputs are cheap compared with being away from the target. Make inputs more expensive (higher r) or being far away cheaper (lower q_p).
-reference  success            3 stars  t= 26.8 s  E= 4.69  max|a|=2.00  left=0.05 m  solves=268  mean solve 0.58 ms  knobs={'q_p': 0.1, 'q_v': 1.0, 'r': 1.0}
+reference  success            3 stars  t= 26.8 s  E= 4.69  max|a|=2.00  left=0.05 m  solves=268  mean solve 0.59 ms  knobs={'q_p': 0.1, 'q_v': 1.0, 'r': 1.0}
            - Arrived in 26.8 s using 4.69 of 5 energy.
            - Perfect balance between fast and cheap!
 all checks passed
 
 $ python calibrate.py brake_check
 knob ranges ok (max <= max(50, 3 x reference))
-default    controller_failure 0 stars  t= 13.0 s  E= 4.90  max|a|=1.00  left=0.41 m  solves=131  mean solve 0.31 ms  knobs={'N': 10, 'stop': 0}
+default    controller_failure 0 stars  t= 13.0 s  E= 4.90  max|a|=1.00  left=0.41 m  solves=131  mean solve 0.29 ms  knobs={'N': 10, 'stop': 0}
            - At t = 11.6 s the ball was 7.6 m from the wall at 4.0 m/s; braking needs 8.0 m and 4.0 s.
            - Your horizon covered 1 s (≈ 4.0 m), less than the braking distance: the plan saw the wall too late.
            - From then on no input sequence could stop the ball before the wall, so the OCP was bound to become infeasible. At t = 13.0 s the solver found no valid plan and reported acados status 4 (QP solver failure): the controller lost recursive feasibility.
            - Look further ahead (a longer N), or require every plan to end at rest (terminal stop).
-reference  success            3 stars  t= 25.1 s  E= 3.71  max|a|=1.00  left=0.03 m  solves=251  mean solve 0.56 ms  knobs={'N': 20, 'stop': 1}
+reference  success            3 stars  t= 25.1 s  E= 3.71  max|a|=1.00  left=0.03 m  solves=251  mean solve 0.58 ms  knobs={'N': 20, 'stop': 1}
            - Arrived in 25.1 s with N = 20 (2 s ahead), terminal stop on; it overshot the star by 0.03 m.
            - Short horizon + terminal stop: every plan keeps a way to stop, so the controller stays feasible and calm with cheap solves.
 case 1     controller_failure 0 stars  t= 13.3 s  E= 4.90  max|a|=1.00  left=0.79 m  solves=134  mean solve 0.15 ms  knobs={'N': 5, 'stop': 0}
@@ -56,64 +61,64 @@ case 1     controller_failure 0 stars  t= 13.3 s  E= 4.90  max|a|=1.00  left=0.7
            - Your horizon covered 0.5 s (≈ 2.0 m), less than the braking distance: the plan saw the wall too late.
            - From then on no input sequence could stop the ball before the wall, so the OCP was bound to become infeasible. At t = 13.3 s the solver found no valid plan and reported acados status 4 (QP solver failure): the controller lost recursive feasibility.
            - Look further ahead (a longer N), or require every plan to end at rest (terminal stop).
-case 2     controller_failure 0 stars  t= 13.2 s  E= 5.68  max|a|=1.00  left=0.62 m  solves=133  mean solve 0.56 ms  knobs={'N': 20, 'stop': 0}
+case 2     controller_failure 0 stars  t= 13.2 s  E= 5.68  max|a|=1.00  left=0.62 m  solves=133  mean solve 0.57 ms  knobs={'N': 20, 'stop': 0}
            - At t = 11.6 s the ball was 7.6 m from the wall at 3.9 m/s; braking needs 7.7 m and 3.9 s.
            - Your horizon covered 2 s (≈ 7.8 m), just about the braking distance: the wall came into view only when braking already had to start, with no margin. A 2 s plan cannot even contain a full stop from 3.9 m/s.
            - From then on no input sequence could stop the ball before the wall, so the OCP was bound to become infeasible. At t = 13.2 s the solver found no valid plan and reported acados status 4 (QP solver failure): the controller lost recursive feasibility.
            - Look further ahead (a longer N), or require every plan to end at rest (terminal stop).
-case 3     time_out           0 stars  t= 60.0 s  E= 0.40  max|a|=1.00  left=20.08 m  solves=600  mean solve 0.13 ms  knobs={'N': 5, 'stop': 1}
+case 3     time_out           0 stars  t= 60.0 s  E= 0.40  max|a|=1.00  left=20.08 m  solves=600  mean solve 0.14 ms  knobs={'N': 5, 'stop': 1}
            - Time is up: with the terminal stop every plan must end at rest within 0.5 s, so the ball may drive at most ≈ 0.5 m/s (a_{\max}\, N\, \Delta t). Safe, but too slow with N = 5.
-case 4     success            1 stars  t= 49.9 s  E= 1.65  max|a|=1.00  left=0.00 m  solves=499  mean solve 0.26 ms  knobs={'N': 10, 'stop': 1}
+case 4     success            1 stars  t= 49.9 s  E= 1.65  max|a|=1.00  left=0.00 m  solves=499  mean solve 0.27 ms  knobs={'N': 10, 'stop': 1}
            - Arrived in 49.9 s with N = 10 (1 s ahead), terminal stop on; it overshot the star by 0.00 m.
            - For ★★, arrive within 27 s. With the terminal stop the ball may only drive ≈ 1.0 m/s here: a longer horizon allows more speed.
-case 5     success            2 stars  t= 17.2 s  E= 9.31  max|a|=1.00  left=0.00 m  solves=172  mean solve 0.81 ms  knobs={'N': 30, 'stop': 0}
+case 5     success            2 stars  t= 17.2 s  E= 9.31  max|a|=1.00  left=0.00 m  solves=172  mean solve 0.77 ms  knobs={'N': 30, 'stop': 0}
            - Arrived in 17.2 s with N = 30 (3 s ahead), terminal stop off; it overshot the star by 0.78 m.
-           - For ★★★, use N \leq 20: smaller, faster solves (0.81 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
-case 6     success            2 stars  t= 17.2 s  E= 9.38  max|a|=1.00  left=0.01 m  solves=172  mean solve 1.65 ms  knobs={'N': 60, 'stop': 1}
+           - For ★★★, use N \leq 20: smaller, faster solves (0.77 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
+case 6     success            2 stars  t= 17.2 s  E= 9.38  max|a|=1.00  left=0.01 m  solves=172  mean solve 1.70 ms  knobs={'N': 60, 'stop': 1}
            - Arrived in 17.2 s with N = 60 (6 s ahead), terminal stop on; it overshot the star by 0.80 m.
-           - For ★★★, use N \leq 20: smaller, faster solves (1.65 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
+           - For ★★★, use N \leq 20: smaller, faster solves (1.70 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
 all checks passed
 
 $ python calibrate.py dead_end
 knob ranges ok (max <= max(50, 3 x reference))
-default    time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 1.24 ms  min_clearance=0.19  knobs={'N': 30}  fix=none
-           - The ball stopped 0.2 m from the block at (32, 20) with the target behind it: stuck. Every solve converged to the same plan (a local solution of the nonconvex OCP), so the ball no longer moves.
+default    time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 1.22 ms  min_clearance=0.185  knobs={'N': 30}  fix=none
+           - The ball stopped 0.2 m from the block at (32, 20) with the target behind it: stuck. Every solve returned (status 0) practically the same plan, a stationary point of the nonconvex OCP, so the ball no longer moves.
            - The horizon (3 s) cannot see around the obstacle, and every small step sideways first costs more. Pick a fix and try it.
-           - (Building the solver for N = 30 took 2.6 s, once: it is cached now.)
-reference  success            3 stars  t= 25.2 s  E=17.42  max|a|=2.00  left=0.05 m  solves=252  mean solve 1.20 ms  min_clearance=3.54  knobs={'N': 30}  waypoints=[[35.0, 40.0]]  fix=waypoints
-           - Arrived in 25.2 s with 1 waypoint(s), 1.20 ms per solve; closest approach to a block 3.5 m.
+           - (Building the solver for N = 30 took 2.8 s, once: it is cached now.)
+reference  success            3 stars  t= 25.2 s  E=17.42  max|a|=2.00  left=0.05 m  solves=252  mean solve 1.23 ms  min_clearance=3.538  knobs={'N': 30}  waypoints=[[35.0, 40.0]]  fix=waypoints
+           - Arrived in 25.2 s with 1 waypoint(s), 1.23 ms per solve; closest approach to a block 3.5 m.
            - One good hint was enough: the local planner did the rest.
-horizon    time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 3.03 ms  min_clearance=0.19  knobs={'N': 150}  fix=horizon
-           - The ball stopped 0.2 m from the block at (32, 30) with the target behind it: stuck. Every solve converged to the same plan (a local solution of the nonconvex OCP), so the ball no longer moves.
-           - Even 15 s of foresight (N = 150) did not help: SQP is a local method, and warm-started from the previous plan every new plan stayed on the same side of the wall. The longer horizon only made each solve slower (3.03 ms on average).
+horizon    time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 3.04 ms  min_clearance=0.185  knobs={'N': 150}  fix=horizon
+           - The ball stopped 0.2 m from the block at (32, 30) with the target behind it: stuck. Every solve returned (status 0) practically the same plan, a stationary point of the nonconvex OCP, so the ball no longer moves.
+           - Even 15 s of foresight (N = 150) did not help: SQP is a local method, and warm-started from the previous plan every new plan stayed on the same side of the wall. The longer horizon only made each solve slower (3.04 ms on average).
            - (Building the solver for N = 150 took 2.7 s, once: it is cached now.)
 all checks passed
 
 $ python calibrate.py crosswind
 knob ranges ok (max <= max(50, 3 x reference))
-default    solve_budget       0 stars  t=  6.0 s  E= 5.86  max|a|=2.00  left=29.00 m  solves=60  mean solve 1.86 ms  max_drift=0.00  min_clearance=6.00  knobs={'k': 1, 'margin': 0.1}
+default    solve_budget       0 stars  t=  6.0 s  E= 5.86  max|a|=2.00  left=29.00 m  solves=60  mean solve 1.84 ms  max_drift=0.004  mean_replan_deviation=0.002  min_clearance=6.000  knobs={'k': 1, 'margin': 0.1}
            - The compute budget (60 solves) ran out at t = 6.0 s, 29.0 m before the target.
            - Re-planning every k = 1 sample(s) = every 0.1 s costs about 60 solves for this stretch alone: re-plan less often.
-reference  success            3 stars  t= 28.2 s  E=50.38  max|a|=2.00  left=0.04 m  solves=29  mean solve 2.68 ms  max_drift=0.36  min_clearance=0.05  knobs={'k': 10, 'margin': 0.3}
-           - Through the gap in 28.2 s with 29 of 60 solves (re-plan every 1 s); the wind pushed the ball up to 0.36 m off its plan.
+reference  success            3 stars  t= 28.2 s  E=50.38  max|a|=2.00  left=0.04 m  solves=29  mean solve 2.53 ms  max_drift=0.443  mean_replan_deviation=0.194  min_clearance=0.054  knobs={'k': 10, 'margin': 0.3}
+           - Through the gap in 28.2 s with 29 of 60 solves (re-plan every 1 s); the wind pushed the ball up to 0.44 m off its plan.
            - Just enough feedback: re-planning corrects the wind before it matters.
 all checks passed
 
 # 2. Level 1: weight scaling and the sweep
 $ python calibrate.py price_of_speed q_p=1 q_v=0.1 r=0.01
-run        battery_empty      0 stars  t= 20.3 s  E= 5.22  max|a|=2.00  left=0.51 m  solves=203  mean solve 0.59 ms  knobs={'q_p': 1.0, 'q_v': 0.1, 'r': 0.01}
+run        battery_empty      0 stars  t= 20.3 s  E= 5.22  max|a|=2.00  left=0.51 m  solves=203  mean solve 0.56 ms  knobs={'q_p': 1.0, 'q_v': 0.1, 'r': 0.01}
            - The battery ran out at t = 20.3 s, 0.5 m before the target.
            - The controller accelerated and braked at full power: inputs are cheap compared with being away from the target. Make inputs more expensive (higher r) or being far away cheaper (lower q_p).
            - Note: you scaled all weights by the same factor. That does not change the optimal plan: only the ratios between Q and R matter.
 
 $ python calibrate.py price_of_speed q_p=30 q_v=3 r=0.3
-run        battery_empty      0 stars  t= 20.3 s  E= 5.22  max|a|=2.00  left=0.51 m  solves=203  mean solve 0.80 ms  knobs={'q_p': 30.0, 'q_v': 3.0, 'r': 0.3}
+run        battery_empty      0 stars  t= 20.3 s  E= 5.22  max|a|=2.00  left=0.51 m  solves=203  mean solve 0.78 ms  knobs={'q_p': 30.0, 'q_v': 3.0, 'r': 0.3}
            - The battery ran out at t = 20.3 s, 0.5 m before the target.
            - The controller accelerated and braked at full power: inputs are cheap compared with being away from the target. Make inputs more expensive (higher r) or being far away cheaper (lower q_p).
            - Note: you scaled all weights by the same factor. That does not change the optimal plan: only the ratios between Q and R matter.
 
 $ python calibrate.py price_of_speed q_p=1 q_v=10 r=10
-run        success            3 stars  t= 26.8 s  E= 4.69  max|a|=2.00  left=0.05 m  solves=268  mean solve 0.61 ms  knobs={'q_p': 1.0, 'q_v': 10.0, 'r': 10.0}
+run        success            3 stars  t= 26.8 s  E= 4.69  max|a|=2.00  left=0.05 m  solves=268  mean solve 0.59 ms  knobs={'q_p': 1.0, 'q_v': 10.0, 'r': 10.0}
            - Arrived in 26.8 s using 4.69 of 5 energy.
            - Perfect balance between fast and cheap!
 
@@ -129,114 +134,114 @@ wrote 36 runs to /workspace/docs/figures/price_of_speed_sweep.csv
 
 # 3. Level 2: more horizon / terminal-stop combinations
 $ python calibrate.py brake_check N=30 stop=1
-run        success            2 stars  t= 19.3 s  E= 5.95  max|a|=1.00  left=0.01 m  solves=193  mean solve 0.92 ms  knobs={'N': 30, 'stop': 1}
+run        success            2 stars  t= 19.3 s  E= 5.95  max|a|=1.00  left=0.01 m  solves=193  mean solve 0.98 ms  knobs={'N': 30, 'stop': 1}
            - Arrived in 19.3 s with N = 30 (3 s ahead), terminal stop on; it overshot the star by 0.15 m.
-           - For ★★★, use N \leq 20: smaller, faster solves (0.92 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
+           - For ★★★, use N \leq 20: smaller, faster solves (0.98 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
 
 $ python calibrate.py brake_check N=40 stop=1
-run        success            2 stars  t= 16.8 s  E= 8.24  max|a|=1.00  left=0.01 m  solves=168  mean solve 1.31 ms  knobs={'N': 40, 'stop': 1}
+run        success            2 stars  t= 16.8 s  E= 8.24  max|a|=1.00  left=0.01 m  solves=168  mean solve 1.23 ms  knobs={'N': 40, 'stop': 1}
            - Arrived in 16.8 s with N = 40 (4 s ahead), terminal stop on; it overshot the star by 0.33 m.
-           - For ★★★, use N \leq 20: smaller, faster solves (1.31 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
+           - For ★★★, use N \leq 20: smaller, faster solves (1.23 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
 
 $ python calibrate.py brake_check N=40 stop=0
-run        success            2 stars  t= 16.6 s  E= 8.45  max|a|=1.00  left=0.01 m  solves=166  mean solve 1.08 ms  knobs={'N': 40, 'stop': 0}
+run        success            2 stars  t= 16.6 s  E= 8.45  max|a|=1.00  left=0.01 m  solves=166  mean solve 1.03 ms  knobs={'N': 40, 'stop': 0}
            - Arrived in 16.6 s with N = 40 (4 s ahead), terminal stop off; it overshot the star by 0.34 m.
-           - For ★★★, use N \leq 20: smaller, faster solves (1.08 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
+           - For ★★★, use N \leq 20: smaller, faster solves (1.03 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
 
 $ python calibrate.py brake_check N=60 stop=0
-run        success            2 stars  t= 17.2 s  E= 9.38  max|a|=1.00  left=0.01 m  solves=172  mean solve 1.67 ms  knobs={'N': 60, 'stop': 0}
+run        success            2 stars  t= 17.2 s  E= 9.38  max|a|=1.00  left=0.01 m  solves=172  mean solve 1.55 ms  knobs={'N': 60, 'stop': 0}
            - Arrived in 17.2 s with N = 60 (6 s ahead), terminal stop off; it overshot the star by 0.80 m.
-           - For ★★★, use N \leq 20: smaller, faster solves (1.67 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
+           - For ★★★, use N \leq 20: smaller, faster solves (1.55 ms each now). A short horizon alone sees the wall too late, so it needs something that keeps a way to stop in every plan.
 
 # 4. Level 3: every horizon fix and one badly placed waypoint
 $ python calibrate.py dead_end fix=horizon N=30
-run        time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 1.26 ms  min_clearance=0.19  knobs={'N': 30}  fix=horizon
-           - The ball stopped 0.2 m from the block at (32, 20) with the target behind it: stuck. Every solve converged to the same plan (a local solution of the nonconvex OCP), so the ball no longer moves.
+run        time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 1.21 ms  min_clearance=0.185  knobs={'N': 30}  fix=horizon
+           - The ball stopped 0.2 m from the block at (32, 20) with the target behind it: stuck. Every solve returned (status 0) practically the same plan, a stationary point of the nonconvex OCP, so the ball no longer moves.
            - A horizon of 3 s (N = 30) sees even less than the default 3 s: no way around the wall either. Try a longer one.
-           - (Building the solver for N = 30 took 2.4 s, once: it is cached now.)
+           - (Building the solver for N = 30 took 2.5 s, once: it is cached now.)
 
 $ python calibrate.py dead_end fix=horizon N=60
-run        time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 1.79 ms  min_clearance=0.19  knobs={'N': 60}  fix=horizon
-           - The ball stopped 0.2 m from the block at (32, 20) with the target behind it: stuck. Every solve converged to the same plan (a local solution of the nonconvex OCP), so the ball no longer moves.
-           - Even 6 s of foresight (N = 60) did not help: SQP is a local method, and warm-started from the previous plan every new plan stayed on the same side of the wall. The longer horizon only made each solve slower (1.79 ms on average).
-           - (Building the solver for N = 60 took 2.4 s, once: it is cached now.)
+run        time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 1.77 ms  min_clearance=0.185  knobs={'N': 60}  fix=horizon
+           - The ball stopped 0.2 m from the block at (32, 20) with the target behind it: stuck. Every solve returned (status 0) practically the same plan, a stationary point of the nonconvex OCP, so the ball no longer moves.
+           - Even 6 s of foresight (N = 60) did not help: SQP is a local method, and warm-started from the previous plan every new plan stayed on the same side of the wall. The longer horizon only made each solve slower (1.77 ms on average).
+           - (Building the solver for N = 60 took 2.5 s, once: it is cached now.)
 
 $ python calibrate.py dead_end fix=horizon N=100
-run        time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 1.68 ms  min_clearance=0.19  knobs={'N': 100}  fix=horizon
-           - The ball stopped 0.2 m from the block at (32, 20) with the target behind it: stuck. Every solve converged to the same plan (a local solution of the nonconvex OCP), so the ball no longer moves.
-           - Even 10 s of foresight (N = 100) did not help: SQP is a local method, and warm-started from the previous plan every new plan stayed on the same side of the wall. The longer horizon only made each solve slower (1.68 ms on average).
+run        time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 1.70 ms  min_clearance=0.185  knobs={'N': 100}  fix=horizon
+           - The ball stopped 0.2 m from the block at (32, 20) with the target behind it: stuck. Every solve returned (status 0) practically the same plan, a stationary point of the nonconvex OCP, so the ball no longer moves.
+           - Even 10 s of foresight (N = 100) did not help: SQP is a local method, and warm-started from the previous plan every new plan stayed on the same side of the wall. The longer horizon only made each solve slower (1.70 ms on average).
            - (Building the solver for N = 100 took 2.8 s, once: it is cached now.)
 
 $ python calibrate.py dead_end fix=none
-run        time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 1.27 ms  min_clearance=0.19  knobs={'N': 30}  fix=none
-           - The ball stopped 0.2 m from the block at (32, 20) with the target behind it: stuck. Every solve converged to the same plan (a local solution of the nonconvex OCP), so the ball no longer moves.
+run        time_out           0 stars  t= 45.0 s  E= 7.96  max|a|=2.00  left=15.19 m  solves=450  mean solve 1.25 ms  min_clearance=0.185  knobs={'N': 30}  fix=none
+           - The ball stopped 0.2 m from the block at (32, 20) with the target behind it: stuck. Every solve returned (status 0) practically the same plan, a stationary point of the nonconvex OCP, so the ball no longer moves.
            - The horizon (3 s) cannot see around the obstacle, and every small step sideways first costs more. Pick a fix and try it.
-           - (Building the solver for N = 30 took 2.1 s, once: it is cached now.)
+           - (Building the solver for N = 30 took 2.8 s, once: it is cached now.)
 
 $ python calibrate.py dead_end fix=waypoints wp=22,42
-run        time_out           0 stars  t= 45.0 s  E=25.32  max|a|=2.00  left=18.41 m  solves=450  mean solve 1.18 ms  min_clearance=0.81  knobs={'N': 30}  waypoints=[[22.0, 42.0]]  fix=waypoints
-           - The ball stopped 0.8 m from the block at (32, 30) with the target behind it: stuck. Every solve converged to the same plan (a local solution of the nonconvex OCP), so the ball no longer moves.
+run        time_out           0 stars  t= 45.0 s  E=25.32  max|a|=2.00  left=18.41 m  solves=450  mean solve 1.20 ms  min_clearance=0.811  knobs={'N': 30}  waypoints=[[22.0, 42.0]]  fix=waypoints
+           - The ball stopped 0.8 m from the block at (32, 30) with the target behind it: stuck. Every solve returned (status 0) practically the same plan, a stationary point of the nonconvex OCP, so the ball no longer moves.
            - It reached 1 of 1 waypoint(s). Place them so the straight line to each next one does not lead into the trap.
-           - (Building the solver for N = 30 took 3.2 s, once: it is cached now.)
+           - (Building the solver for N = 30 took 3.0 s, once: it is cached now.)
 
 # 5. Level 4 Crosswind: re-plan interval k x obstacle margin m
 $ python calibrate.py crosswind k=1 margin=0.1
-run        solve_budget       0 stars  t=  6.0 s  E= 5.86  max|a|=2.00  left=29.00 m  solves=60  mean solve 1.84 ms  max_drift=0.00  min_clearance=6.00  knobs={'k': 1, 'margin': 0.1}
+run        solve_budget       0 stars  t=  6.0 s  E= 5.86  max|a|=2.00  left=29.00 m  solves=60  mean solve 1.81 ms  max_drift=0.004  mean_replan_deviation=0.002  min_clearance=6.000  knobs={'k': 1, 'margin': 0.1}
            - The compute budget (60 solves) ran out at t = 6.0 s, 29.0 m before the target.
            - Re-planning every k = 1 sample(s) = every 0.1 s costs about 60 solves for this stretch alone: re-plan less often.
 
 $ python calibrate.py crosswind k=2 margin=0.1
-run        solve_budget       0 stars  t= 12.0 s  E=20.62  max|a|=2.00  left=17.28 m  solves=60  mean solve 3.17 ms  max_drift=0.00  min_clearance=0.13  knobs={'k': 2, 'margin': 0.1}
+run        solve_budget       0 stars  t= 12.0 s  E=20.62  max|a|=2.00  left=17.28 m  solves=60  mean solve 3.23 ms  max_drift=0.018  mean_replan_deviation=0.008  min_clearance=0.130  knobs={'k': 2, 'margin': 0.1}
            - The compute budget (60 solves) ran out at t = 12.0 s, 17.3 m before the target.
            - Re-planning every k = 2 sample(s) = every 0.2 s costs about 60 solves for this stretch alone: re-plan less often.
 
 $ python calibrate.py crosswind k=3 margin=0.1
-run        solve_budget       0 stars  t= 18.0 s  E=28.15  max|a|=2.00  left=5.16 m  solves=60  mean solve 2.71 ms  max_drift=0.02  min_clearance=0.11  knobs={'k': 3, 'margin': 0.1}
+run        solve_budget       0 stars  t= 18.0 s  E=28.15  max|a|=2.00  left=5.16 m  solves=60  mean solve 2.65 ms  max_drift=0.040  mean_replan_deviation=0.017  min_clearance=0.111  knobs={'k': 3, 'margin': 0.1}
            - The compute budget (60 solves) ran out at t = 18.0 s, 5.2 m before the target.
            - Re-planning every k = 3 sample(s) = every 0.3 s costs about 60 solves for this stretch alone: re-plan less often.
 
 $ python calibrate.py crosswind k=5 margin=0.1
-run        crash_block        0 stars  t=  9.1 s  E=15.01  max|a|=2.00  left=23.07 m  solves=19  mean solve 3.33 ms  max_drift=0.06  min_clearance=0.00  knobs={'k': 5, 'margin': 0.1}
+run        crash_block        0 stars  t=  9.1 s  E=15.01  max|a|=2.00  left=23.07 m  solves=19  mean solve 4.90 ms  max_drift=0.097  mean_replan_deviation=0.053  min_clearance=0.004  knobs={'k': 5, 'margin': 0.1}
            - The ball hit a block at t = 9.1 s.
-           - Between re-plans the ball ran open-loop for 0.5 s and the wind pushed it up to 0.06 m off the plan. Re-plan more often, or give it more room (margin m).
+           - Between re-plans the ball ran open-loop for 0.5 s and the wind pushed it up to 0.10 m off the plan. Re-plan more often, or give it more room (margin m).
 
 $ python calibrate.py crosswind k=10 margin=0.1
-run        crash_block        0 stars  t=  9.2 s  E=19.01  max|a|=2.00  left=23.04 m  solves=10  mean solve 3.80 ms  max_drift=0.31  min_clearance=0.00  knobs={'k': 10, 'margin': 0.1}
+run        crash_block        0 stars  t=  9.2 s  E=19.01  max|a|=2.00  left=23.04 m  solves=10  mean solve 3.89 ms  max_drift=0.388  mean_replan_deviation=0.210  min_clearance=0.000  knobs={'k': 10, 'margin': 0.1}
            - The ball hit a block at t = 9.2 s.
-           - Between re-plans the ball ran open-loop for 1 s and the wind pushed it up to 0.31 m off the plan. Re-plan more often, or give it more room (margin m).
+           - Between re-plans the ball ran open-loop for 1 s and the wind pushed it up to 0.39 m off the plan. Re-plan more often, or give it more room (margin m).
 
 $ python calibrate.py crosswind k=20 margin=0.1
-run        crash_block        0 stars  t=  9.1 s  E=18.18  max|a|=2.00  left=22.88 m  solves=5  mean solve 4.57 ms  max_drift=1.33  min_clearance=0.00  knobs={'k': 20, 'margin': 0.1}
+run        crash_block        0 stars  t=  9.1 s  E=18.18  max|a|=2.00  left=22.88 m  solves=5  mean solve 6.38 ms  max_drift=1.465  mean_replan_deviation=0.889  min_clearance=0.000  knobs={'k': 20, 'margin': 0.1}
            - The ball hit a block at t = 9.1 s.
-           - Between re-plans the ball ran open-loop for 2 s and the wind pushed it up to 1.33 m off the plan. Re-plan more often, or give it more room (margin m).
+           - Between re-plans the ball ran open-loop for 2 s and the wind pushed it up to 1.47 m off the plan. Re-plan more often, or give it more room (margin m).
 
 $ python calibrate.py crosswind k=1 margin=0.3
-run        solve_budget       0 stars  t=  6.0 s  E= 5.86  max|a|=2.00  left=29.00 m  solves=60  mean solve 1.84 ms  max_drift=0.00  min_clearance=6.00  knobs={'k': 1, 'margin': 0.3}
+run        solve_budget       0 stars  t=  6.0 s  E= 5.86  max|a|=2.00  left=29.00 m  solves=60  mean solve 1.89 ms  max_drift=0.004  mean_replan_deviation=0.002  min_clearance=6.000  knobs={'k': 1, 'margin': 0.3}
            - The compute budget (60 solves) ran out at t = 6.0 s, 29.0 m before the target.
            - Re-planning every k = 1 sample(s) = every 0.1 s costs about 60 solves for this stretch alone: re-plan less often.
 
 $ python calibrate.py crosswind k=2 margin=0.3
-run        solve_budget       0 stars  t= 12.0 s  E=19.99  max|a|=2.00  left=17.31 m  solves=60  mean solve 3.03 ms  max_drift=0.00  min_clearance=0.27  knobs={'k': 2, 'margin': 0.3}
+run        solve_budget       0 stars  t= 12.0 s  E=19.99  max|a|=2.00  left=17.31 m  solves=60  mean solve 3.07 ms  max_drift=0.018  mean_replan_deviation=0.008  min_clearance=0.274  knobs={'k': 2, 'margin': 0.3}
            - The compute budget (60 solves) ran out at t = 12.0 s, 17.3 m before the target.
            - Re-planning every k = 2 sample(s) = every 0.2 s costs about 60 solves for this stretch alone: re-plan less often.
 
 $ python calibrate.py crosswind k=3 margin=0.3
-run        solve_budget       0 stars  t= 18.0 s  E=27.56  max|a|=2.00  left=5.14 m  solves=60  mean solve 2.89 ms  max_drift=0.02  min_clearance=0.25  knobs={'k': 3, 'margin': 0.3}
+run        solve_budget       0 stars  t= 18.0 s  E=27.56  max|a|=2.00  left=5.14 m  solves=60  mean solve 2.67 ms  max_drift=0.040  mean_replan_deviation=0.017  min_clearance=0.247  knobs={'k': 3, 'margin': 0.3}
            - The compute budget (60 solves) ran out at t = 18.0 s, 5.1 m before the target.
            - Re-planning every k = 3 sample(s) = every 0.3 s costs about 60 solves for this stretch alone: re-plan less often.
 
 $ python calibrate.py crosswind k=5 margin=0.3
-run        success            2 stars  t= 28.1 s  E=38.95  max|a|=2.00  left=0.02 m  solves=57  mean solve 2.22 ms  max_drift=0.07  min_clearance=0.21  knobs={'k': 5, 'margin': 0.3}
-           - Through the gap in 28.1 s with 57 of 60 solves (re-plan every 0.5 s); the wind pushed the ball up to 0.07 m off its plan.
+run        success            2 stars  t= 28.1 s  E=38.95  max|a|=2.00  left=0.02 m  solves=57  mean solve 2.24 ms  max_drift=0.111  mean_replan_deviation=0.049  min_clearance=0.214  knobs={'k': 5, 'margin': 0.3}
+           - Through the gap in 28.1 s with 57 of 60 solves (re-plan every 0.5 s); the wind pushed the ball up to 0.11 m off its plan.
            - For ★★★, use at most 35 solves: re-plan less often, and maybe give the wind more room.
 
 $ python calibrate.py crosswind k=10 margin=0.3
-run        success            3 stars  t= 28.2 s  E=50.38  max|a|=2.00  left=0.04 m  solves=29  mean solve 2.59 ms  max_drift=0.36  min_clearance=0.05  knobs={'k': 10, 'margin': 0.3}
-           - Through the gap in 28.2 s with 29 of 60 solves (re-plan every 1 s); the wind pushed the ball up to 0.36 m off its plan.
+run        success            3 stars  t= 28.2 s  E=50.38  max|a|=2.00  left=0.04 m  solves=29  mean solve 2.52 ms  max_drift=0.443  mean_replan_deviation=0.194  min_clearance=0.054  knobs={'k': 10, 'margin': 0.3}
+           - Through the gap in 28.2 s with 29 of 60 solves (re-plan every 1 s); the wind pushed the ball up to 0.44 m off its plan.
            - Just enough feedback: re-planning corrects the wind before it matters.
 
 $ python calibrate.py crosswind k=20 margin=0.3
-run        crash_block        0 stars  t= 10.1 s  E=21.77  max|a|=2.00  left=20.90 m  solves=6  mean solve 7.81 ms  max_drift=1.33  min_clearance=0.00  knobs={'k': 20, 'margin': 0.3}
+run        crash_block        0 stars  t= 10.1 s  E=21.77  max|a|=2.00  left=20.90 m  solves=6  mean solve 5.07 ms  max_drift=1.465  mean_replan_deviation=0.996  min_clearance=0.000  knobs={'k': 20, 'margin': 0.3}
            - The ball hit a block at t = 10.1 s.
-           - Between re-plans the ball ran open-loop for 2 s and the wind pushed it up to 1.33 m off the plan. Re-plan more often, or give it more room (margin m).
+           - Between re-plans the ball ran open-loop for 2 s and the wind pushed it up to 1.47 m off the plan. Re-plan more often, or give it more room (margin m).
 

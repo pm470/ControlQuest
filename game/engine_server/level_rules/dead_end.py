@@ -1,12 +1,15 @@
 """Rules of Level 3, "Dead End" (PRD 7, Level 3): nonconvexity and local optima.
 
 A U-shaped trap opens towards the start. Without help the MPC drives into the U and
-gets stuck in front of the back wall: a local optimum (time out). The weights and the
+gets stuck in front of the back wall (time out): every solve returns practically the same
+plan, a stationary point of the nonconvex OCP (KKT conditions met to the solver tolerance;
+not shown to be a local minimum). The weights and the
 margin are locked; the player picks ONE fix (level["fixes"]) and tunes only its control:
 
     "none"       the default MPC (N = level["N"]): fails
     "horizon"    a longer horizon: the knob N (any whole number in its range; a new N
-                 compiles its solver once, ~2-3 s); calibrated: it never escapes
+                 compiles its solver once, ~2-3 s); calibrated: none of the tested horizons
+                 (N = 30, 60, 100, 150) escaped on this map (not a proof that none can)
     "waypoints"  up to level["waypoints"]["max"] waypoints; the MPC reference is the next
                  waypoint and switches within level["waypoints"]["switch_radius"]
 
@@ -103,8 +106,9 @@ def explain(level, knobs, sim, m, stars) -> list[str]:
         j = int(np.argmin(dists))
         if m["final_speed"] < 0.2 and dists[j] < 4.0:
             msgs.append(f"The ball stopped {dists[j]:.1f} m from the block at {_where(blocks[j])} "
-                        "with the target behind it: stuck. Every solve converged to the same plan "
-                        "(a local solution of the nonconvex OCP), so the ball no longer moves.")
+                        "with the target behind it: stuck. Every solve returned (status 0) "
+                        "practically the same plan, a stationary point of the nonconvex OCP, so the "
+                        "ball no longer moves.")
             if fix == "none":
                 msgs.append(f"The horizon ({horizon:g} s) cannot see around the obstacle, and every "
                             "small step sideways first costs more. Pick a fix and try it.")

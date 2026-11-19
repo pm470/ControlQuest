@@ -2,7 +2,7 @@
 
 The standard terminal cost |x_N - x_ref|_P^2 measures the straight-line distance to the
 target. Behind a wall that is a poor estimate of the true cost-to-go, and the MPC can
-get stuck in a local optimum. Here the cost-to-go is computed offline and given to
+get stuck in front of an obstacle. Here the cost-to-go is computed offline and given to
 the solver as a smooth function:
 
 1. geodesic_distance: shortest-path distance to the target on a grid, around the

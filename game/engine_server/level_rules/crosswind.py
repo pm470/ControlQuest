@@ -34,21 +34,32 @@ def wind_function(level: dict):
     return wind
 
 
-def drift(sim) -> np.ndarray:
-    """Per sample k (length n+1): distance [m] between where the plan being executed said
-    the ball would be at t_k and where it is. Grows during an open-loop stretch."""
+def drift(sim) -> tuple[np.ndarray, np.ndarray]:
+    """Deviation from the prediction in force (since engine 0.14.0, 2026-11-19).
+
+    d[k] (length n+1): distance [m] between the ball at sample k and where the plan in force
+    before sample k (the last one solved at a sample < k) predicted it. At a re-planning
+    instant this is the outgoing plan, compared just before it is replaced: the open-loop
+    prediction error after a whole stretch of k samples (one sample for k = 1). d[0] = 0:
+    nothing was predicted for t = 0. (Until 0.13.0 the new plan was used at a re-plan, which
+    starts at the measured ball, so the error at the end of each stretch was never seen and
+    k = 1 always gave 0.)
+
+    Also returns the values at the re-planning instants (one per replaced plan)."""
     out = np.zeros(len(sim.x))
+    steps = list(sim.solve_steps)
+    at_replans = []
     s = 0
-    for k in range(len(sim.x)):
-        while s + 1 < len(sim.solve_steps) and sim.solve_steps[s + 1] <= k:
+    for k in range(1, len(sim.x)):
+        while s + 1 < len(steps) and steps[s + 1] < k:
             s += 1
-        if not sim.solve_steps:
-            break
-        m = k - sim.solve_steps[s]
+        m = k - steps[s]
         plan = sim.plans[s]
-        if 0 <= m < len(plan):
+        if 0 < m < len(plan):
             out[k] = np.linalg.norm(np.asarray(plan[m][:2]) - np.asarray(sim.x[k][:2]))
-    return out
+            if s + 1 < len(steps) and steps[s + 1] == k:
+                at_replans.append(out[k])
+    return out, np.array(at_replans)
 
 
 def run(level: dict, knobs: dict, cache: SolverCache) -> dict:
@@ -71,7 +82,7 @@ def run(level: dict, knobs: dict, cache: SolverCache) -> dict:
 
     X, U = np.array(sim.x), np.array(sim.u).reshape(-1, 2)
     target = np.array(level["target"])
-    d = drift(sim)
+    d, at_replans = drift(sim)
     metrics = {
         "time": sim.t[-1],
         "energy": sim.energy[-1],
@@ -79,7 +90,9 @@ def run(level: dict, knobs: dict, cache: SolverCache) -> dict:
         "margin": knobs["margin"],
         "solves_used": len(sim.solve_time),
         "solve_budget": budget,
+        # deviation from the prediction in force: max over the run, mean at the re-plans
         "max_drift": float(d.max()) if len(d) else 0.0,
+        "mean_replan_deviation": float(at_replans.mean()) if len(at_replans) else None,
         "distance_left": float(np.linalg.norm(X[-1, :2] - target)),
         "min_clearance": float(min(block_distance(b, p) for b in blocks for p in X[:, :2])),
         "max_accel": float(np.abs(U).max()) if len(U) else 0.0,

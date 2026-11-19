@@ -52,7 +52,8 @@ RESEARCH = ResearchInfo(
             venue="IFAC-PapersOnLine 56(3), 265–270",
             url="https://doi.org/10.1016/j.ifacol.2023.12.035",
             doi="10.1016/j.ifacol.2023.12.035",
-            free_url="https://arxiv.org/abs/2309.09358",
+            # no "Free version (arXiv)" link in the game (the user, 2026-11-19); the preprint
+            # https://arxiv.org/abs/2309.09358 is still cited in docs/RESEARCH.md
             problem=("An ecological cruise control saves fuel using a preview of the road grade, but "
                      "how well it works depends strongly on the cost-function weights."),
             approach=("Solve the fuel-optimal problem offline with dynamic programming, find matching "

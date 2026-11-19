@@ -13,7 +13,10 @@ evaluation of learning effectiveness. Our numbers come from our simulations; the
 contributions are paraphrased from their abstracts.
 
 - Measured data: [`results/calibrate_2026-11-19.txt`](results/calibrate_2026-11-19.txt) (raw
-  output, environment and commands), [`figures/price_of_speed_sweep.csv`](figures/price_of_speed_sweep.csv).
+  output, environment and commands), [`figures/price_of_speed_sweep.csv`](figures/price_of_speed_sweep.csv);
+  numerical verification of the solutions: [`results/verify_numerics.py`](results/verify_numerics.py)
+  and its output [`results/verify_numerics_2026-11-19.txt`](results/verify_numerics_2026-11-19.txt)
+  (section 3). All numbers below are from engine 0.14.0.
 - The research brief this builds on (proposal and bibliography):
   [`SCIENTIFIC_UPGRADE_BRIEF.md`](SCIENTIFIC_UPGRADE_BRIEF.md). Where it and this document
   differ, this document reflects the built game (reduced scope, 2026-11-19).
@@ -43,9 +46,15 @@ subject to
   (hard: the "walls");
 - obstacles (Dead End, Crosswind): $(p_k - c_j)^\top E_j (p_k - c_j) \ge 1 - s_{k,j}$, $s_{k,j} \ge 0$
   on the predicted positions: each block's minimum-area enclosing ellipse, enlarged by a
-  margin. These constraints are **soft**: acados penalises the slack linearly (weight $10^4$, an
-  exact L1 penalty) plus a small quadratic term (weight 10), because hard ellipse constraints
-  made the QP solver fail when an ellipse and the input bounds were active together;
+  margin. These constraints are **soft**, because hard ellipse constraints made the QP solver
+  fail when an ellipse and the input bounds were active together. The slack cost per stage is
+  $\sigma_k\,(z\,s + \tfrac12 Z s^2)$ with $z = 10^4$, $Z = 10$ and acados' cost scaling
+  $\sigma_k$ ($\Delta t$ on the stages, 1 at the end of the horizon; checked in the acados source),
+  i.e. effectively $10^3 s + 0.5\,s^2$ per stage and $10^4 s + 5\,s^2$ at $k = N$. A linear (L1)
+  penalty reproduces the hard constraint (an *exact* penalty) only if its weight exceeds the
+  magnitude of the constraint's Lagrange multiplier; we do not prove that this holds here.
+  Measured instead (section 3): in Dead End the accepted plans' slacks stayed below
+  $10^{-9}$, while in Crosswind accepted plans do enter the ellipses after a gust;
 - Brake Check only, optional: the terminal constraint $v_N = 0$.
 
 $Q = \mathrm{diag}(q_p, q_p, q_v, q_v)$, $R = r I$, $P = 10\,Q$. The stage cost is weighted by $\Delta t$
@@ -60,7 +69,8 @@ is used only if it is finite and inside all bounds; plans must also stay outside
 ellipses (a gust can push the ball into an ellipse; the soft constraint then leads the plan out,
 and only touching a block is a crash). A solve that stops at the SQP iteration limit is used only if
 its plan passes all these checks, the ellipse check included. Every other solver failure ends
-the run as "controller failure"; there is no fallback controller.
+the run as "controller failure"; there is no fallback controller. The bound check uses the general
+state bounds, not the terminal stop $v_N = 0$; that one is verified separately (section 3).
 
 **Closed loop and rules outside the OCP.** The run ends on success ($\|p - p_\star\| < 0.05$ m and
 $\|v\| < 0.05$ m/s), time out, controller failure, a crash (the ball's path enters a block,
@@ -69,7 +79,9 @@ Crosswind's solve budget are **game rules that stop the run**, not constraints i
 
 **Determinism.** No randomness except Crosswind's wind, which uses a fixed seed. Two runs with
 the same settings gave identical trajectories (checked 2026-11-19 for Level 1's default and
-Crosswind's reference).
+Crosswind's reference), and every calibration run reproduced its outcome, time and effort across
+separate runs. Internal solver details can still differ slightly between processes (e.g. how
+many of Dead End's solves need zero SQP iterations).
 
 **How the numbers were measured.** With the existing `game/engine_server/calibrate.py` in the
 course Docker image (commands and environment in the log). "Time" is the time to the target for
@@ -88,7 +100,7 @@ feedback controller, and why does every solve have to be fast?
 model, optimise the input sequence, apply only $u_0$, repeat. 20 m field, ball at rest, $N = 30$
 (3 s), all weights 1. No stars.
 
-**Measured.** Target reached after 10.0 s with 100 solves (one every 0.1 s), 0.58 ms per solve.
+**Measured.** Target reached after 10.0 s with 100 solves (one every 0.1 s), 0.66 ms per solve.
 
 **Papers.**
 - [0A] J. Frey, K. Baumgärtner, G. Frison, M. Diehl (2025). *Multi-Phase Optimal Control
@@ -182,17 +194,17 @@ $N \in \{5, 10, 20, 30, 40, 60\}$ and the terminal stop $v_N = 0$. ★★ within
 | $N$ (horizon) | stop | Outcome | Time | mean solve |
 |---|---|---|---|---|
 | 5 (0.5 s) | off | controller failure | 13.3 s (stopped) | 0.15 ms |
-| 10 (1 s), default | off | controller failure | 13.0 s (stopped) | 0.31 ms |
-| 20 (2 s) | off | controller failure | 13.2 s (stopped) | 0.56 ms |
-| 30 (3 s) | off | success ★★ | 17.2 s | 0.81 ms |
-| 40 (4 s) | off | success ★★ | 16.6 s | 1.08 ms |
-| 60 (6 s) | off | success ★★ | 17.2 s | 1.67 ms |
-| 5 | on | time out, 20.1 m left | 60.0 s (stopped) | 0.13 ms |
-| 10 | on | success ★ | 49.9 s | 0.26 ms |
-| 20, reference | on | success ★★★ | 25.1 s | 0.56 ms |
-| 30 | on | success ★★ | 19.3 s | 0.92 ms |
-| 40 | on | success ★★ | 16.8 s | 1.31 ms |
-| 60 | on | success ★★ | 17.2 s | 1.65 ms |
+| 10 (1 s), default | off | controller failure | 13.0 s (stopped) | 0.29 ms |
+| 20 (2 s) | off | controller failure | 13.2 s (stopped) | 0.57 ms |
+| 30 (3 s) | off | success ★★ | 17.2 s | 0.77 ms |
+| 40 (4 s) | off | success ★★ | 16.6 s | 1.03 ms |
+| 60 (6 s) | off | success ★★ | 17.2 s | 1.55 ms |
+| 5 | on | time out, 20.1 m left | 60.0 s (stopped) | 0.14 ms |
+| 10 | on | success ★ | 49.9 s | 0.27 ms |
+| 20, reference | on | success ★★★ | 25.1 s | 0.58 ms |
+| 30 | on | success ★★ | 19.3 s | 0.98 ms |
+| 40 | on | success ★★ | 16.8 s | 1.23 ms |
+| 60 | on | success ★★ | 17.2 s | 1.70 ms |
 
 Default run in detail: at $t = 11.6$ s the ball was 7.6 m from the wall at 4.0 m/s; braking needs
 8.0 m, the 1 s horizon reached about 4 m. From then on no input sequence could stop it before
@@ -205,7 +217,9 @@ failure is reported by the solver; the evidence that no feasible plan existed is
 control invariant set here ($u = 0$ keeps the ball at rest within all constraints), so with the
 exact model the shifted previous plan extended by one resting step stays feasible: recursive
 feasibility. The price is a speed limit of about $a_{\max} N \Delta t$, hence slow runs for short
-$N$. A long horizon also works without the stop, at a higher cost per solve.
+$N$. A long horizon also works without the stop, at a higher cost per solve. Numerically (section
+3), every accepted plan with the stop on met $|v_N| \le 10^{-11}$ m/s, the model equations to
+$4\cdot 10^{-11}$ and all bounds exactly; each failing run ended with one rejected solve (status 4).
 
 **Papers.**
 - [2A] M. E. Geurts, A. Katriniok, E. Silvas, N. J. Brouwer, W. P. M. H. Heemels (2025).
@@ -237,20 +251,28 @@ $N$ from 5 to 300) or ② up to 3 waypoints (the reference switches to the next 
 
 | Fix | Outcome | Distance left | mean solve |
 |---|---|---|---|
-| none ($N = 30$) | time out (45 s) | 15.2 m | 1.27 ms |
-| horizon $N = 60$ | time out (45 s) | 15.2 m | 1.79 ms |
-| horizon $N = 100$ | time out (45 s) | 15.2 m | 1.68 ms |
-| horizon $N = 150$ | time out (45 s) | 15.2 m | 3.03 ms |
-| waypoint (35, 40), reference | success ★★★, 25.2 s | – | 1.20 ms |
-| waypoint (22, 42) | time out (45 s) | 18.4 m | 1.18 ms |
+| none ($N = 30$) | time out (45 s) | 15.2 m | 1.25 ms |
+| horizon $N = 60$ | time out (45 s) | 15.2 m | 1.77 ms |
+| horizon $N = 100$ | time out (45 s) | 15.2 m | 1.70 ms |
+| horizon $N = 150$ | time out (45 s) | 15.2 m | 3.04 ms |
+| waypoint (35, 40), reference | success ★★★, 25.2 s | – | 1.23 ms |
+| waypoint (22, 42) | time out (45 s) | 18.4 m | 1.20 ms |
 
-Every horizon stopped at the same point, 0.19 m from the back wall.
+Every tested horizon stopped at the same point, 0.185 m from the back wall. While the ball is
+stuck (last 10 s, section 3): every solve ends with acados status 0, consecutive plans differ by
+at most $1.3\cdot 10^{-5}$ m, 30 % to 97 % of the solves need no SQP iteration at all (the warm
+start already meets the tolerance; the share varies slightly between runs), and the KKT residuals stay at or below $10^{-4}$, the
+solver tolerance.
 
 **Interpretation.** With obstacles the OCP is nonconvex. SQP improves its starting guess (the
-shifted previous plan) locally; once the plans lead into the U, every solve converges to the
-same plan in front of the wall and the ball stops. More foresight did not change that here and
-only made each solve slower. A suitable waypoint changes the reference, and the same local MPC
-then finds the way; a badly placed one leads into the trap again.
+shifted previous plan) locally; once the plans lead into the U, the solver keeps returning
+practically the same plan in front of the wall and the ball stops. That plan satisfies the
+first-order optimality (KKT) conditions to the solver tolerance: it is a **stationary point**
+of the OCP. Second-order conditions were not checked, so we do **not** claim it is a local
+minimum, and the experiments do not show that a longer horizon can never help: they show that
+none of the tested horizons (30, 60, 100, 150) escaped on this map, while each solve got slower.
+A suitable waypoint changes the reference, and the same local MPC then finds the way; a badly
+placed one leads into the trap again.
 
 **Papers.**
 - [3A] S.-M. Lee (2025). *Global-Initialization-Based Model Predictive Control for Mobile Robots
@@ -266,8 +288,8 @@ then finds the way; a badly placed one leads into the trap again.
   preprint has a shorter title). A safe corridor of obstacle-free polytopes with waypoints and a
   sequence of MPC problems; simulations with the robot Digit. Relation: automatic waypoints.
 
-**Limits.** That all tested horizons got stuck is what happened on this map, not a proof that a
-longer horizon never helps. Waypoints are placed by the player, not by a global planner. A third
+**Limits.** That all tested horizons got stuck is an empirical observation on this map with this
+warm start, not a mathematical result about horizons in general. Waypoints are placed by the player, not by a global planner. A third
 fix (a learned or exact cost-to-go) was explored in a spike and dropped (AGENTS.md section 6).
 
 ### Level 4 "Crosswind": feedback, disturbances and how often to re-plan
@@ -279,27 +301,49 @@ disturbances, when computation is limited?
 1 s, seed 7) pushes the real ball; the model does not know it. The OCP is solved every $k$ samples
 ($k \in \{1, 2, 3, 5, 10, 20\}$); in between the next inputs of the last plan are applied open-loop.
 Budget 60 solves (the run stops when it is used up), time limit 35 s; ★★ within 30 s; ★★★ also at
-most 35 solves. The player also sets the obstacle margin $m$. "Drift" is the distance between the
-ball and the plan being executed; it is 0 at every re-plan, and always 0 for $k = 1$.
+most 35 solves. The player also sets the obstacle margin $m$.
 
-**Measured** (outcome · time · solves · max drift):
+**Deviation from the prediction (engine 0.14.0).** At every sample $t_j$ the game measures the
+distance between the ball and the position predicted for $t_j$ by the plan in force before $t_j$;
+at a re-planning instant this is the outgoing plan, just before it is replaced. So the value at
+a re-plan is the open-loop prediction error after a whole stretch of $T = k\,\Delta t$ (one sample
+for $k = 1$). During a stretch the real ball receives exactly the planned inputs and differs from
+the model only by the wind, so this error is the double integral of the wind over the stretch,
+at most $\tfrac12 |w|_{\max} T^2$ with $|w|_{\max} = 0.9$ m/s²: 0.0045, 0.11, 0.45 and 1.8 m for
+$k = 1, 5, 10, 20$. (Before engine 0.14.0 the value at a re-plan was taken against the new plan,
+which starts at the ball, so the end of every stretch was missed and $k = 1$ always gave 0;
+both definitions are compared in the verification log.)
+
+**Measured** (outcome · time · solves · deviation from the prediction: max over the run (mean
+at the re-plans)):
 
 | $k$ | margin 0.1 m | margin 0.3 m |
 |---|---|---|
-| 1 (default) | budget used up · 6.0 s · 60 · 0.00 m | budget used up · 6.0 s · 60 · 0.00 m |
-| 2 | budget used up · 12.0 s · 60 · 0.00 m | budget used up · 12.0 s · 60 · 0.00 m |
-| 3 | budget used up · 18.0 s · 60 · 0.02 m | budget used up · 18.0 s · 60 · 0.02 m |
-| 5 | crash · 9.1 s · 19 · 0.06 m | **success ★★ · 28.1 s · 57 · 0.07 m** |
-| 10 | crash · 9.2 s · 10 · 0.31 m | **success ★★★ · 28.2 s · 29 · 0.36 m** (reference) |
-| 20 | crash · 9.1 s · 5 · 1.33 m | crash · 10.1 s · 6 · 1.33 m |
+| 1 (default) | budget used up · 6.0 s · 60 · 0.004 (0.002) m | budget used up · 6.0 s · 60 · 0.004 (0.002) m |
+| 2 | budget used up · 12.0 s · 60 · 0.018 (0.008) m | budget used up · 12.0 s · 60 · 0.018 (0.008) m |
+| 3 | budget used up · 18.0 s · 60 · 0.040 (0.017) m | budget used up · 18.0 s · 60 · 0.040 (0.017) m |
+| 5 | crash · 9.1 s · 19 · 0.097 (0.053) m | **success ★★ · 28.1 s · 57 · 0.111 (0.049) m** |
+| 10 | crash · 9.2 s · 10 · 0.388 (0.210) m | **success ★★★ · 28.2 s · 29 · 0.443 (0.194) m** (reference) |
+| 20 | crash · 9.1 s · 5 · 1.465 (0.889) m | crash · 10.1 s · 6 · 1.465 (0.996) m |
 
-(Times of failed runs are the time until the run stopped.)
+(Times of failed runs are the time until the run stopped.) The runs end at different times and
+for different reasons, so their maxima cover different stretches of wind. A fair comparison of
+the re-planning intervals uses the window $t \le 6$ s, which every run covers and in which every
+run meets the same wind (fixed seed); there the values are identical for both margins:
 
-**Interpretation.** Frequent re-planning keeps the drift small but uses up the budget long
-before the target. Rare re-planning saves solves, but the wind pushes the ball up to 1.3 m off
-its plan between re-plans, into a block. Only intermediate $k$ together with a margin that
-leaves room for the drift between re-plans succeeds; with $m = 0.1$ m no tested $k$ did. One fixed
-$k$ must suit the most demanding part of the run.
+| $k$ | 1 | 2 | 3 | 5 | 10 | 20 |
+|---|---|---|---|---|---|---|
+| max deviation, $t \le 6$ s | 0.004 m | 0.015 m | 0.035 m | 0.097 m | 0.388 m | 1.465 m |
+| mean deviation, $t \le 6$ s | 0.002 m | 0.005 m | 0.010 m | 0.023 m | 0.081 m | 0.392 m |
+
+(`verify_numerics.py`; all values within the bound $\tfrac12 |w|_{\max} T^2$ above.)
+
+**Interpretation.** The prediction error between re-plans grows roughly with the square of the
+open-loop time and does not depend on the margin. Frequent re-planning keeps it to millimetres
+but uses up the budget long before the target. Rare re-planning saves solves, but the wind pushes
+the ball up to about 1.5 m off its prediction between re-plans, into a block. Only intermediate
+$k$ together with a margin that leaves room for that error succeeded; with $m = 0.1$ m no tested
+$k$ did. One fixed $k$ must suit the most demanding part of the run.
 
 **Papers.**
 - [5A] P. Li, T. Wang, Y. Kang, K. Li, Y.-B. Zhao (2022). *Event-based model predictive control
@@ -316,9 +360,33 @@ $k$ must suit the most demanding part of the run.
 
 **Limits.** Fixed-interval re-planning, not event- or self-triggered MPC (not built, by
 decision). The budget counts solves, not computing time. One wind realisation (fixed seed): the
-table shows this wind, not all winds. The margin is a heuristic buffer, not a robust (tube) MPC.
+table shows this wind, not all winds. The margin is a heuristic buffer, not a robust (tube) MPC;
+accepted plans in this level may enter the ellipses after a gust (soft constraints, section 3).
 
-## 3. References: how they were checked
+## 3. Numerical verification of the solutions
+
+`docs/results/verify_numerics.py` records every MPC solve of a run (read-only) and checks it;
+the output is in `docs/results/verify_numerics_2026-11-19.txt`. Results:
+
+- **Brake Check, all 12 horizon / terminal-stop settings.** Every accepted plan with the terminal
+  stop on met $|v_N| \le 9.5\cdot 10^{-12}$ m/s. In all accepted plans: dynamics residual
+  $\max_k |x_{k+1} - f(x_k,u_k)|_\infty \le 3.8\cdot 10^{-11}$, $x_0 = \hat{x}$ exactly, no input or
+  state bound violated; acados KKT residuals at most $10^{-6}$ (stationarity, complementarity),
+  $4\cdot 10^{-11}$ (equality), $10^{-11}$ (inequality); status 0 throughout. Each failing run ended
+  with exactly one rejected solve, status 4 (QP solver failure). That status is not a certificate
+  of infeasibility; the evidence for infeasibility is the braking distance (section 2).
+- **Dead End.** See section 2: status 0 everywhere, a stationary plan while stuck (KKT residuals
+  $\le 10^{-4}$, the tolerance; dynamics residuals $\le 10^{-4}$, as the SQP stops at that tolerance),
+  no claim of a local minimum.
+- **Obstacle constraints.** Dead End: smallest ellipse value of all accepted plans' predicted
+  positions $h = 1.0000$ and slacks $\le 5.3\cdot 10^{-10}$, so the soft constraint behaved like the
+  hard one in these runs (plans touch the ellipse, no measurable violation). Crosswind: accepted
+  plans enter the ellipses after a gust (smallest $h$ 0.88 in the successful runs, 0.36 before a
+  crash; slacks up to 0.12 and 0.64). There the game deliberately accepts such plans; only
+  touching a block ends the run.
+- **Crosswind deviation.** Definition, both versions and the common window: section 2.
+
+## 4. References: how they were checked
 
 All ten were checked on 2026-11-19 against Crossref (DOI metadata: title, authors, venue,
 volume, pages, year), arXiv (where a preprint exists) and the RSS 2024 programme page ([0B] has
@@ -327,11 +395,14 @@ above and in the game paraphrase those abstracts only. Corrections to the brief:
 authors (F. Krabbes was missing); [3B]'s preprint title is shorter than the published one.
 Section, figure or result claims from the brief that are not in the abstracts are not used.
 
-## 4. What this project does not claim
+## 5. What this project does not claim
 
 - It does not reproduce or outperform any cited method; the papers are context for the levels.
 - Its numbers come from one deterministic simulation per setting on one machine; they illustrate
   the trade-offs, they are not statistics.
 - Recursive feasibility in Brake Check holds for the exact model without disturbances only; no
   level makes stability or real-world safety claims.
+- Dead End shows a stationary point and that the tested horizons did not escape; it does not
+  prove a local minimum or that no horizon could escape.
+- The obstacle penalty is not proven to be exact; its behaviour was measured (section 3).
 - No study of learning effectiveness was done.
