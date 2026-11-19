@@ -239,7 +239,7 @@ def draw_pill(p: QPainter, rect: QRectF, text: str, font_px: float = 13) -> None
 
 
 def draw_level_icon(p: QPainter, kind: str, center: QPointF, size: float, color: str) -> None:
-    """Small line icons for the level tiles: loop, bolt, wall, trap, weight, wind."""
+    """Small line icons for the level tiles: loop, bolt, wall, trap, wind."""
     p.save()
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     pen = QPen(QColor(color), max(2.0, size * 0.09), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
@@ -264,9 +264,6 @@ def draw_level_icon(p: QPainter, kind: str, center: QPointF, size: float, color:
     elif kind == "trap":
         p.drawPolyline([pt(6, 4), pt(18, 4), pt(18, 20), pt(6, 20)])
         p.drawEllipse(pt(9, 12), 2.5 * s, 2.5 * s)
-    elif kind == "weight":
-        p.drawPolygon(QPolygonF([pt(5, 20), pt(7, 9), pt(17, 9), pt(19, 20)]))
-        p.drawEllipse(pt(12, 6), 2.6 * s, 2.6 * s)
     elif kind == "wind":
         path = QPainterPath(pt(3, 8))
         path.lineTo(pt(15, 8))

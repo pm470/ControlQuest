@@ -26,12 +26,22 @@ class PriceOfSpeedWidget(LevelPlayWidget):
     def add_extras(self, column: QVBoxLayout) -> None:
         self.battery = BudgetBar("Battery", self.data.budget["energy"], self.data.pars.get("energy"))
         self.battery.setToolTip("Energy used so far (the run stops when the battery is empty). "
-                                "The yellow tick: use less than this for ★★★.")
+                                "The yellow tick: use less than this for ★★★.\n"
+                                "\"Energy\" here is the effort measure Σ Δt‖u‖² (in m²/s³), "
+                                "not physical energy in joules.")
         column.addWidget(self.battery)
 
     def update_extras(self, t: float) -> None:
         tr = self.result.trajectory
         self.battery.set_used(tr.interp(tr.energy, t))
+
+    def debrief_visual(self, result):
+        """The battery bar at the end of the run (Research debrief)."""
+        bar = BudgetBar("Battery", self.data.budget["energy"], self.data.pars.get("energy"))
+        bar.set_used(result.metrics.get("energy", 0.0))
+        bar.setToolTip("Effort used in this run: Σ Δt‖u‖² (not physical energy). "
+                       "The yellow tick: ★★★ par.")
+        return bar
 
     def result_rows(self, result):
         m, d = result.metrics, self.data
@@ -69,7 +79,7 @@ LEVEL = LevelInfo(
              "fast; $R$ prices accelerating. Large $Q$ compared with $R$ gives a fast, aggressive "
              "controller; large $R$ gives a slow, economical one. Only the ratios matter: "
              "multiplying every weight by the same number changes nothing."),
-    teaching=("The default weights ($q_p = 10$, $q_v = 1$, $r = 0.1$) are almost time-optimal: the "
+    teaching=("The default weights ($q_p = 10$, $q_v = 1$, $r = 0.1$) make an aggressive controller: the "
               "ball accelerates and brakes at full power, and the battery runs empty just before "
               "the star. Make inputs more expensive relative to the position error (raise $r$ or "
               "lower $q_p$) so it brakes more gently, but not so gently that time runs out. The "

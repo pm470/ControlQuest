@@ -215,6 +215,8 @@ def stylesheet() -> str:
     QPushButton[scale="tall"] {{
         font-size: 15px; font-weight: 800; padding: 13px 18px; border-radius: 18px;
     }}
+    /* same height, narrower sides: four buttons in one row of the result card */
+    QPushButton[scale="compact"] {{ padding: 9px 14px; }}
 
     /* containers: tiles (role "card") stand on a lip; wells are tonal insets */
     QFrame[role="card"] {{

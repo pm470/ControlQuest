@@ -55,7 +55,7 @@ class SolveSelector(QWidget):
 
     def set_count(self, n: int, dt: float, times: list[float] | None = None) -> None:
         """n solves in the current run (0 = no run yet). times: when each solve was computed
-        (default: one solve per dt; Level 5 re-plans less often)."""
+        (default: one solve per dt; Level 4 (Crosswind) re-plans less often)."""
         self._dt, self._times, self._n, self._k = dt, times, n, 0
         self._validator.setRange(1, max(1, n))
         self.of_label.setText(f"/{n}")

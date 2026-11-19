@@ -30,8 +30,10 @@ interface `acados_template`) and **CasADi**.
   **About 2 weeks** total, starting around 2026-10-19. Keep the scope small.
 - Players are classmates from the MPC course: use course notation (Q, R, P, N,
   x_k, u_k); explanations can be short and technical.
-- Planned: 5 levels (PRD section 7). Levels 1, 2, 4, 5 must-have; Level 3 should-have.
-  Plus Level 0 "Hello, MPC" (added 2026-11-17): an optional tutorial without stars.
+- Levels (since 2026-11-19, reduced scope): the tutorial Level 0 "Hello, MPC" (no stars) and
+  **four rated levels**: 1 "The Price of Speed", 2 "Brake Check", 3 "Dead End", 4 "Crosswind".
+  The former Level 4 "Heavy Ball" (model mismatch) was **removed**; Crosswind moved from 5 to 4.
+  The goal now is a polished, scientifically grounded version of these levels (section 8).
 - **RL is out of scope for now** (stretch goal only, if time is left at the end).
 
 ## 3. Repository map
@@ -41,6 +43,9 @@ ControlQuest/
 ├── AGENTS.md            this file (CLAUDE.md just imports it)
 ├── README.md            short project description + pointers
 ├── docs/PRD.md          game design: rules, screens, levels, data formats, plan
+├── docs/RESEARCH.md     scientific motivation, formal OCP, measured results, references
+│                        (data: docs/results/, docs/figures/; the research brief:
+│                        docs/SCIENTIFIC_UPGRADE_BRIEF.md, a proposal, superseded where they differ)
 ├── game/                THE GAME (all current work)
 │   ├── README.md            detailed code map and workflows
 │   ├── requirements.txt     host-side Python deps (PySide6-Essentials, matplotlib)
@@ -96,6 +101,8 @@ without the engine; pressing Run then shows a clear "engine offline" message.
 - Check/tune a level without the UI (inside the container, e.g. via
   `docker run --rm -v "<repo>:/workspace" -w /workspace/game/engine_server <image> python calibrate.py price_of_speed`):
   `python calibrate.py <level_id>` (checks), `--sweep` (table), `q_p=0.3 r=1` (one run).
+  Level 1's sweep as CSV: `--sweep --csv /workspace/docs/figures/price_of_speed_sweep.csv`; its
+  figure (on the host): `python docs/figures/make_price_of_speed_pareto.py`.
 - Environment variables: `CONTROLQUEST_DEV=1` (dev buttons), `CONTROLQUEST_ENGINE_URL`,
   `CONTROLQUEST_IMAGE`, `CONTROLQUEST_PORT`.
 - Git Bash + Docker on Windows: prefix `MSYS_NO_PATHCONV=1` and pass Windows paths
@@ -122,7 +129,7 @@ without the engine; pressing Run then shows a clear "engine offline" message.
 Contract between the two sides: `controlquest/engine/protocol.py` ↔
 `engine_server/level_rules/common.py` + `server.py`, plus the level JSON files.
 
-## 6. Status (2026-11-17)
+## 6. Status (2026-11-19)
 
 - Done: menus (title with animation, level select with stars/locks/free mode, how
   to play, settings), engine server, MPC package, **Level 1 "The Price of Speed"
@@ -133,11 +140,12 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
   level, soft ellipse constraints, block crash check) and **Level 3 "Dead End"**
   playable: click-to-place waypoints, blocks + ellipses + waypoints on the map
   (`calibrate.py dead_end`). Since 2026-10-26 the player **picks a fix** (no fix /
-  ① longer horizon N ∈ {30, 60, 100, 150} / ② waypoints) and compares them in
-  "Your experiments"; fix ③ is still a TODO (below). Engine v0.5.0.
+  ① longer horizon: any whole N from 5 to 300, typed or slider, a new N builds its solver
+  once / ② waypoints) and compares them in "Your experiments"; fix ③ was dropped
+  (below). Engine v0.5.0.
 - Done (2026-11-03): **Level 2 "Brake Check"** playable (horizon dropdown, terminal-stop
-  switch, brake-check gauge; `calibrate.py brake_check`). Levels 4 and 5 are built too
-  (branch `level3to4`, `calibrate.py heavy_ball` / `crosswind`). Engine v0.9.0.
+  switch, brake-check gauge; `calibrate.py brake_check`). Levels 4 and 5 were built too
+  (branch `level3to4`); Level 4 "Heavy Ball" was removed on 2026-11-19. Engine v0.9.0.
 - Done (2026-11-14, branch `gui`): **UI redesign** on all screens and levels (design rules
   in section 10; borderless tiles with lips, three-tile level screen, knob colours in the
   OCP, new level select). Game-side only: engine unchanged (still v0.9.0).
@@ -148,19 +156,40 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
   `level_rules/hello_mpc.py`, `calibrate.py hello_mpc`). Engine v0.10.0 (new level id).
 - Done (2026-11-19): **all symbols in the LaTeX font** (`ui/math_text.py`, `$...$` in every
   text incl. the engine sentences; section 8). Engine v0.11.0.
-- Not yet: speed/acceleration plots (PRD 5.6),
+- Done (2026-11-19, reduced scope, phase 1): **Level 4 "Heavy Ball" removed** (level file, level
+  JSON, level rules, the `/test_drive` endpoint, the ghost ball and the `prediction_error` /
+  `prediction_lookahead` trajectory fields, the "weight" icon). **Crosswind is Level 4**
+  (`levels/level_4_crosswind.py`). The model gain `g` stays in `mpc/` (all levels use g = 1;
+  kept so the OCP recipe and the compiled solvers are unchanged). Bug fixed: a run that
+  finishes while the play screen is hidden (the player went back to the intro during
+  "Computing...") is now replayed when the play screen is shown again, not unseen. Engine v0.12.0.
+- Done (2026-11-19, phase 2): **scientific wording** of the level texts and the engine's
+  "what happened" sentences fixed (rules in section 8); Crosswind's and Dead End's OCP cards say
+  the ellipse constraints are soft. Texts only, no parameters changed. Engine v0.13.0.
+  Bug fixed on the way: the result card squeezed its rows and sentences on top of each other
+  when it was taller than the map (900×560 in Brake Check, Dead End, Crosswind; already before
+  the new texts). Its text part now scrolls inside the card; the buttons stay visible.
+- Done (2026-11-19, phase 3): **Research debrief** (`gameplay/research_debrief.py`, content in
+  `controlquest/research/<level_id>.py`, 10 papers checked against Crossref / arXiv / RSS):
+  "Insights" on the result card, "Research background" on the intro (not Level 0's),
+  `LevelScreen` has explicit views (intro / play / debrief / other). Game-side only.
+- Not yet: speed/acceleration plots (PRD 5.6; not planned in the reduced scope),
   saving progress to disk (progress resets on restart, intentionally for now).
-- Next planned work: the MPC side of levels 2, 4, 5 (horizon N per level, terminal
-  constraint, model gain, wind, re-plan interval); obstacles are already in place.
+- Done (2026-11-19, phase 4): **`docs/RESEARCH.md`** (motivation, formal OCP incl. soft
+  constraints and the external budgets, research question, measured results, interpretation,
+  limits and the 10 checked references per level), the raw log
+  `docs/results/calibrate_2026-11-19.txt`, Level 1's static Pareto figure
+  (`docs/figures/`), `calibrate.py` prints solves / mean solve time / drift / clearance and
+  writes the sweep as CSV; the brief renamed to `docs/SCIENTIFIC_UPGRADE_BRIEF.md`; PRD and
+  this file brought up to date. In the debrief, "Your latest run" moved under the takeaway.
+- All four reduced-scope phases are done. Open: nothing planned; ask the team before new scope.
 
-**TODO (on hold since 2026-10-26): fix ③ of Level 3 (a better terminal cost / cost-to-go).**
-The pick-a-fix mechanic is built with fixes ① and ② (fix selector, N dropdown, comparison
-table); ③ is missing. Adding it: one entry in `level_data/dead_end.json` "fixes", a branch
-in `level_rules/dead_end.py`, its controls in `levels/level_3_dead_end.py` (`_on_fix`).
-Plan: `~/.claude/plans/now-i-had-imagined-wondrous-spring.md` (on pm470's machine).
-Feasibility spike results (engine only, default map):
+**Dropped (2026-11-19, reduced scope): fix ③ of Level 3 (a better terminal cost / cost-to-go).**
+Do not build it, nor the Dijkstra reference. Level 3 keeps fixes ① and ②. The spike results
+below stay as background (they may be mentioned in the research texts):
 - ① **Longer horizon N**: never escapes. N = 30/60/100/150 all time out at (29.8, 25);
-  mean solve time 0.95 → 2.67 ms (max 84 ms), run 1.0 → 2.9 s. Lesson: foresight
+  mean solve time 0.95 → 2.67 ms (max 84 ms), run 1.0 → 2.9 s (2026-11-19 on another
+  machine: 1.3 → 3.0 ms; solve times are machine-specific). Lesson: foresight
   doesn't fix a local optimum; SQP with a warm start stays in its homotopy class.
   Built as fix ① (it is the "doesn't work" lesson).
 - ② **Waypoints**: built as fix ②, 23.6–34 s with one good waypoint.
@@ -175,8 +204,8 @@ Feasibility spike results (engine only, default map):
   path of D (no solver change). L = 1 m: time out (creeps); **L = 2–8 m: success,
   23.3 s, 1.5 ms/solve**; L ≥ 12 m: time out (reference past the corner, trapped
   at (30, 14)). Open decision: build ③ this way, or keep the terminal-cost version.
-- Code already in the repo for it: `engine_server/mpc/value_function.py` (Dijkstra
-  grid cost-to-go + RBF fit; **not used yet**).
+- Code from the spike still in the repo: `engine_server/mpc/value_function.py` (Dijkstra
+  grid cost-to-go + RBF fit; **not used**).
 
 ## 7. Rules for agents working in this repo
 
@@ -241,6 +270,85 @@ Feasibility spike results (engine only, default map):
   `checks.cases` (more expected outcomes/stars per level).
 - (2026-10-26) The knob-range rule (max ≤ max(50, 3 × reference)) is for weights only;
   discrete knobs with `"choices"` (e.g. horizon N) are exempt (`calibrate.py`).
+- (2026-11-19) **Reduced scope (time constraints); this overrides earlier plans, including the
+  "must-have Levels 1, 2, 4, 5" of 2026-10-19 and the scientific-upgrade brief's implementation
+  ideas** (the brief, `docs/SCIENTIFIC_UPGRADE_BRIEF.md`, stays as research reference).
+  Goal: a polished, scientifically grounded version of the existing game, no extra complexity.
+  - **Level 4 "Heavy Ball" removed** (the user: "I do not want it anymore"); the tutorial + four
+    rated levels remain, **Crosswind renumbered 5 → 4**, total stars "x / 12". All of Heavy
+    Ball's code goes (incl. test drive endpoint and ghost ball); the generic model gain `g` stays
+    in `mpc/` (unchanged OCP recipe).
+  - Hello, MPC: keep the existing tutorial. Price of Speed: keep the weight tuning; **no
+    interactive Pareto front** (a static Pareto plot made offline with the calibration tools is
+    allowed, docs only). Brake Check: keep horizon, terminal stop and brake gauge, nothing new.
+    Dead End: only fixes ① horizon and ② waypoints; **no fix ③, no Dijkstra, no terminal cost**.
+    Crosswind: keep fixed-interval re-planning; **no event-/self-triggered MPC** (only mentioned in
+    the research texts).
+  - Research: keep the brief's **two papers per remaining level** (0A/0B, 1A/1B, 2A/2B, 3A/3B,
+    5A/5B, Crosswind's pair keeps the brief's name); **one reusable Research debrief screen** with level-specific content: the scientific
+    problem, why it matters, how the level shows it, how the papers address it. Reuse existing
+    metrics and visualisations. **No** experiment-history system, complex interactive plots,
+    new optimisation algorithms or controller features. No change of controller parameters
+    without the user's approval.
+  - Priorities: 1 fix bugs and verify calibration; 2 scientific accuracy; 3 research debrief;
+    4 visual consistency; 5 document the scientific motivation and the measured results.
+- (2026-11-19) **Research debrief decisions** (the user approved the agent's recommendations):
+  - content in a new package `controlquest/research/` (typed dataclasses `ResearchInfo`,
+    `PaperRef`; one file per level, keyed by level id; static, offline, not in the level JSON);
+  - reached from an **"Insights" button on the result card after any outcome** (Replay · Retry ·
+    Insights · Next) and from a **"Research background" link on the level intro** (debrief in a
+    "No run yet" state); Level 0: only from its result card (tutorial otherwise unchanged);
+  - the result card's "Next level" rule stays **as it is** (only after a success, none on the
+    last level); the debrief's buttons follow the same rule: tonal "‹ Back to the level" + coral
+    "Next level ›" only when the result card shows Next; opened from the intro: "Start level ▶";
+  - layout: **two tiles like the level intro**, the main button pinned at the bottom; sections
+    The problem · Why it matters · What this level showed (the run's real numbers) · What research
+    does (2 paper cards, links open only on click) · **Limits of this level** (1–2 sentences);
+  - visuals: the run's numbers plus **existing widgets frozen at the run's end** (Level 1 battery
+    bar, Level 2 brake gauge at the point of no return, Level 3 "Your experiments", Level 4
+    compute-budget bar); no new chart widget;
+  - failed runs show "stopped after t s, d m left", never a time to target; no run yet: "No run
+    yet";
+  - Level 1 keeps "battery / energy" in play; tooltip and debrief say $\sum \Delta t\,\|u\|^2$ is an
+    effort measure, not physical energy;
+  - the research question is the debrief's headline only (not added to the level intro);
+  - scientific wording fixes in game texts **and** in the engine's "what happened" sentences
+    (engine version bump); the 10 references are checked against their public DOI/arXiv pages;
+  - measured results for `docs/RESEARCH.md` come from the existing `calibrate.py` (commands
+    listed, no new benchmark script); Level 1's static Pareto plot: `calibrate.py --sweep` writes
+    a CSV, a small offline script draws the PNG (docs only, labelled "best trade-offs among the
+    tested settings"); the brief is renamed to `docs/SCIENTIFIC_UPGRADE_BRIEF.md`.
+- (2026-11-19) **References checked** (phase 3) against Crossref (DOI metadata), arXiv and the
+  RSS 2024 programme page; abstracts from Crossref, arXiv or Semantic Scholar. All 10 exist with
+  the brief's titles, years and venues. Corrected: [1A] has **five** authors (F. Krabbes was
+  missing in the brief); [3B]'s arXiv preprint has a shorter title than the published letter;
+  [0B] (RSS 2024) has no DOI listed, the link is the programme page. Not used: the brief's
+  claims that are not in the abstracts (e.g. "constraint tightening" for [5A], section/figure
+  pointers), and the author-hosted mirrors (not checked). Summaries in the game paraphrase
+  the abstracts; each `PaperRef.checked` says what was verified.
+- (2026-11-19) The result card has **four buttons** (Replay · Retry · Insights · Next level ›);
+  to fit 460 px they use the new button scale **"compact"** (`theme.py`: same height, 14 px
+  sides). Use it only where several buttons share a narrow row.
+- (2026-11-19) **"Your latest run" first in the debrief**: the agent asked whether to keep the
+  spec's order (problem → why it matters → what the level showed) or show the player's run
+  first; the user told it to take its recommendation: the well "Your latest run" sits right
+  under the takeaway, visible without scrolling at 1280×800.
+- (2026-11-19) **Phase 4 docs**: `docs/RESEARCH.md` uses only numbers from
+  `calibrate.py` runs (raw log in `docs/results/`, with environment and commands) and labels
+  them as our simulation data, separate from the papers (paraphrased abstracts). Times of
+  failed runs are "until the run stopped"; solve times are acados `time_tot`, machine-specific.
+  Level 1's figure shows the "best trade-offs among the tested settings", not a true Pareto front.
+- (2026-11-19) **Scientific wording rules** (phase 2; keep them in every new text): limits are
+  per axis ($|a_x|, |a_y| \leq a_{\max}$, so the speed $\|v\|$ can exceed $v_{\max}$); $k = 1$ is "the
+  most feedback", never "perfect"; re-planning "lets the controller react to" model errors, it
+  does not "correct anything"; Level 1's default is "aggressive", not "time-optimal", and its
+  "energy" is an effort measure $\sum \Delta t\,\|u\|^2$; the terminal stop keeps the OCP feasible
+  **with an exact model and no disturbances**; a controller failure is "the solver found no
+  valid plan (acados status ...)", the physics (braking distance vs room) is the evidence, not
+  the solver; Dead End's trap is "stuck: every solve converges to the same plan (a local
+  solution)", not a proven local optimum; obstacle ellipse constraints are **soft** (say so
+  wherever the OCP shows them); Crosswind's "off the plan" is measured against the plan being
+  executed, so it is 0 at every re-plan (and always 0 for $k = 1$).
 
 **MPC**
 - (2026-10-19) Obstacles: a block is given by 4 corners; the solver avoids the
@@ -360,7 +468,7 @@ Feasibility spike results (engine only, default map):
 - (2026-11-17) **Level 0 "Hello, MPC": an introduction to MPC itself** (the user found Level 1
   starts with a finished MPC, too much for a first-time player). Decisions:
   - concept **A: guided tour** (no puzzle, nothing can fail); **optional, no stars** (not in
-    the total "x / 15"), always open, Level 1 is open from the start; the tile shows a
+    the total "x / 15", now "x / 12"), always open, Level 1 is open from the start; the tile shows a
     **"Tutorial" tag** (no done state); the lifted "next level" is **never** Level 0;
   - title "Hello, MPC", accent **rose** (`ACCENTS["rose"]`), icon "loop"; open field;
     everything locked (q_p = q_v = r = 1, N = 30). **(2026-11-18) No knobs at all**: the
@@ -404,7 +512,7 @@ Feasibility spike results (engine only, default map):
   otherwise; failing solves listed in the tooltip). The separate one-line "Whole run" summary
   is gone. The "‹ k /n ›" stepper only moves the map; no per-solve numbers are shown. The user
   first wanted to drop the iterations ("always 1?"): measured, they are 1 in Levels 0–2 (no
-  obstacles: the OCP is a QP) but 2–6 per solve with obstacles (Levels 3–5), so they stay.
+  obstacles: the OCP is a QP) but 2–6 per solve with obstacles (Levels 3–5 then; Dead End and Crosswind now), so they stay.
 - (2026-11-19) **Every symbol in the LaTeX font, everywhere** (the user disliked the game font's
   "★" next to the OCP's \star and asked for "everything in the same font as LaTeX"; chose
   "all math-like text", all at once). Design rule 7 (section 10) says how. Built:
@@ -468,6 +576,13 @@ Feasibility spike results (engine only, default map):
 - (2026-11-19) LaTeX in Python strings: `$\Delta t$` inside a plain `f"..."` is an invalid
   escape (SyntaxWarning, breaks later): use `rf"..."` and double the TeX braces (`{{...}}`).
   In the level JSON files a backslash is written `\\`.
+- (2026-11-19) A widget placed over another with an alignment flag (the result card over the
+  map, `addWidget(w, 0, 0, AlignCenter)`) gets at most the cell's size even when its content is
+  taller: Qt then squeezes fixed-height children on top of each other (no error). Give such a
+  widget a scrolling part with a small minimum height (`result_panel._FitScroll`), and test the
+  longest texts at 900×560.
+- (2026-11-19) Qt rich text ignores `white-space: nowrap` on a `<span>` (it only works for a whole
+  block). To keep "m/s" from breaking after the slash, put a word joiner after it: `m/\u2060s` (`WJ` in `level_0_hello_mpc.py`).
 - A QSpinBox in a narrow fixed width clips its number to nothing (the hidden arrow buttons
   still take room): the solve stepper uses a QLineEdit + QIntValidator instead.
 - Don't override QWidget method names in subclasses (e.g. a `screen()` method on the main
@@ -542,10 +657,10 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
    buttons Play (big, coral) / How to play / Settings / Quit, an "MPC engine
    online/offline/outdated" pill bottom-left, version bottom-right.
 2. **Level select** (`ui/level_card.py`): "Choose a level" + subtitle, Free mode switch,
-   total stars pill "x / 15" (Level 0 has no stars), one chunky tile per level (Level 0:
+   total stars pill "x / 12" (Level 0 has no stars), one chunky tile per level (Level 0:
    rose, loop icon, a "Tutorial" tag instead of stars, always open, never the lifted one): top block in the level's accent
    colour with the big number and the level icon (`LevelInfo.icon`: bolt, wall, trap,
-   weight, wind; `painting.draw_level_icon`), then title, topic, 3 stars. The next level
+   wind; `painting.draw_level_icon`), then title, topic, 3 stars. The next level
    to play (first unlocked one without stars) is lifted, ringed in its colour and shows a
    Play pill (no mascot on this screen). Locked tiles are muted with a lock and
    "Finish level N to unlock"; clicking one explains how to unlock it. Tiles reflow.
@@ -569,10 +684,24 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
    `LevelInfo.intro(data) -> LevelIntro` (goal, stars, OCP, fixed, notes); each level file
    builds its OCP in a module function `ocp(..., intro=False)` used by both screens.
    Back (button or Esc) on the play screen returns to the intro (play state kept).
+   **Research debrief** (`gameplay/research_debrief.py`, phase 3): opened by "Insights" on the
+   result card (with that run) or "Research background" left of "Start level" on the intro
+   (no run yet; not on Level 0's intro). Two tiles like the intro: left: research question
+   (quote), takeaway, then a well "Your latest run" (outcome dot, stars (not Level 0), "Reached
+   the target in t s" or "<outcome>: stopped after t s, d m from the target", the result card's
+   rows, and an existing visual frozen at the run's end: Level 0 loop diagram, Level 1 battery
+   bar, Level 2 brake gauge at the point of no return (or the least room to spare), Level 3
+   "Your experiments", Level 4 compute budget; "No run yet" without a run), then The problem,
+   Why it matters, What this level showed, Limits of this level; right: What research does (two paper wells: title,
+   authors · year, venue, Problem / Approach / Link to this level, "Open the paper ›" and
+   "Free version (arXiv) ›" links, opened only on click), then pinned "‹ Back to the level" +
+   "Next level ›" (only when the result card offers it) or "Start level ▶" (from the intro).
+   Back / Esc returns to where it was opened from; the play view keeps everything and its
+   replay is paused.
    **Level 0 (tutorial)**: no stars anywhere (header, intro, result card); the intro adds the
    loop diagram; on the play screen the controls tile is the **guided tour** (computed
    automatically; Step k of 7 · title · text · ‹ Back / Next ›, map + OCP highlights per step),
-   after the replay **"Tour complete"** (a short summary + "Replay the tour"). No knobs, no
+   after the replay **"Tour complete"** (a short summary, "Replay tour" and "Next level ›"). No knobs, no
    Run/Reset: the player only watches.
    **Playable level** (`gameplay/level_play_widget.py`), three tiles on wide windows:
    - left, **map tile**: the **map** (soft 50 m board without outline, grid every 5 m,
@@ -583,7 +712,7 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
      during the replay, reached ones grey); under it the level's extras (Level 1:
      **battery bar** "Battery ▬▬ 4.0 / 5", fills as energy is used, yellow tick = ★★★ par;
      Level 2: **brake check**: wall ahead / braking needs / plan looks ahead, red after the
-     point of no return; Level 4: the ghost-ball caption; Level 5: compute budget), then
+     point of no return; Level 4 (Crosswind): compute budget), then
      ONE **replay well**: ▶/❚❚ · scrubber · time · speed chip (1×/2×/4×/8×, default 2×) ·
      "‹ k /n ›" MPC solve stepper (number typeable);
    - middle, **OCP tile**: **"The OCP your MPC solves"** (typeset math: min over u, stage
@@ -594,7 +723,7 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
      one row per knob: coloured symbol chip + name, a typeable value field, a slider in
      the knob's colour; discrete knobs as a dropdown, toggles as a switch); Reset + wide
      Run ▶; a status line; Level 3: **Choose a fix** instead: selectable cards "No fix",
-     "1. Longer horizon" (N dropdown + "N steps = … s ahead" note), "2. Waypoints"
+     "1. Longer horizon" (N as a typed value + slider, 5–300, + "N steps = … s ahead" note), "2. Waypoints"
      (map editing only then; instructions, "n / 3 waypoints", Clear, the list of
      waypoints), then **Your experiments** (best run per fix: result with colour dot,
      ms per solve, stars; this visit only; a section of the tile, not a card); the OCP
@@ -604,8 +733,10 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
      controls tile; both columns scroll.
    - At the end of a replay a **result card** appears over the map: outcome title with
      colour dot, stars, metric rows (e.g. time vs limit and ★★ par, energy vs battery and
-     ★★★ par, peak acceleration), 1–3 "what happened" sentences from the engine, buttons
-     Replay / Retry / Next level ›. Changing a knob hides the card.
+     ★★★ par, peak acceleration), 1–3 "what happened" sentences from the engine (the text
+     part scrolls inside the card when it does not fit over the map), buttons Replay / Retry /
+     Insights / Next level › (compact; Next only after a success with the next level
+     unlocked; Level 0: no Retry). Changing a knob hides the card.
 
 ## 11. Working with the user (how the team likes it)
 

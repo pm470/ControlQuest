@@ -3,8 +3,9 @@
 A PySide6 desktop app (runs on your computer) plus a small **MPC engine** server
 (runs acados inside Docker). The design is in [`docs/PRD.md`](../docs/PRD.md).
 
-**Status:** menus done; **all five levels** ("The Price of Speed", "Brake Check", "Dead
-End", "Heavy Ball", "Crosswind") are playable end to end (tune knobs / pick a fix / place
+**Status:** menus done; the tutorial "Hello, MPC" and **all four levels** ("The Price of
+Speed", "Brake Check", "Dead End", "Crosswind"; "Heavy Ball" was removed on 2026-11-19) are
+playable end to end (tune knobs / pick a fix / place
 waypoints → Run → MPC computes the run in Docker → replay with the live plan → result
 card, stars, unlock).
 
@@ -53,8 +54,7 @@ game/
 │   ├── price_of_speed.json          start, target, limits, time limit, battery, pars, knobs, checks
 │   ├── brake_check.json             Level 2: horizon choices, terminal-stop toggle, pars, checks.cases
 │   ├── dead_end.json                + blocks (4 corners each), locked weights/margin, waypoint rules
-│   ├── heavy_ball.json              + plant (hidden real gain g_true), test drive, margin/g knobs
-│   └── crosswind.json               + wind (constant + seeded gusts), solve budget, k/margin knobs
+│   └── crosswind.json               Level 4: + wind (constant + seeded gusts), solve budget, k/margin knobs
 │
 ├── controlquest/                THE GAME WINDOW (host, no acados)
 │   ├── app.py, main_window.py       start-up, screen switching (Esc = back)
@@ -62,7 +62,10 @@ game/
 │   ├── ui/                          theme (colours, stylesheet), painting (ball, stars...), widgets,
 │   │                                math_render (LaTeX-style formulas via matplotlib mathtext),
 │   │                                math_text (text with inline $...$ math in the LaTeX font)
+│   ├── research/                    the debrief's static content: one file per level id
+│   │                                    (ResearchInfo + two PaperRef, base.py; checked references)
 │   ├── screens/                     title, level select, how to play, settings, level screen
+│   │                                    (level screen views: intro / play / debrief)
 │   ├── levels/                      one file per level: LevelInfo (+ play_screen when playable,
 │   │                                    + intro texts/numbers for the level intro)
 │   │   ├── level_0_hello_mpc.py         Level 0 (tutorial, no stars): guided tour of the MPC loop,
@@ -70,8 +73,7 @@ game/
 │   │   ├── level_1_price_of_speed.py    Level 1's goal text, battery bar, result rows
 │   │   ├── level_2_brake_check.py       Level 2's goal, brake-check gauge, OCP with v_N = 0, result rows
 │   │   ├── level_3_dead_end.py          Level 3: fix selector, N / waypoint controls, OCP per fix
-│   │   ├── level_4_heavy_ball.py        Level 4: margin + g knobs, test drive, OCP with g
-│   │   └── level_5_crosswind.py         Level 5: re-plan interval k + margin, compute-budget bar
+│   │   └── level_4_crosswind.py         Level 4: re-plan interval k + margin, compute-budget bar
 │   ├── gameplay/                    reusable parts of a playable level
 │   │   ├── loop_diagram.py              the drawn MPC loop (Level 0's intro)
 │   │   ├── level_intro.py               the level intro shown before the play screen: story, what
@@ -89,7 +91,9 @@ game/
 │   │   │                                    each knob has a colour, also used in the OCP (\knob{...})
 │   │   ├── brake_gauge.py               Level 2's brake check (wall ahead / braking / plan reach)
 │   │   ├── playback.py                  replay clock + play/pause/scrub/speed (in the replay well)
-│   │   ├── result_panel.py              outcome, stars, metrics, "what happened"
+│   │   ├── result_panel.py              outcome, stars, metrics, "what happened", Replay/Retry/Insights/Next
+│   │   ├── research_debrief.py          the Research debrief: question, problem, relevance, your run,
+│   │   │                                    two papers, limits (content from controlquest/research/)
 │   │   ├── ocp_card.py                  "The OCP your MPC solves" (typeset math, knob colours)
 │   │   ├── run_info_card.py             "Whole run": total cost, avg solve time, avg SQP iterations, solved count
 │   │   ├── solve_selector.py            "‹ k /n ›": inspect one MPC solve's plan
@@ -100,7 +104,7 @@ game/
 │       └── client.py                    async HTTP: health polling, request_run -> ticket
 │
 └── engine_server/               THE MPC ENGINE (runs in Docker, has acados)
-    ├── server.py                    HTTP only: GET /health, POST /run, POST /test_drive (L4)
+    ├── server.py                    HTTP only: GET /health, POST /run
     ├── runner.py                    run_level(id, knobs): level id -> rules; solver cache
     ├── calibrate.py                 check / tune a level from the command line
     ├── level_rules/                 game rules per level (stop rules, stars, explanations)
@@ -110,9 +114,7 @@ game/
     │   ├── brake_check.py               Level 2: terminal stop, point of no return, stars, "what happened"
     │   ├── dead_end.py                  Level 3: the chosen fix (none / horizon N / waypoints),
     │                                    stars, local-optimum explanations
-    │   ├── heavy_ball.py                Level 4: plant with g_true, test drive, 1 s-ahead
-    │                                    prediction error, stars, mismatch explanations
-    │   └── crosswind.py                 Level 5: seeded wind, solve budget, drift, stars
+    │   └── crosswind.py                 Level 4: seeded wind, solve budget, drift, stars
     ├── mpc/                         pure MPC, knows nothing about the game
     │   ├── model.py                     double integrator (CasADi); parameters: model gain g
     │   │                                + 6 obstacle-ellipse slots (cx, cy, E11, E12, E22)
@@ -170,6 +172,7 @@ game/
 ```bash
 python calibrate.py price_of_speed              # default fails? reference passes?
 python calibrate.py price_of_speed --sweep      # time/energy table over the weights
+python calibrate.py price_of_speed --sweep --csv /workspace/docs/figures/price_of_speed_sweep.csv
 python calibrate.py price_of_speed q_p=0.3 r=1  # one run, prints the explanation
 python calibrate.py dead_end fix=waypoints wp=35,40   # Level 3: one run with a fix
 python calibrate.py dead_end fix=horizon N=100

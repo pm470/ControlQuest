@@ -1,6 +1,6 @@
 {
   "id": "crosswind",
-  "comment": "Level 5. Read by BOTH the game (controlquest/gameplay/level_data.py) and the engine (engine_server/level_rules/common.py). Calibrated with engine_server/calibrate.py.",
+  "comment": "Level 4 (was Level 5 until Heavy Ball was removed on 2026-11-19). Read by BOTH the game (controlquest/gameplay/level_data.py) and the engine (engine_server/level_rules/common.py). Calibrated with engine_server/calibrate.py.",
 
   "dt": 0.1,
   "N": 30,

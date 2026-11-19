@@ -10,7 +10,7 @@ The default MPC gets stuck in the U. The player picks ONE fix at a time
     Waypoints       -> click / drag / right-click on the map (gameplay/waypoint_editor.py)
 "Your experiments" (gameplay/comparison_card.py) keeps the best run of each fix, so the
 player sees which fix works and what it costs per MPC solve. A third fix (a better
-terminal cost / cost-to-go) is planned: see the TODO in AGENTS.md section 6.
+terminal cost / cost-to-go) is not built: dropped with the reduced scope (2026-11-19, AGENTS.md).
 """
 
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
@@ -146,6 +146,13 @@ class DeadEndWidget(LevelPlayWidget):
         self._built_ns.add(int(result.metrics.get("N", self.data.N)))
         self.comparison.record(result)
 
+    def debrief_visual(self, result):
+        """The "Your experiments" table (best run of each fix) for the Research debrief."""
+        table = ComparisonCard(self.data.fixes)
+        for r in self.comparison.results():
+            table.record(r)
+        return table
+
     # --- the OCP of the chosen fix -----------------------------------------------------------
     def ocp_spec(self) -> OcpSpec:
         d = self.data
@@ -205,7 +212,8 @@ def ocp(d, fix: str, n: int, intro: bool = False) -> OcpSpec:
             rf"{ellipses},\quad j = 1,\ldots,{len(d.blocks)}",
         ],
         notes=(rf"{notes} Re-solved every $\Delta t = {d.dt:g}$ s, $N = {n}$ steps ({n * d.dt:g} s) "
-               "ahead. With obstacles the OCP is nonconvex: SQP finds a local optimum."),
+               "ahead. With obstacles the OCP is nonconvex: SQP, warm-started from the previous plan, "
+               "finds a local solution at best."),
         legend=[(r"c_j,\, E_j", f"ellipse around block $j$ (dashed), {d.margin:g} m margin"),
                 *([(r"p_{\mathrm{ref}}", "the current waypoint")] if fix == WAYPOINTS else []),
                 *STATE_LEGEND,

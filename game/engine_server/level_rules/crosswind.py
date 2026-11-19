@@ -1,4 +1,4 @@
-"""Rules of Level 5, "Crosswind" (PRD 7, Level 5): feedback, i.e. why we re-plan.
+"""Rules of Level 4, "Crosswind" (PRD 7, Level 4): feedback, i.e. why we re-plan.
 
 The real ball is pushed by wind (level["wind"]: a constant part plus gusts that stay
 constant for gust_period seconds, from a fixed seed, so every run is the same). The

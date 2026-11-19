@@ -4,7 +4,6 @@ Uses Qt's asynchronous network manager, so the UI never freezes while waiting.
 Endpoints (see engine_server/server.py):
     GET  /health -> {"status": "ok", "version": ..., "acados": bool, "levels": [...]}
     POST /run    -> RunResult JSON
-    POST /test_drive -> TestDrive JSON (Level 4)
 
     ticket = ctx.engine.request_run(RunRequest(...), parent=self)
     ticket.finished.connect(self.on_result)    # RunResult
@@ -22,7 +21,7 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequ
 from shiboken6 import isValid
 
 from ..core.config import ENGINE_POLL_INTERVAL_MS, ENGINE_RUN_TIMEOUT_MS, ENGINE_TIMEOUT_MS
-from .protocol import EngineStatus, RunRequest, RunResult, TestDrive
+from .protocol import EngineStatus, RunRequest, RunResult
 
 
 class RunTicket(QObject):
@@ -106,11 +105,6 @@ class EngineClient(QObject):
     def request_run(self, run: RunRequest, parent: QObject | None = None) -> RunTicket:
         """Ask the engine to simulate one run; the answer arrives on the returned ticket."""
         return self._post("/run", run.to_json(), RunResult.from_json, "run result", parent)
-
-    def request_test_drive(self, level_id: str, knobs: dict, parent: QObject | None = None) -> RunTicket:
-        """Level 4 test drive: the ticket's finished(TestDrive) has predicted vs measured."""
-        return self._post("/test_drive", {"level_id": level_id, "knobs": knobs}, TestDrive.from_json,
-                          "test drive", parent)
 
     def _post(self, path: str, payload: dict, parse, what: str, parent: QObject | None) -> RunTicket:
         ticket = RunTicket(parent if parent is not None else self)

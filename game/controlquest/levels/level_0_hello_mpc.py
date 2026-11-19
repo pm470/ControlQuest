@@ -111,7 +111,9 @@ def tour_steps(d, result) -> list[TourStep]:
                  "Now it picks the best input sequence: the one with the lowest cost that "
                  "respects the limits."
                  "<br><br><b>Cost:</b> being far from the star, moving fast, accelerating"
-                 rf"<br><b>Limits:</b> $|a| \leq {d.a_max:g}$ m/s², $|v| \leq {d.v_max:g}$ m/s"
+                 # "m/⁠s": a word joiner after the slash, so the line never breaks inside "m/s"
+                 rf"<br><b>Limits:</b> $|a_x|, |a_y| \leq {d.a_max:g}$ m/{WJ}s², "
+                 rf"$|v_x|, |v_y| \leq {d.v_max:g}$ m/{WJ}s"
                  "<br><b>Result:</b> the plan, the dashed line on the map, ending "
                  f"{T:g} s ahead ($x_N$)", "plan", ocp="optimise"),
         TourStep("④ Apply the first input",
@@ -124,8 +126,8 @@ def tour_steps(d, result) -> list[TourStep]:
                  "first plan, coral: the current one."
                  f"<br><b>Receding horizon:</b> the plan always reaches $N = {n}$ steps ahead, so it "
                  "moves with the ball."
-                 "<br><b>Why it matters:</b> re-planning from measurements corrects anything the "
-                 "model gets wrong.", "repeat", solve=later, ocp="measure"),
+                 "<br><b>Why it matters:</b> re-planning from each new measurement lets the controller "
+                 "react to what its model got wrong.", "repeat", solve=later, ocp="measure"),
         TourStep("Watch it run",
                  f"Press Play to watch the remaining {max(0, tr.n_solves - later - 1)} rounds. With "
                  "‹ k /n › under the map you can look at any single plan.", "repeat", solve=later),
@@ -136,6 +138,7 @@ GOAL = "Follow the tour through one round of the MPC loop, then watch the whole 
 WATCHING = (r"Every $\Delta t = {dt:g}$ s: measure, plan, apply the first input. "
             "Watch the dashed plan move along with the ball.")  # while the rest of the run plays
 REPEAT_SOLVE = 10  # step "Repeat" shows the solve 1 s (10 rounds) after the first one
+WJ = "⁠"  # word joiner: no line break here (e.g. inside "m/s")
 
 
 def example_predictions(d, n: int, x0) -> list[list[tuple[float, float]]]:
@@ -306,10 +309,15 @@ class HelloMpcWidget(LevelPlayWidget):
             self.run_info.set_hidden(True)
         super()._on_result(result)  # loads the replay and starts playing
         if self._touring:
+            self._autoplay_pending = False  # the tour starts paused, also if it arrived hidden
             self.playback.pause()
             self._steps = tour_steps(self.data, result)
             self._fix_step_height()
             self._go(0)
+
+    def debrief_visual(self, result):
+        """The MPC loop diagram of the intro (Research debrief)."""
+        return LoopDiagram(self.data.dt)
 
     def _on_failed(self, reason: str) -> None:
         super()._on_failed(reason)

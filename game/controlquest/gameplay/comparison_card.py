@@ -60,6 +60,10 @@ class ComparisonCard(QWidget):
         grid.setColumnStretch(0, 1)
         self.body.addLayout(grid)
 
+    def results(self) -> list[RunResult]:
+        """The best run of each fix so far (e.g. to show the same table in the debrief)."""
+        return list(self._best.values())
+
     def record(self, r: RunResult) -> None:
         fix = r.fix
         if fix not in self._cells:

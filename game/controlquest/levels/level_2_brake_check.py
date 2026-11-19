@@ -13,13 +13,14 @@ wall with the braking distance and with how far the plan looks ahead.
 
 import math
 
-from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ..gameplay.brake_gauge import BrakeGauge
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
 from ..gameplay.ocp_card import STATE_LEGEND, OcpSpec
+from ..ui.math_text import math_text
 from .base import LevelInfo
 
 
@@ -66,6 +67,41 @@ class BrakeCheckWidget(LevelPlayWidget):
         n_run = int(self.result.metrics.get("N", d.N))
         self.gauge.set_values(_wall_ahead(x[:2], x[2:], lo, hi), speed**2 / (2 * d.a_max),
                               n_run * d.dt * speed)
+
+    def debrief_visual(self, result):
+        """The brake check frozen at the point of no return, or (no such point) at the moment
+        the ball came closest to it (Research debrief)."""
+        d, m = self.data, result.metrics
+        (lo, hi) = d.workspace
+        n_run = int(m.get("N", d.N))
+        pnr = m.get("point_of_no_return")
+        if pnr:
+            t, wall, brake, reach = pnr["t"], pnr["wall_ahead"], pnr["braking"], pnr["reach"]
+            caption = rf"At $t = {t:.1f}$ s: the point of no return (braking needs more room than is left)."
+        else:  # the sample with the least spare room (wall ahead minus braking distance)
+            best = None
+            for k, x in enumerate(result.trajectory.x):
+                speed = math.hypot(x[2], x[3])
+                if speed < 0.1:
+                    continue
+                wall, brake = _wall_ahead(x[:2], x[2:], lo, hi), speed**2 / (2 * d.a_max)
+                if best is None or wall - brake < best[0]:
+                    best = (wall - brake, k, wall, brake, n_run * d.dt * speed)
+            if best is None:
+                return None
+            _, k, wall, brake, reach = best
+            t = result.trajectory.t[k]
+            caption = (rf"At $t = {t:.1f}$ s: the least room to spare in this run "
+                       f"({wall - brake:.1f} m more than braking needs).")
+        box = QWidget()
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+        lay.addWidget(math_text(caption, "caption"))
+        gauge = BrakeGauge(scale_m=20.0)
+        gauge.set_values(wall, brake, reach)
+        lay.addWidget(gauge)
+        return box
 
     # --- the OCP with the chosen N and terminal stop ------------------------------------------
     def ocp_spec(self) -> OcpSpec:
@@ -142,12 +178,14 @@ LEVEL = LevelInfo(
     concept=("The horizon has to see far enough. An MPC that plans $N$ steps ahead notices the "
              "wall only once the wall is inside its horizon. If braking takes longer than that, "
              "it notices too late and no feasible plan is left: recursive feasibility is lost. "
-             "A terminal constraint (every plan must end at rest) guarantees that a way to stop "
-             "always exists, at the price of a more cautious controller."),
+             "A terminal constraint (every plan must end at rest) keeps a way to stop in every "
+             "plan; with an exact model and no disturbances, as here, the OCP then stays feasible "
+             "at every step, at the price of a more cautious controller."),
     teaching=("With the default $N = 10$ (1 s, about 4 m at full speed) the ball rushes at the "
-              "wall. Braking from 4 m/s needs 8 m, so the OCP eventually has no solution: "
-              "controller failure. Two ideas: a longer horizon (fast and safe, but bigger "
-              "solves), or a short horizon plus the terminal stop (always safe, but slower). The "
+              "wall. Braking from 4 m/s needs 8 m, so at some point no plan can avoid the wall any "
+              "more and the solver fails: controller failure. Two ideas: a longer horizon (fast, "
+              "but bigger solves), or a short horizon plus the terminal stop (feasible at every "
+              "step, but slower). The "
               "brake check under the map compares the distance to the wall, the braking "
               "distance, and how far the plan looks."),
     hints=(

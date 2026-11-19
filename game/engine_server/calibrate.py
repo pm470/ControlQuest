@@ -2,6 +2,7 @@
 
     python calibrate.py price_of_speed            # checks from the level file
     python calibrate.py price_of_speed --sweep    # table of time / energy over the weights
+    python calibrate.py price_of_speed --sweep --csv out.csv   # ... and every run as CSV
     python calibrate.py price_of_speed q_p=0.3 r=1   # one run with these knobs
     python calibrate.py dead_end fix=waypoints wp=35,40   # one run with a fix and waypoints
     python calibrate.py dead_end fix=horizon N=100
@@ -16,6 +17,7 @@ Exit code 1 if a check fails.
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
 
 import runner
@@ -24,10 +26,12 @@ from level_rules.common import load_level
 
 def show(label: str, result: dict) -> None:
     m = result["metrics"]
+    extra = "".join(f"  {k}={m[k]:.2f}" for k in ("max_drift", "min_clearance") if k in m)
     print(f"{label:<10} {result['outcome']:<18} {result['stars']} stars  t={m['time']:5.1f} s  "
-          f"E={m['energy']:5.2f}  max|a|={m['max_accel']:.2f}  knobs={result['knobs']}"
+          f"E={m['energy']:5.2f}  max|a|={m['max_accel']:.2f}  left={m['distance_left']:.2f} m  "
+          f"solves={m['solves']}  mean solve {m['mean_solve_ms']:.2f} ms{extra}  knobs={result['knobs']}"
           + (f"  waypoints={result['waypoints']}" if result.get("waypoints") else "")
-          + (f"  fix={result['fix']}  mean solve {m['mean_solve_ms']:.2f} ms" if result.get("fix") else ""))
+          + (f"  fix={result['fix']}" if result.get("fix") else ""))
     for msg in result["messages"]:  # the game typesets $...$; plain enough for the console
         print(f"{'':<10} - {msg.replace('$', '')}")
 
@@ -62,6 +66,7 @@ def main() -> int:
     parser.add_argument("level_id")
     parser.add_argument("knobs", nargs="*", help="name=value pairs (wp=x,y for a waypoint) for one run")
     parser.add_argument("--sweep", action="store_true")
+    parser.add_argument("--csv", metavar="PATH", help="with --sweep: also write every run to a CSV file")
     args = parser.parse_args()
     level = load_level(args.level_id)
 
@@ -80,14 +85,26 @@ def main() -> int:
         print("q_p / r rows, q_v columns: time [s] / energy (T/O = time out, BAT = battery empty)")
         qps, qvs = [10, 1, 0.3, 0.1, 0.03, 0.01], [0.01, 0.1, 1, 3, 10, 30]
         print(f"{'q_p':>8} " + "".join(f"{f'q_v={v:g}':>15}" for v in qvs))
+        rows = []
         for qp in qps:
             cells = []
             for qv in qvs:
                 res = runner.run_level(args.level_id, {"q_p": qp, "q_v": qv, "r": 1.0})
+                m = res["metrics"]
+                rows.append({"q_p": qp, "q_v": qv, "r": 1.0, "outcome": res["outcome"],
+                             "stars": res["stars"], "time_s": round(m["time"], 2),
+                             "energy": round(m["energy"], 4), "distance_left_m": round(m["distance_left"], 3),
+                             "solves": m["solves"], "mean_solve_ms": round(m["mean_solve_ms"], 3)})
                 tag = {"success": f"{res['metrics']['time']:.1f}", "time_out": "T/O",
                        "battery_empty": "BAT"}.get(res["outcome"], res["outcome"][:4])
                 cells.append(f"{tag}/{res['metrics']['energy']:.2f}{'*' * res['stars']}")
             print(f"{qp:>8g} " + "".join(f"{c:>15}" for c in cells))
+        if args.csv:
+            with open(args.csv, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            print(f"wrote {len(rows)} runs to {args.csv}")
         return 0
 
     checks, ok = level.get("checks", {}), True

@@ -65,11 +65,14 @@ def _has_new(spec: OcpSpec) -> bool:
 
 
 class LevelIntroWidget(QWidget):
-    """The intro of one level. Emits start() when the player presses "Start level"."""
+    """The intro of one level. Emits start() when the player presses "Start level", and
+    research() for the "Research background" link (only with research=True)."""
 
     start = Signal()
+    research = Signal()
 
-    def __init__(self, level: LevelInfo, data: LevelData, parent: QWidget | None = None):
+    def __init__(self, level: LevelInfo, data: LevelData, parent: QWidget | None = None,
+                 research: bool = False):
         super().__init__(parent)
         intro = level.intro(data)
 
@@ -132,6 +135,11 @@ class LevelIntroWidget(QWidget):
         self.start_button = Button("Start level  ▶", variant="primary", scale="large")
         self.start_button.setToolTip("Tune the controller and run it")
         self.start_button.clicked.connect(self.start)
+        # "Research background": left of Start in the pinned row (the intro gets no taller)
+        self.research_button = Button("Research background  ›", variant="link")
+        self.research_button.setToolTip("The research behind this level and two recent papers")
+        self.research_button.clicked.connect(self.research)
+        self.research_button.setVisible(research)
 
         # --- two tiles side by side; each scrolls its content, Start stays at the bottom ---
         root = QHBoxLayout(self)
@@ -145,7 +153,10 @@ class LevelIntroWidget(QWidget):
             if bottom is not None:
                 foot = QHBoxLayout()
                 foot.setContentsMargins(TILE_PADDING, 8, TILE_PADDING, TILE_PADDING)
-                foot.addWidget(bottom)
+                foot.setSpacing(12)
+                if research:
+                    foot.addWidget(self.research_button)
+                foot.addWidget(bottom, 1)
                 outer.body.addLayout(foot)
             root.addWidget(outer, 1000)
         root.addStretch(1)

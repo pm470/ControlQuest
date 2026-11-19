@@ -103,7 +103,8 @@ def explain(level, knobs, sim, m, stars) -> list[str]:
         j = int(np.argmin(dists))
         if m["final_speed"] < 0.2 and dists[j] < 4.0:
             msgs.append(f"The ball stopped {dists[j]:.1f} m from the block at {_where(blocks[j])} "
-                        f"with the target behind it: a local optimum.")
+                        "with the target behind it: stuck. Every solve converged to the same plan "
+                        "(a local solution of the nonconvex OCP), so the ball no longer moves.")
             if fix == "none":
                 msgs.append(f"The horizon ({horizon:g} s) cannot see around the obstacle, and every "
                             "small step sideways first costs more. Pick a fix and try it.")
@@ -114,7 +115,7 @@ def explain(level, knobs, sim, m, stars) -> list[str]:
             elif fix == "horizon":
                 msgs.append(f"Even {horizon:g} s of foresight ($N = {m['N']}$) did not help: SQP is a "
                             "local method, and warm-started from the previous plan every new plan "
-                            "stays on the same side of the wall. The longer horizon only made each "
+                            "stayed on the same side of the wall. The longer horizon only made each "
                             f"solve slower ({m['mean_solve_ms']:.2f} ms on average).")
             else:
                 msgs.append(f"It reached {m['waypoints_reached']} of {m['waypoints']} waypoint(s). "

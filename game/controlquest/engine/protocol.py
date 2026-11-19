@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 PROTOCOL_VERSION = 1
-ENGINE_VERSION = "0.11.0"  # the engine_server version this game expects (engine_server/server.py)
+ENGINE_VERSION = "0.13.0"  # the engine_server version this game expects (engine_server/server.py)
 
 # outcome name -> (label for the player, ui.theme colour name)
 OUTCOMES = {
@@ -92,12 +92,10 @@ class Trajectory:
     status: list[int] = field(default_factory=list)  # per solve: acados status (0 = ok)
     ref_index: list[int] = field(default_factory=list)  # per solve: active waypoint (= #waypoints: target)
     crash_point: list[float] | None = None  # where the ball hit a block, if it did
-    prediction_lookahead: int = 0  # Level 4: M; the ghost ball at t_k is stage M of plan k-M
-    prediction_error: list[float] = field(default_factory=list)  # Level 4: per sample [m]
     solve_steps: list[int] = field(default_factory=list)  # sample of each solve ([] = every sample)
     disturbance: list[list[float]] = field(default_factory=list)  # n applied wind accelerations
-    drift: list[float] = field(default_factory=list)  # Level 5: per sample, distance from the plan [m]
-    solve_budget: int = 0  # Level 5: max solves (0 = none)
+    drift: list[float] = field(default_factory=list)  # Level 4 (Crosswind): per sample, distance from the plan [m]
+    solve_budget: int = 0  # Level 4 (Crosswind): max solves (0 = none)
 
     @property
     def n_solves(self) -> int:
@@ -146,8 +144,6 @@ class Trajectory:
                    iterations=list(d.get("iterations", [])),
                    costs=list(d.get("costs", [])), status=list(d.get("status", [])),
                    ref_index=list(d.get("ref_index", [])), crash_point=d.get("crash_point"),
-                   prediction_lookahead=int(d.get("prediction_lookahead", 0)),
-                   prediction_error=list(d.get("prediction_error", [])),
                    solve_steps=list(d.get("solve_steps", [])),
                    disturbance=list(d.get("disturbance", [])), drift=list(d.get("drift", [])),
                    solve_budget=int(d.get("solve_budget", 0)))
@@ -185,19 +181,3 @@ class RunResult:
             fix=payload.get("fix"),
         )
 
-
-@dataclass
-class TestDrive:
-    """Answer of POST /test_drive (Level 4): constant acceleration from rest for `duration`
-    seconds; where the model (gain g) expects the ball, and where the real ball got."""
-
-    accel: float
-    duration: float
-    g: float
-    predicted_m: float
-    measured_m: float
-
-    @classmethod
-    def from_json(cls, d: dict[str, Any]) -> TestDrive:
-        return cls(accel=float(d["accel"]), duration=float(d["duration"]), g=float(d["g"]),
-                   predicted_m=float(d["predicted_m"]), measured_m=float(d["measured_m"]))

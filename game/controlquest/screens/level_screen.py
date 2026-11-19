@@ -1,13 +1,18 @@
-"""Level screen: hosts one level.
+"""Level screen: hosts one level, in one of four views (self._view):
 
-Opening a level (from the level select or "Next level") first shows its intro
-(gameplay/level_intro.py, if the level file sets `intro`); "Start level" then shows the
-gameplay widget (usually a gameplay.LevelPlayWidget) built by `play_screen`. Back on the
-play screen returns to the intro, Back on the intro to the level select. The play screen
-is kept while the player stays in the level (knobs, last run, experiments survive a look
-at the intro); leaving the level or opening another one starts fresh. Levels without
-`play_screen` show a "coming soon" card with the briefing. A body widget with a `navigate`
-signal (str, object) can ask for another screen, e.g. "Next level".
+    "intro"    the level intro (gameplay/level_intro.py, if the level file sets `intro`)
+    "play"     the gameplay widget built by `play_screen` (usually a LevelPlayWidget)
+    "debrief"  the Research debrief (gameplay/research_debrief.py, if the level has research
+               content in controlquest/research/): from the result card's "Insights" (with
+               the latest run) or from the intro's "Research background" (no run yet)
+    "other"    the "coming soon" card of a level that is not playable yet
+
+Opening a level (from the level select or "Next level") shows its intro first; "Start level"
+shows the play view. Back: debrief -> where it was opened from; play -> intro; intro -> the
+level select. The play view is kept while the player stays in the level (knobs, last run,
+replay position, experiments survive a look at the intro or the debrief); leaving the level
+or opening another one starts fresh. A body widget with a `navigate` signal (str, object)
+can ask for another screen, e.g. "Next level".
 """
 
 from __future__ import annotations
@@ -21,7 +26,9 @@ from ..core.config import DEV_MODE, MAX_STARS
 from ..core.navigation import ScreenId
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntroWidget
+from ..gameplay.research_debrief import ResearchDebriefWidget
 from ..levels.base import LevelInfo
+from ..research import research_for
 from ..ui.math_text import math_text
 from ..ui.widgets import Button, Card, ScreenHeader, StarRow, StepIcon, divider, label, scrollable
 from .base_screen import BaseScreen
@@ -44,8 +51,10 @@ class LevelScreen(BaseScreen):
         root.addLayout(self._body_host, 1)
         self._intro: QWidget | None = None  # the level intro (built when the level opens)
         self._play: QWidget | None = None  # the play screen (built at the first "Start level")
+        self._debrief: ResearchDebriefWidget | None = None  # built when first opened
         self._other: QWidget | None = None  # the "coming soon" card
-        self._on_play = False  # which one is shown: play screen or intro
+        self._view = ""  # "intro" | "play" | "debrief" | "other"
+        self._debrief_from = "play"  # where Back on the debrief returns to
         ctx.state.changed.connect(self._refresh_stars)
 
     def _refresh_stars(self) -> None:
@@ -66,6 +75,7 @@ class LevelScreen(BaseScreen):
         self._clear()  # a level always opens fresh (also "Next level" from the result card)
         if not level.is_playable:
             self._other = self._add(self._coming_soon(level))
+            self._view = "other"
             self.header.set_back_text("Back to the levels")
         elif level.intro is None:
             self.show_play()
@@ -76,8 +86,10 @@ class LevelScreen(BaseScreen):
         self._clear()
 
     def go_back(self) -> None:
-        """From the play screen back to the intro; from the intro to the level select."""
-        if self._on_play and self._intro is not None:
+        """Debrief -> where it was opened from; play -> intro; intro -> the level select."""
+        if self._view == "debrief":
+            self.show_play() if self._debrief_from == "play" else self.show_intro()
+        elif self._view == "play" and self._intro is not None:
             self.show_intro()
         else:
             super().go_back()
@@ -86,21 +98,60 @@ class LevelScreen(BaseScreen):
     def show_intro(self) -> None:
         level = self.level
         if self._intro is None:
-            self._intro = self._add(LevelIntroWidget(level, load_level_data(level.id)))
+            # the tutorial's intro has no research link (its debrief opens from its result card)
+            research = research_for(level.id) is not None and not level.tutorial
+            self._intro = self._add(LevelIntroWidget(level, load_level_data(level.id),
+                                                     research=research))
             self._intro.start.connect(self.show_play)
-        if self._play is not None and hasattr(self._play, "playback"):
-            self._play.playback.pause()  # don't keep replaying behind the intro
+            self._intro.research.connect(lambda: self.show_debrief(from_intro=True))
+        self._pause_play()  # don't keep replaying behind the intro
         self._show(self._intro)
-        self._on_play = False
+        self._view = "intro"
         self.header.set_back_text("Back to the levels")
 
     def show_play(self) -> None:
         if self._play is None:
             self._play = self._add(self.level.play_screen(self.ctx, self.level))
+            if hasattr(self._play, "insights_requested"):
+                self._play.insights_requested.connect(lambda: self.show_debrief(from_intro=False))
         self._show(self._play)
-        self._on_play = True
+        self._view = "play"
         self.header.set_back_text("Back to the level intro" if self._intro is not None
                                   else "Back to the levels")
+
+    def show_debrief(self, from_intro: bool = False) -> None:
+        """The Research debrief: from the intro without a run, from the play view with the
+        play view's latest run (its numbers and one of the level's visuals)."""
+        info = research_for(self.level.id)
+        if info is None:
+            return
+        if self._debrief is None:
+            self._debrief = self._add(ResearchDebriefWidget(self.level, info))
+            self._debrief.back.connect(self.go_back)
+            self._debrief.start.connect(self.show_play)
+            self._debrief.next_level.connect(self._next_level)
+        play = self._play
+        result = None if from_intro or play is None else getattr(play, "result", None)
+        if result is None:
+            self._debrief.show_run(None, from_intro=from_intro)
+        else:
+            # "Next level" exactly when the result card offers it (after a success, unlocked)
+            self._debrief.show_run(result, play.debrief_rows(result), play.debrief_visual(result),
+                                   can_next=result.success and play.next_unlocked())
+        self._pause_play()
+        self._debrief_from = "intro" if from_intro else "play"
+        self._show(self._debrief)
+        self._view = "debrief"
+        self.header.set_back_text("Back to the level intro" if from_intro else "Back to the level")
+
+    def _next_level(self) -> None:
+        nxt = self.ctx.next_level(self.level)
+        if nxt is not None:
+            self.go(ScreenId.LEVEL, nxt)
+
+    def _pause_play(self) -> None:
+        if self._play is not None and hasattr(self._play, "playback"):
+            self._play.playback.pause()
 
     def _add(self, widget: QWidget) -> QWidget:
         widget.hide()
@@ -110,19 +161,19 @@ class LevelScreen(BaseScreen):
         return widget
 
     def _show(self, widget: QWidget) -> None:
-        for w in (self._intro, self._play, self._other):
+        for w in (self._intro, self._play, self._debrief, self._other):
             if w is not None and w is not widget:
                 w.hide()
         widget.show()
 
     def _clear(self) -> None:
-        for w in (self._intro, self._play, self._other):
+        for w in (self._intro, self._play, self._debrief, self._other):
             if w is not None:
                 w.hide()
                 w.setParent(None)
                 w.deleteLater()
-        self._intro = self._play = self._other = None
-        self._on_play = False
+        self._intro = self._play = self._debrief = self._other = None
+        self._view = ""
 
     # --- placeholder until the level is playable ---------------------------------------
     def _coming_soon(self, level: LevelInfo) -> QWidget:

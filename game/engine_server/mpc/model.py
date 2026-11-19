@@ -7,7 +7,8 @@ With u held constant over one sample (zero-order hold) the exact discrete step i
     v+ = v + dt*g*u
 
 g is the *model actuator gain*: 1 means "the ball does exactly what I command".
-It is a runtime parameter of the solver (Level 4 changes it), not a constant.
+It is a runtime parameter of the solver, not a constant (all levels use g = 1 since the
+model-mismatch level "Heavy Ball" was removed on 2026-11-19; kept so the OCP recipe is unchanged).
 
 The parameter vector also holds MAX_OBSTACLES ellipse slots (cx, cy, E11, E12, E22),
 used by the obstacle constraints in ocp.py:  p = [g, slot_1, ..., slot_MAX_OBSTACLES].

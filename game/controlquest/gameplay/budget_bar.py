@@ -1,4 +1,4 @@
-"""A budget bar under the map (Level 1: battery energy; Level 5: MPC solves).
+"""A budget bar under the map (Level 1: battery energy; Level 4, Crosswind: MPC solves).
 
 One row: name, a rounded bar that fills as the budget is used, "used / budget".
 A small star-coloured tick marks the ★★★ par (stay left of it). The bar turns red

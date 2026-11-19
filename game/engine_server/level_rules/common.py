@@ -72,7 +72,7 @@ def configured_controller(cache: SolverCache, level: dict, knobs: dict,
     mpc.set_obstacles([(e.center, e.E) for e in ellipses])
     mpc.set_damping(level.get("solver", {}).get("levenberg_marquardt", 1e-2) if ellipses else 0.0)
     # level["solver"]["ellipse_entry_fails"] = false: entering an ellipse is not a failure
-    # (Level 5: the wind pushes the ball into the safety zone; touching a block still crashes)
+    # (Level 4, Crosswind: the wind pushes the ball into the safety zone; touching a block still crashes)
     mpc.set_strict_obstacles(level.get("solver", {}).get("ellipse_entry_fails", True))
     mpc.set_target([*level["target"], 0.0, 0.0])
     return mpc

@@ -42,7 +42,8 @@ def label(text: str, role: str = "body", wrap: bool = False,
 
 
 class Button(QPushButton):
-    """Push button: variant = default | primary | ghost | danger, scale = normal | large."""
+    """Push button: variant = default | primary | ghost | link | chip | danger,
+    scale = normal | large | tall | compact (narrower sides, e.g. 4 buttons in the result card)."""
 
     def __init__(self, text: str, variant: str = "default", scale: str = "normal",
                  parent: QWidget | None = None):

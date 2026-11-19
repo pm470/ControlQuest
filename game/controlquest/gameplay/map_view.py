@@ -5,9 +5,8 @@ solver sees (dashed), waypoints, the ball, its trail, the current MPC plan
 
     view.set_level(data)            # world size, start, target, blocks
     view.set_waypoints(points)      # [(x, y), ...] in metres (Level 3)
-    view.set_margin(m)              # obstacle margin knob (Level 4): redraws the ellipses
-    view.show_ghost = True          # Level 4: where the plan from M samples ago expected the ball
-    view.show_wind = True           # Level 5: wind arrow (from the trajectory's disturbance)
+    view.set_margin(m)              # obstacle margin knob (Level 4, Crosswind): redraws the ellipses
+    view.show_wind = True           # Level 4 (Crosswind): wind arrow (from the trajectory's disturbance)
     view.set_trajectory(traj)       # a RunResult.trajectory (or None to clear)
     view.set_time(t)                # replay position in seconds (interpolated)
     view.to_world(pos), view.to_screen(x, y)   # pixel <-> metre (e.g. for mouse editing)
@@ -56,7 +55,6 @@ class MapView(QWidget):
         self._waypoints: list[tuple[float, float]] = []
         self.show_plan = True
         self.show_ellipses = True
-        self.show_ghost = False
         self.show_wind = False
         self._tour: str | None = None  # Level 0: one of TOUR_FOCUS, None = normal map
         self._fan: list[list[tuple[float, float]]] = []
@@ -72,7 +70,7 @@ class MapView(QWidget):
         self.update()
 
     def set_margin(self, margin: float) -> None:
-        """Recompute the solver's ellipses for another obstacle margin (a knob in Level 4)."""
+        """Recompute the solver's ellipses for another obstacle margin (a knob in Level 4, Crosswind)."""
         if self._data is not None:
             self._ellipses = level_ellipses(self._data.blocks, margin)
             self.update()
@@ -261,15 +259,6 @@ class MapView(QWidget):
                         for q in seg[1:]:
                             path.lineTo(q)
                         p.drawPath(path)
-
-        # ghost ball: where the plan computed M samples ago expected the ball now (Level 4)
-        M = tr.prediction_lookahead
-        if self.show_ghost and M and not tr.solve_steps and M <= k and k - M < len(tr.plans) and M < len(tr.plans[k - M]):
-            q = tr.plans[k - M][M]
-            ghost = to_px(q[0], q[1])
-            p.setPen(QPen(theme.qcolor(theme.BALL_DARK, 170), 2, Qt.PenStyle.DashLine))
-            p.setBrush(theme.qcolor(theme.BALL, 45))
-            p.drawEllipse(ghost, r_px, r_px)
 
         # Level 0's tour: a faint fan of example predictions (step "predict")
         if tour == "predict":

@@ -113,8 +113,10 @@ def explain(level, sim, m, stars) -> list[str]:
                 msgs.append(f"Your horizon covered {T:g} s (≈ {pnr['reach']:.1f} m), just about the braking "
                             "distance: the wall came into view only when braking already had to start, with "
                             f"no margin. A {T:g} s plan cannot even contain a full stop from {v:.1f} m/s.")
-        msgs.append(("From then on no plan could stop before the wall, so the OCP had no solution "
-                     f"(at $t = {m['time']:.1f}$ s): the controller lost recursive feasibility."
+        msgs.append(("From then on no input sequence could stop the ball before the wall, so the "
+                     "OCP was bound to become infeasible. At "
+                     f"$t = {m['time']:.1f}$ s the solver found no valid plan and reported {sim.detail}: the "
+                     "controller lost recursive feasibility."
                      if sim.outcome == "controller_failure" else "The ball hit the wall."))
         msgs.append("Look further ahead (a longer $N$), or require every plan to end at rest "
                     "(terminal stop).")

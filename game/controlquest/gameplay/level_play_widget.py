@@ -30,6 +30,7 @@ from ..core.context import AppContext
 from ..core.navigation import ScreenId
 from ..engine.protocol import EngineStatus, RunRequest, RunResult
 from ..levels.base import LevelInfo
+from ..research import research_for
 from ..ui.math_text import math_text
 from ..ui.widgets import Button, Card, label, scrollable, well
 from .knob_panel import KnobPanel, knob_colors
@@ -76,6 +77,7 @@ def standard_ocp(data: LevelData) -> OcpSpec:
 
 class LevelPlayWidget(QWidget):
     navigate = Signal(str, object)  # forwarded by LevelScreen, like BaseScreen.navigate
+    insights_requested = Signal()  # "Insights" on the result card: LevelScreen opens the debrief
 
     def __init__(self, ctx: AppContext, level: LevelInfo, data: LevelData,
                  parent: QWidget | None = None):
@@ -84,6 +86,9 @@ class LevelPlayWidget(QWidget):
         self.result: RunResult | None = None
         self._ticket = None
         self._hints_shown = 0
+        # a result that arrives while this screen is hidden (the player went to the intro during
+        # "Computing...") is replayed when the screen is shown again, not unseen in the background
+        self._autoplay_pending = False
         self.playback = Playback(self)
 
         # --- left: the map tile: map (result card on top), level extras, replay well ---
@@ -199,6 +204,8 @@ class LevelPlayWidget(QWidget):
         self.result_panel.watch_again.connect(self._watch_again)
         self.result_panel.try_again.connect(self.result_panel.hide)
         self.result_panel.next_level.connect(self._go_next)
+        self.result_panel.insights.connect(self.insights_requested)
+        self.result_panel.set_insights_visible(research_for(level.id) is not None)
         ctx.engine.status_changed.connect(self._on_engine_status)
         self._on_engine_status(ctx.engine.status)
 
@@ -248,7 +255,16 @@ class LevelPlayWidget(QWidget):
         self.on_result(result)
         self.playback.load(result.trajectory.duration)
         self.bar.set_enabled_for_run(True)
-        self.playback.play()
+        if self.isVisible():
+            self.playback.play()
+        else:
+            self._autoplay_pending = True
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._autoplay_pending:
+            self._autoplay_pending = False
+            self.playback.play()
 
     def _on_failed(self, reason: str) -> None:
         self._set_busy(False)
@@ -283,10 +299,14 @@ class LevelPlayWidget(QWidget):
             return
         if r.stars > 0:
             self.ctx.state.record_result(self.level.id, r.stars)
-        nxt = self.ctx.next_level(self.level)
-        can_next = nxt is not None and self.ctx.state.is_unlocked(nxt, self.ctx.levels)
-        self.result_panel.show_result(r, self.result_rows(r), can_next,
+        self.result_panel.show_result(r, self.result_rows(r), self.next_unlocked(),
                                       show_stars=not self.level.tutorial)
+
+    def next_unlocked(self) -> bool:
+        """True if there is a next level and it is unlocked (the result card then offers
+        "Next level" after a success; the debrief follows the same rule)."""
+        nxt = self.ctx.next_level(self.level)
+        return nxt is not None and self.ctx.state.is_unlocked(nxt, self.ctx.levels)
 
     def _watch_again(self) -> None:
         self.result_panel.hide()
@@ -377,6 +397,15 @@ class LevelPlayWidget(QWidget):
 
     def update_extras(self, t: float) -> None:
         """Update level-specific widgets for replay time t."""
+
+    def debrief_rows(self, result: RunResult) -> list[tuple[str, str, str]]:
+        """The run's numbers in the Research debrief: by default the result card's rows."""
+        return self.result_rows(result)
+
+    def debrief_visual(self, result: RunResult) -> QWidget | None:
+        """An existing visual of the level frozen at the run's end, for the Research debrief
+        (e.g. the battery bar). A new widget every call; None = no visual."""
+        return None
 
     def result_rows(self, result: RunResult) -> list[tuple[str, str, str]]:
         """(name, value, note) rows for the result card."""

@@ -1,4 +1,4 @@
-"""Level 5: "Crosswind" (PRD 7, Level 5): feedback, i.e. why we re-plan.
+"""Level 4: "Crosswind" (PRD 7, Level 4; Level 5 until "Heavy Ball" was removed on 2026-11-19): feedback, i.e. why we re-plan.
 
 Numbers (blocks, wind, limits, weights, the solve budget, pars, knobs) live in
 game/level_data/crosswind.json, shared with the engine. The engine's rules are in
@@ -60,6 +60,14 @@ class CrosswindWidget(LevelPlayWidget):
     def update_extras(self, t: float) -> None:
         self.budget.set_used(self.result.trajectory.solves_until(t))
 
+    def debrief_visual(self, result):
+        """The compute-budget bar at the end of the run (Research debrief)."""
+        bar = BudgetBar("Compute budget", self.data.budget["solves"], self.data.pars.get("solves"),
+                        unit=" solves")
+        bar.set_used(result.metrics.get("solves_used", result.trajectory.n_solves))
+        bar.setToolTip("MPC solves used in this run. The yellow tick: ★★★ par.")
+        return bar
+
     # --- the OCP --------------------------------------------------------------------------------
     def ocp_spec(self) -> OcpSpec:
         d = self.data
@@ -72,7 +80,8 @@ class CrosswindWidget(LevelPlayWidget):
             ("Time", f"{m['time']:.1f} s", f"★★ ≤ {d.pars['time']:g} s"),
             ("Solves", f"{m.get('solves_used', 0)} / {m.get('solve_budget', 0)}",
              f"★★★ ≤ {d.pars['solves']:g} · $k = {m.get('k', 1)}$"),
-            ("Off the plan", f"{m.get('max_drift', 0):.2f} m", f"max, margin $m = {m.get('margin', 0):g}$ m"),
+            ("Off the plan", f"{m.get('max_drift', 0):.2f} m",
+             f"max between re-plans, margin $m = {m.get('margin', 0):g}$ m"),
         ]
 
 
@@ -108,7 +117,8 @@ def ocp(d, k: int, m: float, intro: bool = False) -> OcpSpec:
                r"between the ball gets $u_1, u_2, \ldots$ of the last plan, open-loop. "
                f"$N = {n}$ steps ({n * d.dt:g} s) ahead."),
         legend=[("E_j(m)", "ellipse around block $j$, each half axis enlarged by the margin $m$"),
-                *STATE_LEGEND, "The wind acts on the real ball only."],
+                *STATE_LEGEND, "The wind acts on the real ball only. The ellipse constraints are soft "
+                "(large $L_1$ penalty)."],
     )
 
 
@@ -131,25 +141,25 @@ def intro(d) -> LevelIntro:
 
 
 LEVEL = LevelInfo(
-    number=5,
+    number=4,
     id="crosswind",
     title="Crosswind",
     topic="Feedback",
     briefing=("It's windy. You have a limited compute budget: every re-plan uses one "
               "solve. Get through the gap."),
-    concept=("MPC is feedback: it re-plans from the measured state, so it corrects disturbances "
+    concept=("MPC is feedback: it re-plans from the measured state, so it can correct disturbances "
              "its model does not know about (here, the wind). Between two re-plans the "
              "controller runs open-loop. Re-planning costs computation, so how often to re-plan "
              "is a trade-off between robustness and compute."),
-    teaching=("The default re-plans every sample ($k = 1$). That is perfect, but the 60 solves run "
-              "out before the target: budget exceeded. Re-plan less often and the wind pushes the "
+    teaching=("The default re-plans every sample ($k = 1$): the most feedback, but the 60 solves "
+              "run out after 6 s: budget exceeded. Re-plan less often and the wind pushes the "
               "ball off its plan between re-plans, towards the blocks. Find a $k$ that is cheap "
               "enough but still corrects the wind, and give the ball room with the margin $m$. The "
               "budget bar counts the solves; the solid part of the plan on the map is what runs "
               "open-loop."),
     hints=(
         "Between two re-plans, who corrects for the wind?",
-        "Re-planning every step is perfect, but too expensive. Watch the budget bar.",
+        "Re-planning every step gives the most feedback, but it is too expensive. Watch the budget bar.",
         "Re-plan every second ($k = 10$) and give the wind a little room: a margin of about $m = 0.3$ m.",
     ),
     accent="sun",

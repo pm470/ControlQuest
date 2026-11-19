@@ -1,6 +1,6 @@
 # ControlQuest: Product Requirements Document
 
-**Last updated:** 2026-10-26
+**Last updated:** 2026-11-19 (reduced scope: Level 4 "Heavy Ball" removed, Crosswind is Level 4)
 
 Numbers marked **(calibrate)** are first guesses that must be
 tuned with real runs before they are final.
@@ -58,14 +58,15 @@ Consequences for the design:
 - Point mass in 2D. State `x = [px, py, vx, vy]`, input `u = [ax, ay]`.
 - <span style="color: red">Model used by the controller: double integrator with exact zero-order hold,
   `p+ = p + dt·v + ½dt²·g·a`, `v+ = v + dt·g·a`. `g` is the *model actuator
-  gain* (1 except in Level 4).</span>
+  gain* (1 in every level since the model-mismatch level was removed on 2026-11-19).</span>
 - Sampling time `dt = 0.1 s` in every level (fixed, not a knob).
 - Box limits `|ax|, |ay| ≤ a_max` and `|vx|, |vy| ≤ v_max`, set per level.
 
 ### 4.2 The "real" ball (plant)
 The plant is simulated separately from the model, so levels can add:
-- **actuator mismatch:** the real gain `g_true` differs from the model's `g` (Level 4);
-- **disturbances:** wind acceleration added to the plant (Level 5), generated
+- **actuator mismatch:** the real gain `g_true` could differ from the model's `g` (supported
+  by the engine, used by no level since "Heavy Ball" was removed on 2026-11-19);
+- **disturbances:** wind acceleration added to the plant (Level 4, Crosswind), generated
   from a **fixed random seed** so every run of a level is reproducible.
 
 ### 4.3 Map, obstacles and how the solver sees them
@@ -93,7 +94,7 @@ A run stops as soon as one of these happens. The first one decides the outcome.
 | **Crash (wall)** | the real path leaves the workspace | red |
 | **Controller failure** | acados returns a non-zero status or an invalid plan, e.g. no feasible plan exists | orange, with the status and the reason |
 | **Time out** | `t > t_limit` of the level | grey |
-| **Budget exceeded** | a level budget is used up, e.g. the battery in Level 1 ("battery empty") or the solves in Level 5. Checked after every step; **the run stops immediately**. | red, with which budget |
+| **Budget exceeded** | a level budget is used up, e.g. the battery in Level 1 ("battery empty") or the solves in Level 4 (Crosswind). Checked after every step; **the run stops immediately**. | red, with which budget |
 
 A controller failure **stops** the run. There is no fallback input. "No feasible
 plan existed" is one of the lessons (Level 2), so we show it, not hide it.
@@ -108,7 +109,15 @@ invalid → controller failure. The timeline warning is not built yet.)*
 ## 5. Game structure and screens
 
 ### 5.1 Flow
-`Title → Level select → Level intro → Level screen (tune → run → result) → next level's intro`
+`Title → Level select → Level intro → Level screen (tune → run → result) → (optional) Research
+debrief → next level's intro`
+
+- **Research debrief** (added 2026-11-19, reduced scope): one page per level with the research
+  question, the scientific problem, why it matters, what the level showed (with the latest
+  run's numbers and one of the level's existing visuals), two recent papers (checked
+  references; links open only on click) and the limits of the level. Opened by "Insights" on
+  the result card after any outcome, or by "Research background" on the intro (no run yet).
+  It never blocks progress: stars and unlocking do not depend on it.
 
 - **Level 0 "Hello, MPC"** (added 2026-11-17) is an optional tutorial before Level 1: a
   guided tour of the MPC loop, without stars (section 7).
@@ -158,9 +167,7 @@ Must show:
 
 Should show:
 - toggle "plan history": faint copies of every 10th plan;
-- in Level 4: **predicted vs actual**, a ghost dot where the previous plan said
-  the ball would be now;
-- in Level 5: wind direction and strength (arrow), and the plan segment executed
+- in Level 4 (Crosswind): wind direction and strength (arrow), and the plan segment executed
   open-loop between two re-plans;
 - the crash or failure point, marked on the map.
 
@@ -190,11 +197,13 @@ This connects the game to the course material, and it's cheap to build (text onl
 - **Run** computes the whole closed loop (see §9.1), then plays it back. The
   player can pause, scrub, step one sample at a time, and change speed
   (0.5×–4×).
+- *(2026-11-19: the plots below were not built and are out of the reduced scope; the levels
+  show a budget bar or the brake gauge instead, and the Research debrief reuses them.)*
 - Plots under the map share the playback cursor:
   - always: speed ‖v‖ with v_max, inputs ax and ay with ±a_max;
   - per level, one extra plot: cumulative energy with budget line (L1), distance to
-    wall vs braking distance (L2), distance to the next waypoint (L3), predicted vs
-    actual position error (L4), cumulative number of solves with budget line (L5).
+    wall vs braking distance (L2), distance to the next waypoint (L3), cumulative number of solves with budget line
+    (L4, Crosswind).
 - Should-have: solve time and SQP iterations per step, so expensive moments are
   visible (e.g. sliding along an ellipse).
 
@@ -205,7 +214,8 @@ After a run:
   minimum clearance to blocks, mean/max solve time, max SQP iterations;
 - **"What happened"**: 1–3 sentences generated from rules (§10.1) that explain the
   outcome with numbers from the run;
-- buttons: *Retry with these settings*, *Reset to defaults*, *Next level*.
+- buttons (as built): *Replay*, *Retry*, *Insights* (the Research debrief), *Next level* (only
+  after a success, when the next level is unlocked).
 
 ### 5.8 Hints
 Each level has 2–3 hints, revealed one at a time by the **Hint** button. The first
@@ -225,13 +235,14 @@ understanding, not just turning one knob to the maximum.
 
 ## 7. Levels
 
-There are five levels. Each table lists the map, the knobs, the default (failing)
+There are four rated levels plus the tutorial Level 0 (2026-11-19: Level 4 "Heavy Ball" was
+removed for time reasons and Crosswind moved from 5 to 4). Each table lists the map, the knobs, the default (failing)
 settings, why they fail, the intended fixes, and what the level shows.
 
 All coordinates in metres. Maps are first proposals **(calibrate)**.
 
-**Priority:** Levels 1, 2, 4 and 5 are must-have. Level 3 is should-have, because it
-needs the most extra work (waypoints and their UI).
+**Priority (2026-11-19, reduced scope):** finish and polish these levels; no new gameplay
+features (AGENTS.md section 8).
 
 ---
 
@@ -252,7 +263,7 @@ work: step by step, the way it thinks."*
 | Locked | everything: q_p = q_v = r = 1, P = 10·Q, N = 30 (run ≈ 10 s, 100 solves; calibrated) |
 | Knobs | **none** (2026-11-18): Level 0 only introduces MPC; changing N is Level 2's topic |
 | Intro | as every level, plus a drawn **loop diagram** (1 Measure → 2 Predict → 3 Optimise → 4 Apply, "repeat every Δt") |
-| Play screen | the run is computed automatically; the controls tile is a **guided tour** of 7 steps (You are not steering · ① Measure · ② Predict · ③ Optimise · ④ Apply the first input · ⑤ Repeat · Watch it run), ‹ Back / Next ›. The map highlights the step (ring on the measured ball; a faint fan of example predictions; the plan with its end x_N; the first input u₀; 1 s later, the first plan in grey behind the current one) and the OCP highlights the matching line (x₀ = x̂; the dynamics; the cost + limits). Then the replay plays to the end; the result card has no stars and "Replay tour" / "Next level ›"; the tile becomes **"Tour complete"** (a short summary + "Replay the tour"); no Run, Reset or Retry |
+| Play screen | the run is computed automatically; the controls tile is a **guided tour** of 7 steps (You are not steering · ① Measure · ② Predict · ③ Optimise · ④ Apply the first input · ⑤ Repeat · Watch it run), ‹ Back / Next ›. The map highlights the step (ring on the measured ball; a faint fan of example predictions; the plan with its end x_N; the first input u₀; 1 s later, the first plan in grey behind the current one) and the OCP highlights the matching line (x₀ = x̂; the dynamics; the cost + limits). Then the replay plays to the end; the result card has no stars and "Replay tour" / "Next level ›"; the tile becomes **"Tour complete"** (a short summary, a tonal "Replay tour" and a coral "Next level ›"); no Run, Reset or Retry |
 | Check | `engine_server/calibrate.py hello_mpc` (the run succeeds) |
 
 ---
@@ -271,9 +282,9 @@ runs out, without using more energy than the battery holds."*
 | Limits | a_max = 2, v_max = 2 |
 | Time limit | 40 s (calibrated) |
 | Budget | battery: energy `E = Σ dt·‖u_k‖² ≤ 5`; the run stops when it is empty (calibrated) |
-| Unlocked knobs | `q_p` position weight (Q₁₁ = Q₂₂), `q_v` velocity weight (Q₃₃ = Q₄₄), `r` input weight (R = r·I); all log sliders 1e-3 … 1e3 |
+| Unlocked knobs | `q_p` position weight (Q₁₁ = Q₂₂), `q_v` velocity weight (Q₃₃ = Q₄₄), `r` input weight (R = r·I); all log sliders 0.001 … 50 (team rule: max ≤ max(50, 3 × reference)) |
 | Locked | N = 30, P = 10·Q, no obstacles |
-| Default | q_p = 10, q_v = 1, r = 0.1, close to time-optimal |
+| Default | q_p = 10, q_v = 1, r = 0.1: an aggressive controller (full acceleration and braking) |
 | Why the default fails | it accelerates and brakes at full a_max (≈ 7.4 energy for the whole trip): the battery is empty at t ≈ 20.3 s, 0.5 m before the target |
 | Intended fixes | lower q_p/r (and/or raise q_v) until braking is gentle; too gentle → time out (it creeps into the target too slowly). Calibration: far from the target the MPC always starts at full a_max, so ≈ 4 energy is spent on the first acceleration whatever the weights; the energy differences come from the braking/approach |
 | ★★ time par | ≤ 30 s (calibrated) |
@@ -328,11 +339,11 @@ out: let it look further ahead, or give it a route. Find out which one works."*
 | Map | U-shaped trap that opens towards the start: back wall x ∈ [30, 33], y ∈ [15, 35]; arms y ∈ [32, 35] and y ∈ [15, 18], x ∈ [20, 33]. Start (5, 25), target (45, 25). Calibrated: **each wall is split into 2 blocks (6 blocks)**; with 3 long blocks the overlapping ellipses formed notches where even good routes got stuck |
 | Limits | a_max = 2, v_max = 2 |
 | Time limit | 45 s (calibrated) |
-| Mechanic (2026-10-26) | the player **picks one fix** and tunes only its control; "Your experiments" keeps the best run per fix (outcome, time, ms per solve, stars). Fixes: **no fix** (default); **① longer horizon**: N ∈ {30, 60, 100, 150} (dropdown, all solvers precompiled); **② waypoints**: up to **3 waypoints** by clicking on the map (drag to move, right-click to delete); **③ better terminal cost / cost-to-go**: planned, on hold (AGENTS.md section 6) |
+| Mechanic (2026-10-26) | the player **picks one fix** and tunes only its control; "Your experiments" keeps the best run per fix (outcome, time, ms per solve, stars). Fixes: **no fix** (default); **① longer horizon**: any whole N from 5 to 300 (typed or slider; a new N builds its solver once, a few seconds); **② waypoints**: up to **3 waypoints** by clicking on the map (drag to move, right-click to delete); ③ (better terminal cost / cost-to-go) was dropped on 2026-11-19 (reduced scope) |
 | Locked | q_p = 1, q_v = 1, r = 0.1, P = 10·Q, margin 0.2 m; N = 30 except with fix ① |
 | Default | no fix (N = 30, no waypoints) |
 | Why the default fails | the ball drives into the U and stops 0.2 m before the back wall: the cost gradient points straight into the obstacle, the 3 s horizon sees no way around → **time out** (calibrated) |
-| Fix ① result (calibrated) | **never escapes**: N = 30/60/100/150 all time out at (29.8, 25); mean solve time 0.86 → 2.5 ms. SQP warm-started from the previous plan stays on the same side of the wall |
+| Fix ① result (calibrated) | **never escapes**: N = 30/60/100/150 all time out at (29.8, 25); mean solve time 1.3 → 3.0 ms (2026-11-19, machine-specific; docs/RESEARCH.md). SQP warm-started from the previous plan stays on the same side of the wall |
 | Intended fix | ② 1 waypoint above/right of the U (x ≥ 30, y ≥ 36), then the target; waypoints left of x ≈ 25 lead back into the top of the U (time out again) |
 | Waypoint rule | the MPC reference is the next waypoint (position only, velocity reference = 0). Within the *switch radius* of 2 m, the reference jumps to the next waypoint, so the ball doesn't brake at each waypoint. Waypoints inside an ellipse are rejected when placed (game and engine). |
 | ★★ time par | ≤ 28 s (calibrated: single good waypoints take 23.6–34 s) |
@@ -351,38 +362,16 @@ are done early.
 
 ---
 
-### Level 4: "Heavy Ball" (model mismatch, constraint tightening vs a better model)
+### (removed) Level 4: "Heavy Ball"
 
-**Concept:** the controller plans with a model. If the real system is different,
-plans that are safe on paper crash in reality. There are two fixes: a **safety
-margin** (robust, costs performance) or a **better model** (identify the real
-parameter).
-
-**Briefing:** *"Someone swapped the ball. It looks the same but responds less to
-the motors. Park it in the bay without touching the walls."*
-
-| Item | Value |
-|---|---|
-| Map | a "parking bay": target (40, 25) with a block just behind it, x ∈ [42, 47], y ∈ [20, 30], and a block on each side of the approach, e.g. y ∈ [28, 33] and y ∈ [17, 22], x ∈ [30, 40] **(calibrate the gap with the ellipses)**. Start (5, 25). |
-| Plant | real actuator gain **g_true = 0.6** (hidden from the player). The model uses the knob value `g`. |
-| Limits | a_max = 2 (commanded), v_max = 2 |
-| Time limit | 40 s **(calibrate)** |
-| Unlocked knobs | obstacle margin 0 … 3 m; model actuator gain `g` 0.3 … 1.0 |
-| Extra action | **Test drive** button: applies a constant `ax = 1` for 2 s from rest on an empty map and shows predicted vs measured distance, e.g. "predicted 2.0 m, measured 1.2 m". The player can infer g_true ≈ 0.6 from this. |
-| Locked | Q, R, P, N = 30 |
-| Default | margin = 0.1 m, g = 1.0 |
-| Why the default fails | the plan assumes 2 m/s² of braking but only 1.2 m/s² happens. The ball brakes too late and turns too wide → **crash** into the block behind the target (or it enters the ellipse → controller failure) |
-| Intended fix A | larger margin (robust; slower, uses more space; too large closes the bay) |
-| Intended fix B | set g ≈ 0.6 using the test drive (accurate model; near-perfect run) |
-| ★★ time par | ≤ 26 s **(calibrate)** |
-| ★★★ secondary par | margin ≤ 0.3 m, which effectively requires fix B |
-| Extra plot | prediction error: distance between where the previous plan said the ball would be and where it is |
-| Map extra | ghost dot of the one-step-ahead prediction |
-| Teaching note | "The plan predicted the ball at (39.2, 25.0); it actually was at (40.1, 25.0). The model assumes more braking than the real ball has." |
+Removed on 2026-11-19 (reduced scope). It taught model mismatch (a hidden actuator gain
+`g_true = 0.6`, a test drive to identify it, an obstacle margin). Its last calibration
+(`a7ab364`): with the wrong model (`g = 1`) every margin from 0 to 3 m failed, so only the
+model fix worked. The code is in the git history.
 
 ---
 
-### Level 5: "Crosswind" (feedback: why we re-plan)
+### Level 4: "Crosswind" (feedback: why we re-plan) (Level 5 until 2026-11-19)
 
 **Concept:** MPC is feedback because it re-plans from the measured state. If you
 re-plan rarely, the controller is effectively open-loop between solves and
@@ -394,19 +383,19 @@ one solve. Get through the gap."*
 
 | Item | Value |
 |---|---|
-| Map | two square blocks with a gap: (22, 14)–(28, 20) and (22, 30)–(28, 36); the ellipses leave a gap of ≈ 7 m **(calibrate)**. Start (5, 25), target (45, 25). |
-| Plant | wind acceleration in +y: constant 0.3 m/s² plus gusts, piecewise constant for 1 s each, uniform in [−0.6, 0.6] m/s², **fixed seed** **(calibrate)** |
+| Map | two square blocks with a gap: (22, 11)–(28, 17) and (22, 23)–(28, 29) (calibrated); the straight line y = 25 runs into the upper block, so the ball must pass through the gap (y ≈ 17–23) while the wind (+y) pushes it towards the upper block. Start (5, 25), target (45, 25). |
+| Plant | wind acceleration in +y: constant 0.3 m/s² plus gusts, piecewise constant for 1 s each, uniform in [−0.6, 0.6] m/s², fixed seed 7 (calibrated) |
 | Limits | a_max = 2, v_max = 2 |
-| Time limit | 35 s **(calibrate)** |
-| Budget | max **60 solves** for the run **(calibrate)**; a run of ~20 s has ~200 steps, so re-planning every step is not allowed |
+| Time limit | 35 s (calibrated) |
+| Budget | max **60 solves** for the run (calibrated); the run stops when they are used up. Re-planning every step uses them up after 6 s |
 | Unlocked knobs | re-plan interval `k` ∈ {1, 2, 3, 5, 10, 20} (between re-plans the controller applies the next inputs of the last plan, open-loop); obstacle margin 0 … 3 m |
-| Locked | Q, R, P, N = 30 |
-| Default | k = 1 (always re-plan) |
-| Why the default fails | it is perfect but uses ~200 solves → **budget exceeded** |
-| What the player discovers | k = 20 → the wind drifts the ball into a block → crash; k = 3–5 → passes within budget; a larger margin allows a larger k |
-| ★★ time par | ≤ 24 s **(calibrate)** |
-| ★★★ secondary par | ≤ 40 solves **(calibrate)** |
-| Extra plot | cumulative solves with the budget line; drift = distance between plan and actual position |
+| Locked | q_p = 2, q_v = 0.5, r = 0.05, P = 10·Q, N = 30 |
+| Default | k = 1 (re-plan every sample), margin 0.1 m |
+| Why the default fails | the most feedback, but the 60 solves are used up after 6 s → **budget exceeded** |
+| What the player discovers (measured 2026-11-19, docs/RESEARCH.md) | k = 1, 2, 3 → budget used up; with margin 0.1 m, k = 5, 10, 20 crash into a block (drift up to 1.3 m between re-plans); with margin 0.3 m, k = 5 → ★★ (57 solves), **k = 10 → ★★★ (28.2 s, 29 solves; the reference)**, k = 20 still crashes |
+| ★★ time par | ≤ 30 s (calibrated) |
+| ★★★ secondary par | ≤ 35 solves (calibrated) |
+| Extra plot | built as a compute-budget bar under the map; the drift (distance between the plan being executed and the ball, 0 at every re-plan) is a result row |
 | Map extra | wind arrow; the open-loop segment of the plan being executed is drawn solid, the rest dashed |
 | Teaching note | "Between re-plans the ball ran open-loop for 2.0 s and the wind pushed it 1.8 m off the plan." |
 
@@ -414,15 +403,15 @@ one solve. Get through the gap."*
 
 | Knob | Symbol / meaning | Range | Type | Levels | Needs a new solver? |
 |---|---|---|---|---|---|
-| Position weight | `q_p`: Q₁₁ = Q₂₂ | 1e-3 … 1e3 | log slider | 1 | no (runtime) |
-| Velocity weight | `q_v`: Q₃₃ = Q₄₄ | 1e-3 … 1e3 | log slider | 1 | no |
-| Input weight | `r`: R = r·I | 1e-3 … 1e3 | log slider | 1 | no |
+| Position weight | `q_p`: Q₁₁ = Q₂₂ | 0.001 … 50 | log slider | 1 | no (runtime) |
+| Velocity weight | `q_v`: Q₃₃ = Q₄₄ | 0.001 … 50 | log slider | 1 | no |
+| Input weight | `r`: R = r·I | 0.001 … 50 | log slider | 1 | no |
 | Horizon | `N`, T = N·dt | {5, 10, 20, 30, 40, 60} | dropdown | 2 | precompiled per value |
+| Horizon (fix ①) | `N`, T = N·dt | 5 … 300, whole numbers | typed / slider | 3 | built once per new N (a few seconds) |
 | Terminal stop | `v_N = 0` | on/off | toggle | 2 | no (terminal bounds) |
 | Waypoints | intermediate references | 0–3 | map clicks | 3 | no |
-| Obstacle margin | added to each semi-axis | 0 … 3 m | slider | 4, 5 | no (parameters) |
-| Model actuator gain | `g` in the model | 0.3 … 1.0 | slider | 4 | no (parameter) |
-| Re-plan interval | `k` steps between solves | {1, 2, 3, 5, 10, 20} | dropdown | 5 | no |
+| Obstacle margin | added to each semi-axis | 0 … 3 m | slider | 4 | no (parameters) |
+| Re-plan interval | `k` steps between solves | {1, 2, 3, 5, 10, 20} | dropdown | 4 | no |
 
 Fixed in every level: `dt = 0.1 s`, terminal weight `P = 10·Q` (not a knob, to keep
 the knob count small), solver settings.
@@ -433,7 +422,7 @@ the knob count small), solver settings.
 A run is computed completely by the backend, typically 100–400 steps at ~1 ms per
 solve, so well under a second. The result is then sent to the UI and played back.
 This avoids real-time streaming and makes pause, scrub and replay trivial. The
-"compute budget" in Level 5 counts solves; it does not use wall-clock time.
+"compute budget" in Level 4 (Crosswind) counts solves; it does not use wall-clock time.
 
 ### 9.2 Where it runs
 acados only runs in our Docker image (Linux), and a GUI window cannot easily be
@@ -515,7 +504,7 @@ Agree on these two formats first. Then backend and UI can be built in parallel.
 
 **Run result** (JSON):
 - per step: `t, x, u`, plan `X (N+1 × 4)`, solver status, solve time, SQP
-  iterations, whether a solve happened this step (Level 5), current reference;
+  iterations, whether a solve happened this step (Crosswind), current reference;
 - events: waypoint reached, ellipse entered, crash with its position, failure;
 - metrics, outcome, stars, explanation strings.
 
@@ -554,19 +543,20 @@ These are generated from run data. A first set:
 | time out with ball at rest near an obstacle | "The ball stopped {d} m from obstacle {j} with the target behind it: a local optimum. The horizon cannot see around it." |
 | time out, ball moving slowly the whole time | "The ball never went faster than {v} m/s: your settings make moving expensive / the horizon too short to go faster safely." |
 | crash, with prediction error > 0.2 m | "The plan predicted the ball at {p_pred}, it was at {p_real}: the model does not match the real ball." |
-| crash in Level 5 with k > 1 | "Between re-plans the ball ran open-loop for {k·dt} s and the wind pushed it {drift} m off the plan." |
+| crash in Crosswind with k > 1 | "Between re-plans the ball ran open-loop for {k·dt} s and the wind pushed it {drift} m off the plan." |
 | energy budget exceeded | "Peak acceleration {a} m/s²: the input weight is low compared with the position weight, so the controller accelerates as hard as it can." |
 | success with all weights scaled equally vs default | "Same result as the default: scaling Q, R, P together does not change the optimum." |
 
 ## 11. Acceptance criteria
 
 The game is done when:
-1. Levels 1, 2, 4 and 5 are playable end to end (briefing, tune, run, replay,
-   result, stars), plus Level 3 if time allows.
+1. Levels 1–4 are playable end to end (briefing, tune, run, replay, result, stars), plus
+   the tutorial Level 0.
 2. For **every level**, an automated level check (like `verify.py`) confirms:
    - the default settings fail **with the intended outcome type**;
    - the stored reference solution passes, and reaches ★★★;
-   - the run is deterministic (two runs give identical results).
+   - the run is deterministic (two runs give identical results). *(Not part of `calibrate.py`;
+     checked by hand on 2026-11-19, docs/RESEARCH.md.)*
 3. The predicted plan is shown at every step of every replay.
 4. Every failure shows a "What happened" message with numbers from the run.
 5. The game starts with one documented command, and a classmate who has never
@@ -622,6 +612,5 @@ live plan display or the "What happened" messages: they are the point of the gam
    warning only (§4.4).
 4. Level 3 mechanic: click-to-place waypoints or the toggle fallback?
 5. Is the terminal weight P a knob anywhere? Current answer: no, fixed at 10·Q.
-6. (2026-10-26, on hold) Level 3 with **three fixes to compare** (longer horizon,
-   waypoints, better terminal cost / cost-to-go). Spike results and the open
-   decision on fix ③ are in AGENTS.md section 6 (TODO).
+6. ~~Level 3 with three fixes~~: decided 2026-11-19 (reduced scope): two fixes (longer
+   horizon, waypoints); fix ③ is dropped. Spike results stay in AGENTS.md section 6.
