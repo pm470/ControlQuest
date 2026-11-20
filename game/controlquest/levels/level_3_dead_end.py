@@ -20,6 +20,9 @@ from ..gameplay.fix_selector import FixSelector
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
+from ..gameplay.analysis_panel import (Events, PlotSpec, RefLine, Series, Shade, distances,
+                                       speeds, state_times)
+from ..ui import theme
 from ..gameplay.ocp_card import STATE_LEGEND, OcpSpec
 from ..gameplay.waypoint_editor import WaypointEditor
 from ..ui.math_text import math_text
@@ -160,6 +163,35 @@ class DeadEndWidget(LevelPlayWidget):
         fix = selector.current() if selector else "none"
         n = int(self.knobs.values().get("N", d.N)) if fix == HORIZON and hasattr(self, "knobs") else d.N
         return ocp(d, fix, n)
+
+    def analysis_plots(self, result):
+        """Distance to the FINAL target (also while a waypoint is active) and speed; with
+        waypoints, a vertical line where the reference switches (the first solve with the next
+        ref_index, at its sample time)."""
+        tr, d = result.trajectory, self.data
+        t = state_times(tr)
+        steps, ref = tr.steps, list(tr.ref_index)
+        switches = [steps[i] * tr.dt for i in range(1, min(len(ref), len(steps))) if ref[i] > ref[i - 1]]
+        events = ((Events(switches, "reference switches to the next waypoint / the star"),)
+                  if result.waypoints else ())
+        marks = (" Vertical lines: the reference switches to the next waypoint (the last switch is "
+                 "to the star)." if result.waypoints else "")
+        return [
+            PlotSpec(
+                title="Distance to the target",
+                description=("Measured to the star, also while a waypoint is the active reference. If "
+                             "the controller is trapped, the distance stops decreasing: every solve "
+                             "returns practically the same plan, a stationary point of the nonconvex "
+                             "OCP." + marks),
+                y_label=r"distance $\|p - p_{\star}\|$ [m]", t_end=tr.duration,
+                series=(Series(t, distances(tr, d.target), color=theme.PLOT_1),), events=events),
+            PlotSpec(
+                title="Speed",
+                description=("Drops to zero when the ball is stuck in front of the wall; a good "
+                             "waypoint keeps it moving around the trap." + marks),
+                y_label=r"speed $\|v\|$ [m/s]", t_end=tr.duration,
+                series=(Series(t, speeds(tr), color=theme.PLOT_1),), events=events),
+        ]
 
     def result_rows(self, result):
         m, d = result.metrics, self.data

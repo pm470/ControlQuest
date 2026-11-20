@@ -23,6 +23,9 @@ from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
+from ..gameplay.analysis_panel import (Events, PlotSpec, RefLine, Series, Shade, distances,
+                                       speeds, state_times)
+from ..ui import theme
 from ..gameplay.loop_diagram import LoopDiagram
 from ..gameplay.ocp_card import STATE_LEGEND, OcpSpec
 from ..ui.math_text import math_text
@@ -139,6 +142,7 @@ WATCHING = (r"Every $\Delta t = {dt:g}$ s: measure, plan, apply the first input.
             "Watch the dashed plan move along with the ball.")  # while the rest of the run plays
 REPEAT_SOLVE = 10  # step "Repeat" shows the solve 1 s (10 rounds) after the first one
 WJ = "⁠"  # word joiner: no line break here (e.g. inside "m/s")
+TOUR_ANALYSIS = "The plots are available after the tour's replay"  # Analysis tab during the tour
 
 
 def example_predictions(d, n: int, x0) -> list[list[tuple[float, float]]]:
@@ -309,11 +313,34 @@ class HelloMpcWidget(LevelPlayWidget):
             self.run_info.set_hidden(True)
         super()._on_result(result)  # loads the replay and starts playing
         if self._touring:
+            self.set_analysis_available(False, TOUR_ANALYSIS)
             self._autoplay_pending = False  # the tour starts paused, also if it arrived hidden
             self.playback.pause()
             self._steps = tour_steps(self.data, result)
             self._fix_step_height()
             self._go(0)
+
+    # --- the Analysis tab (2026-11-20): only after the tour's replay, like the solver numbers --
+    def analysis_plots(self, result):
+        tr, d = result.trajectory, self.data
+        t = state_times(tr)
+        tol = d.raw["tolerance"]
+        return [
+            PlotSpec(
+                title="Speed",
+                description=(r"The controller accelerates, drives and brakes so that the ball arrives "
+                             rf"at rest. The limits act per axis ($|v_x|, |v_y| \leq {d.v_max:g}$ m/s), "
+                             rf"so $\|v\|$ can be a little higher than {d.v_max:g} m/s."),
+                y_label=r"speed $\|v\|$ [m/s]", t_end=tr.duration,
+                series=(Series(t, speeds(tr), color=theme.PLOT_1),)),
+            PlotSpec(
+                title="Distance to the target",
+                description=("It falls as the ball approaches the star. The run succeeds when the ball "
+                             rf"is within {tol['position']:g} m of it and slower than "
+                             rf"{tol['speed']:g} m/s."),
+                y_label=r"distance $\|p - p_{\star}\|$ [m]", t_end=tr.duration,
+                series=(Series(t, distances(tr, d.target), color=theme.PLOT_1),)),
+        ]
 
     def debrief_visual(self, result):
         """The MPC loop diagram of the intro (Research debrief)."""
@@ -329,6 +356,7 @@ class HelloMpcWidget(LevelPlayWidget):
     def _on_replay_end(self) -> None:
         super()._on_replay_end()  # the result card (no stars)
         self.run_info.set_hidden(False)  # the whole run has been watched
+        self.set_analysis_available(True)
         if self._touring and self._step == len(self._steps) - 1:
             self._end_tour()
 
@@ -379,6 +407,7 @@ class HelloMpcWidget(LevelPlayWidget):
         if self.result is None:
             return
         self._set_mode(tour=True)
+        self.set_analysis_available(False, TOUR_ANALYSIS)
         self._steps = tour_steps(self.data, self.result)
         self._fix_step_height()
         self._go(0)

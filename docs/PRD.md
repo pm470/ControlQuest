@@ -197,8 +197,10 @@ This connects the game to the course material, and it's cheap to build (text onl
 - **Run** computes the whole closed loop (see §9.1), then plays it back. The
   player can pause, scrub, step one sample at a time, and change speed
   (0.5×–4×).
-- *(2026-11-19: the plots below were not built and are out of the reduced scope; the levels
-  show a budget bar or the brake gauge instead, and the Research debrief reuses them.)*
+- **(2026-11-20) Built as the optional "Analysis" tab of the map tile**: two time-series plots
+  per level of the latest run, sharing the replay's time cursor (AGENTS.md section 8 lists the
+  plots and their data). The list below was the original plan and is only partly what was
+  built (e.g. no separate input plots).
 - Plots under the map share the playback cursor:
   - always: speed ‖v‖ with v_max, inputs ax and ay with ±a_max;
   - per level, one extra plot: cumulative energy with budget line (L1), distance to

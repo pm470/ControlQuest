@@ -15,7 +15,12 @@ from PySide6.QtWidgets import QVBoxLayout
 from ..gameplay.budget_bar import BudgetBar
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntro
+import math
+
 from ..gameplay.level_play_widget import LevelPlayWidget
+from ..gameplay.analysis_panel import (Events, PlotSpec, RefLine, Series, Shade, distances,
+                                       speeds, state_times)
+from ..ui import theme
 from ..gameplay.ocp_card import STATE_LEGEND, OcpSpec
 from ..ui.math_text import math_text
 from .base import LevelInfo
@@ -74,6 +79,9 @@ class CrosswindWidget(LevelPlayWidget):
         v = self.knobs.values() if hasattr(self, "knobs") else {k.name: k.default for k in d.knobs}
         return ocp(d, int(v["k"]), v["margin"])
 
+    def analysis_plots(self, result):
+        return crosswind_plots(result, self.data)
+
     def result_rows(self, result):
         m, d = result.metrics, self.data
         return [
@@ -83,6 +91,69 @@ class CrosswindWidget(LevelPlayWidget):
             ("Off the plan", f"{m.get('max_drift', 0):.2f} m",
              f"max vs the plan in force, margin $m = {m.get('margin', 0):g}$ m"),
         ]
+
+
+def wind_bound(d) -> float:
+    """Largest possible wind acceleration |w| [m/s^2] from the level file: per axis the constant
+    part plus the gust amplitude (gusts are uniform in +-amplitude)."""
+    w = d.raw["wind"]
+    return math.hypot(*(abs(c) + abs(a) for c, a in zip(w["constant"], w["gust_amplitude"])))
+
+
+def prediction_segments(tr, w_max: float):
+    """The engine's prediction error (trajectory.drift, engine >= 0.14.0) and its bound, one
+    segment per plan: plan i is in force for the samples k with steps[i] < k <= steps[i+1] (the
+    last sample is the re-planning instant, compared with this OUTGOING plan); tau = (k -
+    steps[i]) dt. Between re-plans the plant gets exactly the planned inputs and differs from
+    the model only by the wind, so the error is the double integral of the wind: at most
+    0.5 w_max tau^2. NaN separates the segments; t = 0 (no prediction) is left out."""
+    steps, n, dt = tr.steps, len(tr.x) - 1, tr.dt
+    t, err, bound = [], [], []
+    for i, s in enumerate(steps):
+        end = steps[i + 1] if i + 1 < len(steps) else n
+        for k in range(s + 1, end + 1):
+            t.append(tr.t[k])
+            err.append(tr.drift[k])
+            bound.append(0.5 * w_max * ((k - s) * dt) ** 2)
+        if end > s:
+            t.append(math.nan)
+            err.append(math.nan)
+            bound.append(math.nan)
+    return t, err, bound
+
+
+def crosswind_plots(result, d) -> list:
+    """The Analysis tab of Crosswind (also used by the tests)."""
+    tr = result.trajectory
+    w = wind_bound(d)
+    t, err, bound = prediction_segments(tr, w)
+    replans = [s * tr.dt for s in tr.steps[1:]]
+    solve_t = [s * tr.dt for s in tr.steps]
+    count = list(range(1, len(solve_t) + 1))
+    budget = tr.solve_budget or int(d.budget["solves"])
+    return [
+        PlotSpec(
+            title="Prediction error",
+            description=(r"Distance between the ball and the prediction of the plan in force, up to "
+                         r"the moment that plan is replaced ($\tau$: time since it was solved). "
+                         r"Between re-plans the ball gets exactly the planned inputs and only the wind "
+                         rf"($|w| \leq {w:.1f}$ m/s²) differs from the model, so the error stays below "
+                         r"the bound, which grows with $\tau^2$."),
+            y_label="prediction error [m]", t_end=tr.duration,
+            series=(Series(t, err, "prediction error", theme.PLOT_1, style="segments"),
+                    Series(t, bound, r"bound $\frac{1}{2} w_{\max} \tau^2$", theme.PLOT_GUIDE,
+                           style="segments", dashed=True)),
+            events=(Events(replans, "re-plan", theme.PLOT_2, rug=True),), legend_above=True),
+        PlotSpec(
+            title="MPC solves",
+            description=("Every solve uses one unit of the compute budget; the run stops when it is "
+                         "used up. ★★★ needs at most the threshold."),
+            y_label="solves so far", t_end=tr.duration,
+            series=(Series(solve_t + [tr.duration], count + [len(count)], "solves", theme.PLOT_1,
+                           style="step"),),
+            ref_lines=(RefLine(budget, f"budget {budget:g} solves", theme.PLOT_LIMIT),
+                       RefLine(d.pars["solves"], f"★★★ threshold {d.pars['solves']:g}", theme.PLOT_PAR))),
+    ]
 
 
 def ocp(d, k: int, m: float, intro: bool = False) -> OcpSpec:

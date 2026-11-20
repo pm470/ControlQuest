@@ -92,6 +92,8 @@ game/
 │   │   ├── brake_gauge.py               Level 2's brake check (wall ahead / braking / plan reach)
 │   │   ├── playback.py                  replay clock + play/pause/scrub/speed (in the replay well)
 │   │   ├── result_panel.py              outcome, stars, metrics, "what happened", Replay/Retry/Insights/Next
+│   │   ├── analysis_panel.py            the "Analysis" tab: PlotSpec (what a level plots), the
+│   │   │                                    matplotlib (Agg) rendering, PlotView (image + time cursor)
 │   │   ├── research_debrief.py          the Research debrief: question, problem, relevance, your run,
 │   │   │                                    two papers, limits (content from controlquest/research/)
 │   │   ├── ocp_card.py                  "The OCP your MPC solves" (typeset math, knob colours)
@@ -154,6 +156,13 @@ game/
   `server.py`. Change both sides together.
 - **Level numbers live only in `level_data/*.json`**, never in Python.
 - **MPC code (`mpc/`) never knows about levels**; game rules live in `level_rules/`.
+
+### Tests
+
+```powershell
+cd game
+python -m unittest discover -s tests -v     # Analysis tab: plot data and panel (no engine needed)
+```
 
 ## Changing things
 

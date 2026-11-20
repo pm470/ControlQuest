@@ -95,6 +95,20 @@ KNOB_COLORS = [
 
 NEW_GLOW = "#FFEAA6"  # soft highlighter behind OCP parts that are new in a level (level intro)
 
+# --- plots (the Analysis tab, gameplay/analysis_panel.py) -------------------------------------
+# data series: the darker shades of the ball blue and the coral, so they keep >= 3:1 contrast on
+# the white tile (validated with the dataviz palette checks: lightness, chroma, colour-blind
+# separation, contrast); reference lines are dashed and labelled in the legend
+PLOT_1 = BALL_DARK  # main series
+PLOT_2 = PRIMARY_PRESSED  # second series
+PLOT_LIMIT = "#D64545"  # budgets and limits (dashed)
+PLOT_PAR = STAR_DARK  # star thresholds (dashed)
+PLOT_GUIDE = INK_SOFT  # theoretical bounds (dashed)
+PLOT_EVENT = WAYPOINT  # event markers (e.g. a waypoint switch)
+PLOT_SHADE = DANGER  # shaded regions (drawn transparent)
+PLOT_GRID = LINE
+PLOT_CURSOR = INK  # the replay time
+
 
 def knob_color(index: int) -> KnobColor:
     return KNOB_COLORS[index % len(KNOB_COLORS)]
@@ -191,6 +205,19 @@ def stylesheet() -> str:
     }}
     QPushButton[variant="ghost"]:hover {{ color: {INK}; background: {WELL}; }}
     QPushButton[variant="ghost"]:pressed {{ margin-top: 0px; }}
+
+    /* a segmented switch (widgets.SegmentedControl, e.g. Simulation / Analysis): the selected
+       option is a white chip standing on a lip inside a tonal well, the others are plain text */
+    QPushButton[variant="segment"] {{
+        background: transparent; border: none; border-bottom: 2px solid transparent;
+        border-radius: 10px; color: {INK_SOFT}; font-size: 13px; font-weight: 800; padding: 5px 14px;
+    }}
+    QPushButton[variant="segment"]:hover {{ color: {INK}; }}
+    QPushButton[variant="segment"]:checked {{
+        background: {SURFACE}; border-bottom: 2px solid {LIP}; color: {INK};
+    }}
+    QPushButton[variant="segment"]:pressed {{ margin-top: 0px; }}
+    QPushButton[variant="segment"]:disabled {{ color: {LOCKED}; }}
 
     QPushButton[variant="link"] {{
         background: transparent; border: none; color: {PRIMARY_INK};

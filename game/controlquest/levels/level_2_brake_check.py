@@ -19,6 +19,9 @@ from ..gameplay.brake_gauge import BrakeGauge
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget
+from ..gameplay.analysis_panel import (Events, PlotSpec, RefLine, Series, Shade, distances,
+                                       speeds, state_times)
+from ..ui import theme
 from ..gameplay.ocp_card import STATE_LEGEND, OcpSpec
 from ..ui.math_text import math_text
 from .base import LevelInfo
@@ -108,6 +111,37 @@ class BrakeCheckWidget(LevelPlayWidget):
         d = self.data
         knobs = self.knobs.values() if hasattr(self, "knobs") else {k.name: k.default for k in d.knobs}
         return ocp(d, int(knobs["N"]), knobs["stop"] >= 0.5)
+
+    def analysis_plots(self, result):
+        """v_x, and the room to the wall against the stopping distance (nominal model, full
+        braking). The wall is the field's edge in +x (the level's direction of travel)."""
+        tr, d = result.trajectory, self.data
+        t = state_times(tr)
+        x_wall, a = d.workspace[1][0], d.a_max
+        vx = [x[2] for x in tr.x]
+        d_wall = [x_wall - x[0] for x in tr.x]
+        d_stop = [max(v, 0.0) ** 2 / (2 * a) for v in vx]
+        too_late = [s > w for s, w in zip(d_stop, d_wall)]
+        return [
+            PlotSpec(
+                title="Velocity towards the wall",
+                description=(r"With the terminal stop, a short $N$ keeps $v_x$ well below the limit "
+                             r"(about $a_{\max} N \Delta t$): every plan must end at rest."),
+                y_label=r"velocity $v_x$ [m/s]", t_end=tr.duration,
+                series=(Series(t, vx, r"$v_x$", theme.PLOT_1),),
+                ref_lines=(RefLine(d.v_max, rf"limit $v_{{\max}} = {d.v_max:g}$ m/s (per axis)",
+                                   theme.PLOT_LIMIT),)),
+            PlotSpec(
+                title="Room to the wall and stopping distance",
+                description=(rf"Full braking ($a_{{\max}} = {a:g}$ m/s²), nominal model. Shaded: the "
+                             r"stopping distance exceeds the room left, so no input can stop the ball "
+                             r"before the wall (a physical argument, not a solver certificate)."),
+                y_label="distance [m]", t_end=tr.duration,
+                series=(Series(t, d_wall, r"room to the wall $x_{\mathrm{wall}} - p_x$", theme.PLOT_1),
+                        Series(t, d_stop, r"stopping distance $\max(v_x,0)^2 / (2 a_{\max})$",
+                               theme.PLOT_2)),
+                shades=(Shade(t, too_late, "cannot stop before the wall"),)),
+        ]
 
     def result_rows(self, result):
         m, d = result.metrics, self.data

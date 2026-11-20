@@ -13,6 +13,9 @@ from ..gameplay.budget_bar import BudgetBar
 from ..gameplay.level_data import load_level_data
 from ..gameplay.level_intro import LevelIntro
 from ..gameplay.level_play_widget import LevelPlayWidget, standard_ocp
+from ..gameplay.analysis_panel import (Events, PlotSpec, RefLine, Series, Shade, distances,
+                                       speeds, state_times)
+from ..ui import theme
 from .base import LevelInfo
 
 
@@ -42,6 +45,29 @@ class PriceOfSpeedWidget(LevelPlayWidget):
         bar.setToolTip("Effort used in this run: Σ Δt‖u‖² (not physical energy). "
                        "The yellow tick: ★★★ par.")
         return bar
+
+    def analysis_plots(self, result):
+        """Speed and the cumulative effort E(t_k) of the trajectory (engine data, n+1 samples)."""
+        tr, d = result.trajectory, self.data
+        t = state_times(tr)
+        budget, par = d.budget["energy"], d.pars["energy"]
+        return [
+            PlotSpec(
+                title="Speed",
+                description=("Aggressive weights accelerate and brake at full power and drive faster; "
+                             "gentler weights drive slower and spend less effort."),
+                y_label=r"speed $\|v\|$ [m/s]", t_end=tr.duration,
+                series=(Series(t, speeds(tr), color=theme.PLOT_1),)),
+            PlotSpec(
+                title="Cumulative control effort",
+                description=(r"$E(t_k) = \Delta t \sum_{i<k} \|u_i\|^2$ over the inputs applied so far: "
+                             r"an effort measure in m²/s³, not physical energy. The run stops when $E$ "
+                             "reaches the budget; ★★★ needs at most the threshold at the end."),
+                y_label=r"effort $E$ [m$^2$/s$^3$]", t_end=tr.duration,
+                series=(Series(t, list(tr.energy), r"cumulative effort $E(t)$", theme.PLOT_1),),
+                ref_lines=(RefLine(budget, f"budget {budget:g} (the run stops)", theme.PLOT_LIMIT),
+                           RefLine(par, f"★★★ threshold {par:g}", theme.PLOT_PAR))),
+        ]
 
     def result_rows(self, result):
         m, d = result.metrics, self.data

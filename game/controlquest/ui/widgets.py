@@ -77,6 +77,52 @@ class Card(QFrame):
             add_soft_shadow(self)
 
 
+class SegmentedControl(QFrame):
+    """A few mutually exclusive options in one tonal well (e.g. the Simulation / Analysis tabs
+    of a level). The selected option is a white chip on a lip (QSS variant "segment").
+    Emits changed(index) when the player picks another option."""
+
+    changed = Signal(int)
+
+    def __init__(self, labels: list[str], parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setProperty("role", "well")
+        row = QHBoxLayout(self)
+        row.setContentsMargins(4, 4, 4, 4)
+        row.setSpacing(2)
+        self.buttons: list[QPushButton] = []
+        for i, text in enumerate(labels):
+            b = QPushButton(text)
+            b.setProperty("variant", "segment")
+            b.setCheckable(True)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.clicked.connect(lambda _=False, i=i: self._pick(i))
+            row.addWidget(b)
+            self.buttons.append(b)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._current = 0
+        self.set_current(0)
+
+    def current(self) -> int:
+        return self._current
+
+    def set_current(self, index: int) -> None:
+        """Select an option without emitting changed()."""
+        self._current = index
+        for i, b in enumerate(self.buttons):
+            b.setChecked(i == index)
+
+    def set_option_enabled(self, index: int, enabled: bool, tooltip: str = "") -> None:
+        self.buttons[index].setEnabled(enabled)
+        self.buttons[index].setToolTip(tooltip)
+
+    def _pick(self, index: int) -> None:
+        changed = index != self._current
+        self.set_current(index)
+        if changed:
+            self.changed.emit(index)
+
+
 def well(parent: QWidget | None = None) -> QFrame:
     """A tonal inset area inside a tile (e.g. the replay bar). Add a layout to it."""
     frame = QFrame(parent)

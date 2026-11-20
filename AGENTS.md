@@ -173,8 +173,12 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
   `controlquest/research/<level_id>.py`, 10 papers checked against Crossref / arXiv / RSS):
   "Insights" on the result card, "Research background" on the intro (not Level 0's),
   `LevelScreen` has explicit views (intro / play / debrief / other). Game-side only.
-- Not yet: speed/acceleration plots (PRD 5.6; not planned in the reduced scope),
-  saving progress to disk (progress resets on restart, intentionally for now).
+- Done (2026-11-20, branch `gui`): **Analysis tab** (optional, visualisation only): the map
+  tile has two tabs, Simulation (default) and Analysis, with two time-series plots per level
+  of the latest run and a cursor at the replay time (`gameplay/analysis_panel.py`, the levels'
+  `analysis_plots` hook, `widgets.SegmentedControl`); unit tests in `game/tests/`. Game-side
+  only: engine, metrics, scoring and calibration unchanged (calibrations re-run, identical).
+- Not yet: saving progress to disk (progress resets on restart, intentionally for now).
 - Done (2026-11-19, phase 4): **`docs/RESEARCH.md`** (motivation, formal OCP incl. soft
   constraints and the external budgets, research question, measured results, interpretation,
   limits and the 10 checked references per level), the raw log
@@ -346,6 +350,35 @@ below stay as background (they may be mentioned in the research texts):
   paper ›"**, no "Free version (arXiv) ›" link (the user asked for it; `free_url` left empty in
   `research/price_of_speed.py`). Other papers keep their arXiv links; docs/RESEARCH.md still cites
   the preprint.
+- (2026-11-20) **Analysis tab** (the user's request; the agent's recommendations 1A-9A approved,
+  "stay consistent with what is implemented and scientifically correct"):
+  - purely visual and optional: no change to the controller, dynamics, constraints, metrics,
+    scoring, calibration or level completion; no history, overlays, export or new experiments;
+  - drawing (1A): matplotlib Agg renders each plot once per new run (and on resize / display
+    scaling) into an image painted snapped to device pixels, like the formulas; the time cursor
+    is a QPainter line on top, so playback never re-renders; nothing renders while the tab is
+    hidden or inside paintEvent; axis labels in the LaTeX font (mathtext "cm"), ticks in the game
+    font with a per-glyph fallback to DejaVu Sans (for "★");
+  - the tab switch (2A) is a small segmented switch above the map (`SegmentedControl`, QSS
+    variant "segment"); only the map area switches (3A): level extras and the replay well stay
+    under both tabs; the result card belongs to the Simulation tab (4A), so the plots stay
+    readable when a replay ends on Analysis; Level 0: Analysis disabled during the guided tour,
+    available after the tour's replay (5A, like the solver numbers); the plots always show the
+    same run as the map: replaced by a new run, kept on Reset or knob changes, empty on a fresh
+    level visit (6A); the chosen tab is kept during a level visit (7A);
+  - plots and data (all from RunResult.trajectory + the level file, with their own timestamps:
+    states/effort/drift at t_k, per-solve data at steps·dt): L0 speed |v| and distance to the
+    target; L1 speed and cumulative control effort E (m²/s³, not energy) with the budget and ★★★
+    lines; L2 v_x with v_max (per axis) and d_wall = x_wall - p_x vs d_stop = max(v_x,0)²/(2 a_max),
+    shaded where d_stop > d_wall ("a physical argument, not a solver certificate"); L3 distance to
+    the FINAL target and speed, with a line at each reference switch (waypoints); L4 the engine's
+    prediction error (`drift`, prediction in force incl. the outgoing plan at a re-plan, t = 0 left
+    out) in one segment per plan with the bound ½ w_max τ² (w_max = |(|c_x|+a_x, |c_y|+a_y)| = 0.9
+    m/s² from the wind settings; τ = time since the plan in force was solved), re-plan ticks, and
+    the solves staircase with the budget and ★★★ lines. No v_max line on |v| plots (8A: limits are
+    per axis, |v| may exceed v_max). Plot colours: `theme.PLOT_*` (BALL_DARK / PRIMARY_PRESSED for
+    data: they pass the dataviz palette checks incl. 3:1 contrast on white);
+  - tests (9A): `game/tests/test_analysis.py` (stdlib unittest, offscreen, no engine).
 - (2026-11-19) **Final validation** (the user approved the agent's recommendations A1, B, C, not
   D): (A1) Crosswind's deviation is measured against the prediction in force, also at the
   re-planning instant (the outgoing plan), so every $k$ is measured the same way; comparisons
@@ -613,6 +646,9 @@ below stay as background (they may be mentioned in the research texts):
 - Never hard-code the course image name (`vsc-mpcrl26-exercises-<hash>`) in scripts or
   docs: the hash is machine-specific (2026-11-03: a commit with one teammate's hash broke
   the engine start for the other). `start_engine.ps1/.sh` detect it; use `<image>` in docs.
+- (2026-11-20) matplotlib warns "Glyph ... missing from font" (e.g. "★" in Segoe UI) and draws a
+  box: give `font.family` a fallback list (`[game font, "DejaVu Sans"]`, matplotlib >= 3.6 falls
+  back per glyph). Run the plot tests with `-W error::UserWarning` to catch it.
 - Generated code (`engine_server/build/`), `.venv/`, `__pycache__/` are gitignored.
 - Obstacles in acados (2026-10-26, Level 3 calibration): with **hard** ellipse constraints
   HPIPM failed (MINSTEP) whenever an ellipse and the input bounds were active together
@@ -668,7 +704,8 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
    blocks, coral dashed plan with a dot per stage, dashed ellipses, lilac waypoints.
 10. **Text roles** (QSS): title, heading, subheading, subtitle, body, goal, quote, caption,
     eyebrow, stat, tag. **Button variants**: default (tonal + lip), primary (coral + lip),
-    ghost, link (coral text), chip (small white, in wells), danger; scale large / tall.
+    ghost, link (coral text), chip (small white, in wells), danger, segment (a segmented
+    switch, `widgets.SegmentedControl`); scale large / tall / compact.
 11. Fonts: Nunito → Segoe UI → Helvetica Neue → Arial. Outcome colours: success green,
     crash/battery red, controller failure orange, time out grey.
 12. Window fits the screen (default 1280×800 logical), works down to 900×560; Esc = back.
@@ -728,7 +765,10 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
    after the replay **"Tour complete"** (a short summary, "Replay tour" and "Next level ›"). No knobs, no
    Run/Reset: the player only watches.
    **Playable level** (`gameplay/level_play_widget.py`), three tiles on wide windows:
-   - left, **map tile**: the **map** (soft 50 m board without outline, grid every 5 m,
+   - left, **map tile**: on top a **Simulation | Analysis** switch (Simulation by default;
+     Analysis = two time-series plots of the latest run with a cursor at the replay time,
+     "The plots of this run appear here after you run the simulation" before a run; Level 0:
+     only after the tour's replay); the Simulation tab is the **map** (soft 50 m board without outline, grid every 5 m,
      numbers every 10 m with one shared 0 at the origin, start ring, target star, ball
      with trail, current plan, acceleration arrow, a "|v| = … m/s" pill; with obstacles:
      beige blocks, the solver's ellipses dashed, a red × where the ball crashed; Level 3:

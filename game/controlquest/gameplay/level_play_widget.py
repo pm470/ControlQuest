@@ -1,10 +1,14 @@
 """The playable level (PRD 5.2): three tiles (AGENTS.md section 10, "Design rules"):
 
-    map tile            | OCP tile               | controls tile
-    map (+ result card) | the OCP your MPC solves| Goal
-    level extras        | This solve (4 numbers) | knobs (+ level controls)
-    replay well:        | Whole run (one line)   | Reset · Run
-    ▶ scrubber time 2×  ‹ k/n ›                  | (level sections) · Stuck? hints
+    map tile                     | OCP tile               | controls tile
+    [Simulation | Analysis]      | the OCP your MPC solves| Goal
+    map (+ result card) / plots  | Whole run (4 numbers)  | knobs (+ level controls)
+    level extras                 |                        | Reset · Run
+    replay well: ▶ scrubber time 2× ‹ k/n ›               | (level sections) · Stuck? hints
+
+The map tile has two tabs (2026-11-20): Simulation (the map, default) and Analysis (the
+level's time-series plots of the latest run, gameplay/analysis_panel.py). Both share the
+level extras and the replay well; the time cursor in the plots follows the playback clock.
 
 Narrow windows: the OCP tile moves into the right column, under the controls tile.
 
@@ -14,6 +18,7 @@ Flow of one run:
 
 A level subclasses LevelPlayWidget and overrides the hooks at the bottom:
 goal_text(), ocp_spec(), add_extras(column), update_extras(t), result_rows(result),
+analysis_plots(result) (the two plots of the Analysis tab),
 and for levels with other controls than weights (e.g. waypoints): controls_title(),
 add_controls(layout), add_side_cards(column), waypoints(), fix(), on_result(result),
 reset_controls(), set_controls_enabled(enabled);
@@ -23,8 +28,10 @@ the OCP shown should change.
 
 from __future__ import annotations
 
+import traceback
+
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 
 from ..core.context import AppContext
 from ..core.navigation import ScreenId
@@ -32,7 +39,8 @@ from ..engine.protocol import EngineStatus, RunRequest, RunResult
 from ..levels.base import LevelInfo
 from ..research import research_for
 from ..ui.math_text import math_text
-from ..ui.widgets import Button, Card, label, scrollable, well
+from ..ui.widgets import Button, Card, SegmentedControl, label, scrollable, well
+from .analysis_panel import AnalysisPanel, PlotSpec
 from .knob_panel import KnobPanel, knob_colors
 from .level_data import LevelData
 from .map_view import MapView
@@ -96,17 +104,30 @@ class LevelPlayWidget(QWidget):
         self.map.set_level(data)
         self.result_panel = ResultPanel()
         self.result_panel.hide()
-        map_area = QWidget()
-        stack = QGridLayout(map_area)
+        sim_page = QWidget()  # the Simulation tab: the map with the result card on top
+        stack = QGridLayout(sim_page)
         stack.setContentsMargins(0, 0, 0, 0)
         stack.addWidget(self.map, 0, 0)
         stack.addWidget(self.result_panel, 0, 0, Qt.AlignmentFlag.AlignCenter)
+        self.analysis = AnalysisPanel()  # the Analysis tab: the level's plots of the latest run
+        self.pages = QStackedWidget()
+        self.pages.addWidget(sim_page)
+        self.pages.addWidget(self.analysis)
+        self.tabs = SegmentedControl(["Simulation", "Analysis"])
+        self.tabs.buttons[0].setToolTip("The playing field with the ball and the MPC's plan")
+        self.tabs.buttons[1].setToolTip("Plots of the latest run over time, with the replay time")
+        self.tabs.changed.connect(self.pages.setCurrentIndex)
         self.bar = PlaybackBar(self.playback)
         self.solve_selector = SolveSelector()
         self.solve_selector.setToolTip("Step through the MPC solves of this run: the map shows "
                                        "the plan computed in the selected solve")
         map_tile = Card(padding=16, spacing=10, shadow=False)
-        map_tile.body.addWidget(map_area, 1)
+        tabs_row = QHBoxLayout()
+        tabs_row.setContentsMargins(0, 0, 0, 0)
+        tabs_row.addWidget(self.tabs)
+        tabs_row.addStretch(1)
+        map_tile.body.addLayout(tabs_row)
+        map_tile.body.addWidget(self.pages, 1)
         self.add_extras(map_tile.body)  # level extras (e.g. battery) under the map, above the replay
         replay = well()
         replay_row = QHBoxLayout(replay)
@@ -252,6 +273,7 @@ class LevelPlayWidget(QWidget):
         tr = result.trajectory
         self.solve_selector.set_count(tr.n_solves, tr.dt, [tr.time_of_solve(i) for i in range(tr.n_solves)])
         self.run_info.set_result(result)
+        self._build_analysis(result)
         self.on_result(result)
         self.playback.load(result.trajectory.duration)
         self.bar.set_enabled_for_run(True)
@@ -280,6 +302,7 @@ class LevelPlayWidget(QWidget):
     # --- replay ---------------------------------------------------------------------------
     def _on_time(self, t: float) -> None:
         self.map.set_time(t)
+        self.analysis.set_time(t)  # moves the plots' cursor only (no re-render)
         if self.result is not None:
             k = self.result.trajectory.solve_at(t)
             self.solve_selector.set_current(k)
@@ -397,6 +420,29 @@ class LevelPlayWidget(QWidget):
 
     def update_extras(self, t: float) -> None:
         """Update level-specific widgets for replay time t."""
+
+    # --- the Analysis tab ------------------------------------------------------------------
+    def _build_analysis(self, result: RunResult) -> None:
+        """Replace the plots with the ones of this run (once per new result)."""
+        try:
+            self.analysis.set_plots(self.analysis_plots(result))
+        except Exception:  # noqa: BLE001: a plot problem must never break a run
+            traceback.print_exc()
+            self.analysis.clear("The plots could not be drawn for this run.")
+        self.analysis.set_time(self.playback.time)
+
+    def set_analysis_available(self, available: bool, reason: str = "") -> None:
+        """Enable/disable the Analysis tab (Level 0: only after the tour's replay); disabling
+        switches back to the Simulation tab."""
+        self.tabs.set_option_enabled(1, available, "" if available else reason)
+        if not available and self.tabs.current() == 1:
+            self.tabs.set_current(0)
+            self.pages.setCurrentIndex(0)
+
+    def analysis_plots(self, result: RunResult) -> list[PlotSpec]:
+        """The Analysis tab's plots for this run (each level provides two). Data only: built
+        from result.trajectory and the level file, never recomputing the run."""
+        return []
 
     def debrief_rows(self, result: RunResult) -> list[tuple[str, str, str]]:
         """The run's numbers in the Research debrief: by default the result card's rows."""
