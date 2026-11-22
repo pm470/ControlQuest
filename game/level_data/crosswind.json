@@ -30,7 +30,7 @@
      "help": "Solve the OCP only every $k$ samples ($k\\,\\Delta t$ seconds); in between, apply the next inputs of the last plan open-loop. Every solve costs one unit of the compute budget.",
      "default": 1, "min": 1, "max": 20, "choices": [1, 2, 3, 5, 10, 20], "scale": "choice"},
     {"name": "margin", "label": "Obstacle margin", "symbol": "m",
-     "help": "Added to every half axis of the obstacle ellipses [m]: room for the wind to push the ball off its plan.",
+     "help": "Added to every half axis of the obstacle ellipses, in metres: room for the wind to push the ball off its plan.",
      "default": 0.1, "min": 0.0, "max": 3.0, "scale": "linear"}
   ],
 

@@ -69,9 +69,9 @@ def ocp(d, n: int, focus: str | None = None) -> OcpSpec:
             hl(r"x_0 = \hat{x}", "measure"),
             hl(r"x_{k+1} = f(x_k,\,u_k)", "predict"),
             hl(rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}", "optimise"),
-            rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
+            hl(rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}", "optimise"),
         ],
-        notes=(rf"Re-solved every $\Delta t = {d.dt:g}$ s from the measured state $\hat{{x}}$, "
+        notes=(rf"Re-solved every $\Delta t = {d.dt:g}\ \mathrm{{s}}$ from the measured state $\hat{{x}}$, "
                rf"$N = {n}$ steps ({n * d.dt:g} s) ahead; only $u_0$ is applied."),
         legend=STATE_LEGEND,
     )
@@ -97,16 +97,15 @@ def tour_steps(d, result) -> list[TourStep]:
     return [
         TourStep("You are not steering",
                  "An MPC controller drives this ball. "
-                 rf"Every $\Delta t = {dt:g}$ s it runs the same loop: measure, predict, optimise, "
+                 rf"Every $\Delta t = {dt:g}\ \mathrm{{s}}$ it runs the same loop: measure, predict, optimise, "
                  "apply. Let's walk through the first round.", "start"),
         TourStep("① Measure",
-                 r"First it measures the state $\hat{x}$: where the ball is and how fast it moves."
+                 r"First it measures the state $\hat{x}$: where the ball is located and how fast it moves."
                  "<br><br><b>Current state:</b>"
-                 f"<br>$p = ({x[0]:g},\\, {x[1]:g})$ m"
-                 f"<br>$v = ({x[2]:g},\\, {x[3]:g})$ m/s", "measure", ocp="measure"),
+                 f"<br>$p = ({x[0]:g},\\, {x[1]:g})\\ \\mathrm{{m}}$"
+                 f"<br>$v = ({x[2]:g},\\, {x[3]:g})\\ \\mathrm{{m/s}}$", "measure", ocp="measure"),
         TourStep("② Predict",
-                 r"Its model $x_{k+1} = f(x_k,\, u_k)$ says how the ball "
-                 "moves (velocity changes position, acceleration changes velocity). With it, the "
+                 r"The model $x_{k+1} = f(x_k,\, u_k)$ defines the ball's motion. With it, the "
                  "controller can predict where any sequence of accelerations would take the ball "
                  f"over the next $N = {n}$ steps ({T:g} s). The faint lines are a few examples.",
                  "predict", ocp="predict"),
@@ -114,16 +113,19 @@ def tour_steps(d, result) -> list[TourStep]:
                  "Now it picks the best input sequence: the one with the lowest cost that "
                  "respects the limits."
                  "<br><br><b>Cost:</b> being far from the star, moving fast, accelerating"
-                 # "m/⁠s": a word joiner after the slash, so the line never breaks inside "m/s"
-                 rf"<br><b>Limits:</b> $|a_x|, |a_y| \leq {d.a_max:g}$ m/{WJ}s², "
-                 rf"$|v_x|, |v_y| \leq {d.v_max:g}$ m/{WJ}s"
-                 "<br><b>Result:</b> the plan, the dashed line on the map, ending "
+                 # one bullet per limit (2026-11-22); the units inside the formula, so they are in
+                 # the LaTeX font, on the formula's baseline, and never wrap away from it
+                 "<br><b>Limits:</b>"
+                 rf"<br>•&nbsp;$|a_x|,\ |a_y| \leq {d.a_max:g}\ \mathrm{{m/s^2}}$"
+                 rf"<br>•&nbsp;$|v_x|,\ |v_y| \leq {d.v_max:g}\ \mathrm{{m/s}}$"
+                 rf"<br>•&nbsp;${field_limits(d)}$"
+                 "<br><b>Result:</b> the plan represented by the dashed line on the map, ending "
                  f"{T:g} s ahead ($x_N$)", "plan", ocp="optimise"),
         TourStep("④ Apply the first input",
-                 "Only the first input $u_0$ (the arrow) is sent to the motors, for "
-                 f"{dt:g} s. The rest of the plan is not used.", "apply"),
+                 "Only the first input $u_0$ is sent to the motors, for "
+                 f"{dt:g} s. The rest of the plan is not applied.", "apply"),
         TourStep("⑤ Repeat",
-                 rf"Every $\Delta t = {dt:g}$ s the whole loop runs again from the new measurement: "
+                 rf"Every $\Delta t = {dt:g}\ \mathrm{{s}}$ the whole loop runs again from the new measurement: "
                  "a new plan, a new first input."
                  f"<br><br><b>On the map:</b> {later * dt:g} s ({later} rounds) later. Grey: the "
                  "first plan, coral: the current one."
@@ -132,16 +134,23 @@ def tour_steps(d, result) -> list[TourStep]:
                  "<br><b>Why it matters:</b> re-planning from each new measurement lets the controller "
                  "react to what its model got wrong.", "repeat", solve=later, ocp="measure"),
         TourStep("Watch it run",
-                 f"Press Play to watch the remaining {max(0, tr.n_solves - later - 1)} rounds. With "
-                 "‹ k /n › under the map you can look at any single plan.", "repeat", solve=later),
+                 f"Press Play to watch the remaining {max(0, tr.n_solves - later - 1)}"
+                 " rounds.", "repeat", solve=later),
     ]
 
 
 GOAL = "Follow the tour through one round of the MPC loop, then watch the whole run."
-WATCHING = (r"Every $\Delta t = {dt:g}$ s: measure, plan, apply the first input. "
+WATCHING = (r"Every $\Delta t = {dt:g}\ \mathrm{{s}}$: measure, plan, apply the first input. "
             "Watch the dashed plan move along with the ball.")  # while the rest of the run plays
 REPEAT_SOLVE = 10  # step "Repeat" shows the solve 1 s (10 rounds) after the first one
-WJ = "⁠"  # word joiner: no line break here (e.g. inside "m/s")
+
+
+def field_limits(d) -> str:
+    """The position limits (the field) as TeX, with the unit: one range when x and y share it."""
+    (x0, y0), (x1, y1) = d.workspace
+    if (x0, x1) == (y0, y1):
+        return rf"{x0:g} \leq p_x,\ p_y \leq {x1:g}\ \mathrm{{m}}"
+    return rf"{x0:g} \leq p_x \leq {x1:g}\ \mathrm{{m}},\quad {y0:g} \leq p_y \leq {y1:g}\ \mathrm{{m}}"
 TOUR_ANALYSIS = "The plots are available after the tour's replay"  # Analysis tab during the tour
 
 
@@ -303,8 +312,9 @@ class HelloMpcWidget(LevelPlayWidget):
         if not tour and self.result is not None:
             n = self.result.trajectory.n_solves
             self.done_text.setText(
-                rf"Measure, predict, optimise, apply the first input, repeat: every $\Delta t = {self.data.dt:g}$ s, "
-                f"{n} times in this run. From Level 1 on you design this controller yourself: its "
+                rf"Measure, predict, optimise, apply the first input, repeat: every $\Delta t = {self.data.dt:g}\ \mathrm{{s}}$, "
+                f"{n} times in this run.<br><br>"  # two paragraphs (rich text ignores \n)
+                f"From Level 1 on you design this controller yourself: its "
                 "cost, its horizon, its constraints.")
 
     # --- the run -------------------------------------------------------------------------------
@@ -329,7 +339,7 @@ class HelloMpcWidget(LevelPlayWidget):
             PlotSpec(
                 title="Speed",
                 description=(r"The controller accelerates, drives and brakes so that the ball arrives "
-                             rf"at rest. The limits act per axis ($|v_x|, |v_y| \leq {d.v_max:g}$ m/s), "
+                             rf"at rest. The limits act per axis ($|v_x|,\ |v_y| \leq {d.v_max:g}\ \mathrm{{m/s}}$), "
                              rf"so $\|v\|$ can be a little higher than {d.v_max:g} m/s."),
                 y_label=r"speed $\|v\|$ [m/s]", t_end=tr.duration,
                 series=(Series(t, speeds(tr), color=theme.PLOT_1),)),
@@ -426,7 +436,7 @@ class HelloMpcWidget(LevelPlayWidget):
         return [
             ("Time", f"{m['time']:.1f} s", ""),
             ("Horizon", f"$N = {m['N']}$ ({m['horizon_s']:g} s)", ""),
-            ("MPC solves", f"{m.get('solves', 0)}", rf"one every $\Delta t = {self.data.dt:g}$ s"),
+            ("MPC solves", f"{m.get('solves', 0)}",""),
         ]
 
 
@@ -449,15 +459,14 @@ LEVEL = LevelInfo(
     id="hello_mpc",
     title="Hello, MPC",
     topic="The MPC loop",
-    briefing=("Before you design controllers yourself, watch one at work: "
-              "step by step, the way it thinks."),
-    concept=("Model predictive control in one sentence: predict, optimise, apply the first move, "
+    briefing=("Before you design controllers yourself, watch one at work."),
+    concept=("Model predictive control in one sentence: predict, optimise, apply the first control, "
              "repeat. At every step the controller measures the state, uses a model to predict "
              "where different input sequences would take the ball over the next $N$ steps, picks "
              "the sequence with the lowest cost that respects the limits, applies only its first "
              "input, and starts again from the new measurement."),
     teaching=("A guided tour walks you through the first round of the loop on the map. The "
-              "matching part of the OCP lights up at each step. Then you watch the whole run."),
+              "corresponding part of the OCP lights up at each step. Then you watch the whole run."),
     accent="rose",
     icon="loop",
     tutorial=True,

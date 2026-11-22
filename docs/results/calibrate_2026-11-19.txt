@@ -31,9 +31,9 @@ Name: acados_template Version: 0.5.1
 $ python calibrate.py hello_mpc
 knob ranges ok (max <= max(50, 3 x reference))
 default    success            0 stars  t= 10.0 s  E= 6.54  max|a|=2.00  left=0.00 m  solves=100  mean solve 0.66 ms  knobs={}
-           - Arrived in 10.0 s. The MPC solved its OCP 100 times, once every 0.1 s, each time planning N = 30 steps (3 s) ahead from the measured state, and applied only the first input of each plan.
+           - Arrived in 10.0 s. The MPC solved its OCP 100 times.
 reference  success            0 stars  t= 10.0 s  E= 6.54  max|a|=2.00  left=0.00 m  solves=100  mean solve 0.57 ms  knobs={}
-           - Arrived in 10.0 s. The MPC solved its OCP 100 times, once every 0.1 s, each time planning N = 30 steps (3 s) ahead from the measured state, and applied only the first input of each plan.
+           - Arrived in 10.0 s. The MPC solved its OCP 100 times.
 all checks passed
 
 $ python calibrate.py price_of_speed

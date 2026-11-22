@@ -195,6 +195,10 @@ Contract between the two sides: `controlquest/engine/protocol.py` ↔
   KKT $\le 10^{-4}$), no local-minimum claim; obstacle penalty not claimed exact (measured
   slacks instead). Dead End and obstacle wording corrected in game, engine and docs; all
   calibrations re-run (pass; only the Crosswind deviation values changed). Engine v0.14.0.
+- Done (2026-11-22): **consistency check of bold, baselines and symbols** (section 8): formulas take
+  the weight of their text, result-card / debrief rows share one baseline, units of a number in a
+  formula sit inside the formula (also in the engine sentences). Texts only, no numbers changed.
+  Engine v0.15.0.
 
 **Dropped (2026-11-19, reduced scope): fix ③ of Level 3 (a better terminal cost / cost-to-go).**
 Do not build it, nor the Dijkstra reference. Level 3 keeps fixes ① and ②. The spike results
@@ -557,6 +561,35 @@ below stay as background (they may be mentioned in the research texts):
   - (2026-11-19) **The tour's ‹ Back / Next buttons never move**: the step title + text sit in
     an area as tall as the longest tour text at the current width (re-measured when the width
     changes), so the buttons stay at one height on every step instead of jumping with the text.
+  - (2026-11-22) The loop diagram's "repeat every $\Delta t = 0.1$ s" is **bold throughout**: the
+    formula too (the user's request; bolded with `inline_image(weight=700)`, see the speed pill).
+  - (2026-11-22) Tour step "③ Optimise": "Limits:" as **three bullets**, one each for $a$, $v$ and
+    $p$ (incl. the field $0 \leq p_x, p_y \leq 20$ m), with the units inside the formulas (the user's
+    request).
+  - (2026-11-22) Tour step "③ Optimise" lights up **all** limits in the OCP: the input/speed
+    bounds and the field bounds on $p_x$, $p_y$ (the user's request).
+  - (2026-11-22) Inline formulas sat too high in the text (the user saw it on $\hat{x}$ in tour step
+    ① "Measure"): fixed for **all** inline math (`ui/math_text.py`, see the gotcha in section 9).
+  - (2026-11-22) The "Tour complete" text is **two paragraphs**: "From Level 1 on …" starts a new one
+    (`<br><br>`; a `\n` does nothing in rich text).
+- (2026-11-22) **Consistency check: bold, baselines, symbols** (the user: "$N = 30$ also bold"; check
+  every bold text, the heights in each line and the symbols in the whole game). Rules, keep them:
+  - **A formula has the weight of the text around it**: `MathText` thickens it (stroked glyph
+    outlines, `inline_image(weight=...)`; the user found the first, bitmap-shift bold blurry) for a bold role (goal 600, subheading 800), `bold=True` or inside
+    `<b>...</b>`; the map pills' formulas are ExtraBold like their words and at the pills' size
+    (they were regular and 1 px larger). A formula after a bold label ("**Link:** $v_N = 0$")
+    stays regular, like the words after it.
+  - **One baseline per row**: grid rows mixing roles (result card, debrief "Your latest run") use
+    `math_text.align_baselines` (the value sat 2 px low in every row). The result card's notes wrap
+    (Crosswind's "…margin $m = 0.3$ m" was cut off at the card's edge).
+  - **Units**: a unit right after a number inside a formula goes into the formula
+    (`$\Delta t = 0.1\ \mathrm{s}$`, `$m = 0.3\ \mathrm{m}$`), as in the tour's limit bullets; a
+    plain number keeps a plain unit ("10.0 s", "(3 s)"); rating notes stay plain ("★★ ≤ 30 s");
+    plot axis labels keep "[m]"; tooltips stay plain Unicode.
+  - **Symbols**: the wind bound is a norm, $\|w\| \leq w_{\max}$ (like $\|v\|$; $w_{\max}$ is the
+    $w_{\max}$ of the plot's bound $\frac{1}{2} w_{\max} \tau^2$); $|v_x|,\ |v_y|$ written the same
+    everywhere; the engine writes $a_{\max} N \Delta t$ like the game; no "[m]" in knob help texts.
+  Engine v0.15.0 (sentences changed; restart the engine).
   - (2026-11-18) **The solver section stays empty during the tour**: the run is computed before
     the tour, but all its numbers show "–" until the replay has been watched to the end
     (`RunInfoCard.set_hidden`; other levels show them as soon as the run is computed).
@@ -569,6 +602,11 @@ below stay as background (they may be mentioned in the research texts):
   is gone. The "‹ k /n ›" stepper only moves the map; no per-solve numbers are shown. The user
   first wanted to drop the iterations ("always 1?"): measured, they are 1 in Levels 0–2 (no
   obstacles: the OCP is a QP) but 2–6 per solve with obstacles (Levels 3–5 then; Dead End and Crosswind now), so they stay.
+- (2026-11-22) **The map's speed pill**: "$|v| =$" is bold like the number next to it
+  and keeps the OCP's letters (the user rejected the different `v` of mathtext's bold italic): `inline_image(...,
+  weight=800)` thickens the regular glyphs (stroked outlines, see the bold-math gotcha), and
+  the pill shows **from the moment a level opens** (the initial speed from the level
+  file's `start_velocity`, 0 by default), not only after Run (the user's request).
 - (2026-11-19) **Every symbol in the LaTeX font, everywhere** (the user disliked the game font's
   "★" next to the OCP's \star and asked for "everything in the same font as LaTeX"; chose
   "all math-like text", all at once). Design rule 7 (section 10) says how. Built:
@@ -638,7 +676,9 @@ below stay as background (they may be mentioned in the research texts):
   widget a scrolling part with a small minimum height (`result_panel._FitScroll`), and test the
   longest texts at 900×560.
 - (2026-11-19) Qt rich text ignores `white-space: nowrap` on a `<span>` (it only works for a whole
-  block). To keep "m/s" from breaking after the slash, put a word joiner after it: `m/\u2060s` (`WJ` in `level_0_hello_mpc.py`).
+  block). To keep "m/s" from breaking after the slash, put a word joiner after it (`m/\u2060s`), or
+  better put the unit inside the formula (`$|v_x| \leq 2\ \mathrm{m/s}$`): LaTeX font, same baseline,
+  never wraps away from the number (Level 0's tour does this since 2026-11-22).
 - A QSpinBox in a narrow fixed width clips its number to nothing (the hidden arrow buttons
   still take room): the solve stepper uses a QLineEdit + QIntValidator instead.
 - Don't override QWidget method names in subclasses (e.g. a `screen()` method on the main
@@ -649,6 +689,22 @@ below stay as background (they may be mentioned in the research texts):
 - (2026-11-20) matplotlib warns "Glyph ... missing from font" (e.g. "★" in Segoe UI) and draws a
   box: give `font.family` a fallback list (`[game font, "DejaVu Sans"]`, matplotlib >= 3.6 falls
   back per glyph). Run the plot tests with `-W error::UserWarning` to catch it.
+- (2026-11-22) Bold math: don't use mathtext's `\mathbf` / `\mathbfit`: they switch to other Computer
+  Modern fonts (the letters look different from the OCP's; there is no upright bold Greek at all, `\mathbf{\Delta}`
+  silently stays regular). Use `ui/math_text.inline_image(..., weight=700)`: same glyphs, their vector
+  outlines filled **and stroked** with a round pen (3-5 % of the font size by weight) before rasterising,
+  baseline on a whole pixel row. Don't thicken the bitmap by OR-ing shifted copies (TeX's `\pmb` idea): it
+  only widens sideways, in whole device pixels, and looks smeared/blurry (the user, 2026-11-22).
+- (2026-11-22) The `depth` that `MathTextParser("agg").parse()` reports is measured from a wrong
+  baseline row: inline formulas sat 1-2 px above the text, most visibly with accents ($\hat{x}$) and
+  subscripts. `math_text._rasterise` rasterises like matplotlib's `Output.to_raster` and takes the
+  baseline row from the layout box (`floor(box.height - ymin)`). It uses matplotlib's private
+  `_mathtext` and falls back to the public parse if that changes. Measured: on the text baseline at
+  100/125/150 %, within 1 device px at 175 %.
+- (2026-11-22) Cells of a grid row in different text roles don't share a baseline when the layout
+  centres them vertically (the bigger one sits low). Use `math_text.align_baselines(grid)` after
+  filling the grid (top-aligns the cells and pads them via the document's root frame top margin;
+  never `setContentsMargins` on a MathText).
 - Generated code (`engine_server/build/`), `.venv/`, `__pycache__/` are gitignored.
 - Obstacles in acados (2026-10-26, Level 3 calibration): with **hard** ellipse constraints
   HPIPM failed (MINSTEP) whenever an ellipse and the input bounds were active together
@@ -695,7 +751,8 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
    any text as `$...$` (`$N = 30$`, `$\hat{x}$`, `$q_p$`, `$u_0$`) and show it with
    `ui/math_text.py` (`math_text(text, role)`, a label-like widget with inline LaTeX; words
    stay in the game font). OCP legends are `(symbol tex, words)` tuples, typeset fully in the
-   LaTeX font. Tooltips stay plain: pass texts through `to_plain()`. Painted widgets (map pills,
+   LaTeX font. Tooltips stay plain: pass texts through `to_plain()`. A formula is as bold as the
+   text around it, and its unit goes inside it (`$t = 4.2\ \mathrm{s}$`; section 8, 2026-11-22). Painted widgets (map pills,
    loop diagram) prepare their formula images with `inline_image()` outside `paintEvent`.
 8. **One header everywhere** (`ScreenHeader`): the lip back button (`IconButton`), on level
    screens the round level badge (`LevelBadge`, accent colour) + title, stars on the right.
@@ -770,7 +827,8 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
      "The plots of this run appear here after you run the simulation" before a run; Level 0:
      only after the tour's replay); the Simulation tab is the **map** (soft 50 m board without outline, grid every 5 m,
      numbers every 10 m with one shared 0 at the origin, start ring, target star, ball
-     with trail, current plan, acceleration arrow, a "|v| = … m/s" pill; with obstacles:
+     with trail, current plan, acceleration arrow, a bold "|v| = … m/s" pill (also before a run:
+     the initial speed); with obstacles:
      beige blocks, the solver's ellipses dashed, a red × where the ball crashed; Level 3:
      lilac numbered waypoint diamonds with a dotted route, the active one highlighted
      during the replay, reached ones grey); under it the level's extras (Level 1:

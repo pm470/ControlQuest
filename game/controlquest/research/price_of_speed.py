@@ -20,7 +20,7 @@ RESEARCH = ResearchInfo(
                "trade-offs."),
     shown=(r"Each run tested one weight setting. Aggressive weights accelerate and brake at full "
            r"power and empty the battery; very gentle ones creep towards the target and run out of "
-           r"time. Settings in between reach the star, some faster, some with less effort."),
+           r"time. Settings in between reach the target, some faster, some with less effort."),
     limits=(r"The “energy” is the effort measure $\sum \Delta t\,\|u\|^2$, not physical energy in "
             r"joules, and the battery is a game rule that stops the run, not a constraint in the OCP. "
             r"Your runs compare the settings you tried; they do not reveal the best possible "

@@ -56,9 +56,7 @@ def explain(level, outcome, detail, m) -> list[str]:
     """The "What happened" sentences (PRD 10.1), with numbers from this run."""
     N, T = m["N"], m["horizon_s"]
     if outcome == "success":
-        return [f"Arrived in {m['time']:.1f} s. The MPC solved its OCP {m.get('solves', 0)} times, "
-                f"once every {level['dt']:g} s, each time planning $N = {N}$ steps ({T:g} s) ahead "
-                "from the measured state, and applied only the first input of each plan."]
+        return [f"Arrived in {m['time']:.1f} s. The MPC solved its OCP {m.get('solves', 0)} times."]
     if outcome == "time_out":
         return [f"Time is up after {m['time']:.0f} s: the ball is still {m['distance_left']:.2f} m "
                 "from the target."]

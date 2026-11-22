@@ -115,7 +115,7 @@ class RunInfoCard(QWidget):
         if self._hidden:
             return
         m, tr = r.metrics, r.trajectory
-        self.run_title.setText(f"{tr.n_solves} solves · $t = {tr.duration:.1f}$ s")
+        self.run_title.setText(f"{tr.n_solves} solves · $t = {tr.duration:.1f}\\ \\mathrm{{s}}$")
         needed = ("closed_loop_cost", "mean_solve_ms", "mean_iterations", "max_solve_ms",
                   "total_solve_ms", "max_iterations")
         if not all(k in m for k in needed) or not tr.status:

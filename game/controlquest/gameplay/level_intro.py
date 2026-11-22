@@ -41,7 +41,7 @@ MAX_WIDTH = 1240  # content width on very wide windows (lines stay readable)
 class LevelIntro:
     goal: str  # one or two sentences, with the level's numbers
     ocp: OcpSpec  # the OCP at the default knob values; new parts marked with \new / \newknob
-    stars: tuple[str, ...] = ()  # what ★, ★★, ★★★ need ("reach the star", "within 30 s", ...);
+    stars: tuple[str, ...] = ()  # what ★, ★★, ★★★ need ("reach the target", "within 30 s", ...);
     #                              empty for a tutorial (no stars)
     fixed: str = ""  # what the player cannot change, e.g. "$N = 30$, $P = 10\,Q$"
     notes: tuple[str, ...] = ()  # extra lines under the knobs (Level 3: what each fix changes)

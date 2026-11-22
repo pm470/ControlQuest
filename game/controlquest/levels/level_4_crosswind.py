@@ -89,7 +89,7 @@ class CrosswindWidget(LevelPlayWidget):
             ("Solves", f"{m.get('solves_used', 0)} / {m.get('solve_budget', 0)}",
              f"★★★ ≤ {d.pars['solves']:g} · $k = {m.get('k', 1)}$"),
             ("Off the plan", f"{m.get('max_drift', 0):.2f} m",
-             f"max vs the plan in force, margin $m = {m.get('margin', 0):g}$ m"),
+             f"max vs the plan in force, margin $m = {m.get('margin', 0):g}\\ \\mathrm{{m}}$"),
         ]
 
 
@@ -137,7 +137,7 @@ def crosswind_plots(result, d) -> list:
             description=(r"Distance between the ball and the prediction of the plan in force, up to "
                          r"the moment that plan is replaced ($\tau$: time since it was solved). "
                          r"Between re-plans the ball gets exactly the planned inputs and only the wind "
-                         rf"($|w| \leq {w:.1f}$ m/s²) differs from the model, so the error stays below "
+                         rf"($\|w\| \leq w_{{\max}} = {w:.1f}\ \mathrm{{m/s^2}}$) differs from the model, so the error stays below "
                          r"the bound, which grows with $\tau^2$."),
             y_label="prediction error [m]", t_end=tr.duration,
             series=(Series(t, err, "prediction error", theme.PLOT_1, style="segments"),
@@ -203,7 +203,7 @@ def intro(d) -> LevelIntro:
     return LevelIntro(
         goal=(f"Get through the gap and stop on the star within {d.t_limit:g} s, using at most "
               f"{d.budget['solves']:g} solves."),
-        stars=("reach the star", f"within {d.pars['time']:g} s",
+        stars=("reach the target", f"within {d.pars['time']:g} s",
                f"also ≤ {d.pars['solves']:g} solves"),
         ocp=ocp(d, int(knobs["k"]), knobs["margin"], intro=True),
         fixed=(f"$q_p = {lk['q_p']:g}$, $q_v = {lk['q_v']:g}$, $r = {lk['r']:g}$, "
@@ -231,7 +231,7 @@ LEVEL = LevelInfo(
     hints=(
         "Between two re-plans, who corrects for the wind?",
         "Re-planning every step gives the most feedback, but it is too expensive. Watch the budget bar.",
-        "Re-plan every second ($k = 10$) and give the wind a little room: a margin of about $m = 0.3$ m.",
+        "Re-plan every second ($k = 10$) and give the wind a little room: a margin of about $m = 0.3\\ \\mathrm{m}$.",
     ),
     accent="sun",
     icon="wind",

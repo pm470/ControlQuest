@@ -67,7 +67,7 @@ def explain(level, knobs, outcome, detail, m, stars) -> list[str]:
     budget, pars, a_max = level["budget"]["energy"], level["pars"], level["limits"]["a_max"]
     msgs = []
     if outcome == "battery_empty":
-        msgs.append(f"The battery ran out at $t = {m['time']:.1f}$ s, {m['distance_left']:.1f} m "
+        msgs.append(f"The battery ran out at $t = {m['time']:.1f}\\ \\mathrm{{s}}$, {m['distance_left']:.1f} m "
                     f"before the target.")
         if m["max_accel"] >= 0.99 * a_max:
             msgs.append("The controller accelerated and braked at full power: inputs are cheap "

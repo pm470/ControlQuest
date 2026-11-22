@@ -243,7 +243,7 @@ def ocp(d, fix: str, n: int, intro: bool = False) -> OcpSpec:
             rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
             rf"{ellipses},\quad j = 1,\ldots,{len(d.blocks)}",
         ],
-        notes=(rf"{notes} Re-solved every $\Delta t = {d.dt:g}$ s, $N = {n}$ steps ({n * d.dt:g} s) "
+        notes=(rf"{notes} Re-solved every $\Delta t = {d.dt:g}\ \mathrm{{s}}$, $N = {n}$ steps ({n * d.dt:g} s) "
                "ahead. With obstacles the OCP is nonconvex: SQP, warm-started from the previous plan, "
                "finds a local solution at best."),
         legend=[(r"c_j,\, E_j", f"ellipse around block $j$ (dashed), {d.margin:g} m margin"),
@@ -262,7 +262,7 @@ def intro(d) -> LevelIntro:
     lk = d.locked
     return LevelIntro(
         goal=f"Bring the ball to the star and stop there within {d.t_limit:g} s.",
-        stars=("reach the star", f"within {d.pars['time']:g} s",
+        stars=("reach the target", f"within {d.pars['time']:g} s",
                f"also at most {d.pars['waypoints']:g} waypoint"),
         ocp=ocp(d, "none", d.N, intro=True),
         notes=("① Longer horizon: the OCP above with a larger $N$.",

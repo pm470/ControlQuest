@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QFrame, QGridLayout, QHBoxLayout, QScrollArea, QS
 from ..core.config import MAX_STARS
 from ..engine.protocol import OUTCOMES, RunResult
 from ..ui import theme
-from ..ui.math_text import math_text
+from ..ui.math_text import align_baselines, math_text
 from ..ui.widgets import Button, Card, ColorDot, StarRow, divider, label
 
 
@@ -136,7 +136,9 @@ class ResultPanel(Card):
             # $...$ in the LaTeX font (e.g. "$N = 20$ (2 s)")
             self._rows.addWidget(math_text(name, "body", wrap=False), i, 0)
             self._rows.addWidget(math_text(value, "subheading", wrap=False), i, 1)
-            self._rows.addWidget(math_text(note, "caption", wrap=False), i, 2)
+            # the note wraps: a long one ("max vs the plan in force, margin m = 0.3 m") was cut off
+            self._rows.addWidget(math_text(note, "caption"), i, 2)
+        align_baselines(self._rows)  # name, value and note on one baseline per row
         self._rows.setColumnStretch(2, 1)
 
         _clear(self._messages_layout)

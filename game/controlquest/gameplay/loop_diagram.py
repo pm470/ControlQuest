@@ -90,9 +90,11 @@ class LoopDiagram(QWidget):
         p.drawText(QPointF(x + img.width() / dpr, baseline), after)
 
     def _prepare_math(self) -> None:
-        """Typeset Δt = ... for this display's pixel ratio (outside paintEvent)."""
+        """Typeset Δt = ... for this display's pixel ratio (outside paintEvent). Bold like the
+        words around it (2026-11-22), with the OCP's letters: inline_image(weight=700)."""
         self._dpr = self.devicePixelRatioF() or 1.0
-        self._math = inline_image(rf"\Delta t = {self._dt:g}", 11 * MATH_SCALE, theme.INK_SOFT, self._dpr)
+        self._math = inline_image(rf"\Delta t = {self._dt:g}", 11 * MATH_SCALE, theme.INK_SOFT,
+                                  self._dpr, weight=700)  # the words: theme.font(11, Bold)
 
     def event(self, e) -> bool:
         if e.type() in _DPR_EVENTS and abs(self.devicePixelRatioF() - self._dpr) > 1e-6:

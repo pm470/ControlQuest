@@ -27,7 +27,7 @@ from ..engine.protocol import OUTCOMES, RunResult
 from ..levels.base import LevelInfo
 from ..research import PaperRef, ResearchInfo
 from ..ui import theme
-from ..ui.math_text import math_text, to_plain
+from ..ui.math_text import align_baselines, math_text, to_plain
 from ..ui.widgets import Button, Card, ColorDot, StarRow, label, scrollable, well
 from .level_intro import MAX_WIDTH, SECTION_GAP, TILE_PADDING, _Content
 
@@ -149,6 +149,7 @@ class ResearchDebriefWidget(QWidget):
                 grid.addWidget(math_text(name, "body", wrap=False), i, 0)
                 grid.addWidget(math_text(value, "goal", wrap=False), i, 1)
                 grid.addWidget(math_text(note, "caption"), i, 2)  # notes wrap: narrow tiles
+            align_baselines(grid)  # name, value and note on one baseline per row
             grid.setColumnStretch(2, 1)
             self._run.addLayout(grid)
             if visual is not None:

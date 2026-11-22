@@ -39,8 +39,11 @@ BALL_RADIUS_M = 0.9
 #   apply    the plan faint, its first step and the input arrow highlighted
 #   repeat   the plan, with an earlier solve's plan faint behind it (set_tour(..., earlier=k))
 TOUR_FOCUS = ("start", "measure", "predict", "plan", "apply", "repeat")
-HUD_SPEED_TEX = r"|v|\,="  # the speed pill: |v| in the LaTeX font, the number in the game font
+# the speed pill: |v| = in the LaTeX font (the OCP's letters), made bold like the number next to it
+# (game font, ExtraBold) by inline_image(weight=PILL_WEIGHT) (2026-11-22); so are the tags' formulas
+HUD_SPEED_TEX = r"|v|\,="
 HUD_SPEED = f"${HUD_SPEED_TEX}$"
+SPEED_PX, TAG_PX, PILL_WEIGHT = 13, 12, 800  # pill text: theme.font(px, ExtraBold)
 
 
 class MapView(QWidget):
@@ -59,7 +62,7 @@ class MapView(QWidget):
         self._tour: str | None = None  # Level 0: one of TOUR_FOCUS, None = normal map
         self._fan: list[list[tuple[float, float]]] = []
         self._earlier: int | None = None  # tour step "repeat": which earlier plan is drawn grey
-        self._math: dict = {}  # formula -> (image, depth) for the pills (see _prepare_math)
+        self._math: dict = {}  # (formula, text px) -> (image, depth) for the pills (_prepare_math)
         self._math_dpr = 0.0
 
     # --- data -------------------------------------------------------------------------
@@ -207,8 +210,10 @@ class MapView(QWidget):
             active = tr.ref_index[min(k, len(tr.ref_index) - 1)]
         self._draw_waypoints(p, to_px, start, target, r_px, active)
 
-        if tr is None:
+        if tr is None:  # before a run: the ball at the start and its initial speed
             painting.draw_ball(p, start, r_px, look=QPointF(1, 0))
+            v0 = self._data.raw.get("start_velocity", [0.0, 0.0])
+            self._speed_pill(p, field, math.hypot(v0[0], v0[1]))
             return
 
         ball = to_px(x[0], x[1])
@@ -354,27 +359,31 @@ class MapView(QWidget):
             p.drawText(QRectF(c.x() - 34, c.y() + 18, 68, 14), Qt.AlignmentFlag.AlignHCenter,
                        f"wind {mag:.1f}")
 
-        # HUD: the speed in a pill (the time is in the replay bar); |v| in the LaTeX font
+        self._speed_pill(p, field, speed)
+
+    def _speed_pill(self, p: QPainter, field: QRectF, speed: float) -> None:
+        """HUD: the speed in a pill at the field's top left (the time is in the replay bar); shown
+        from the moment the level opens (initial speed), then the replayed speed."""
         self._math_pill(p, QPointF(field.left() + 12, field.top() + 12), HUD_SPEED + f" {speed:.2f} m/s",
-                        13, 28, align_left=True)
+                        SPEED_PX, 28, align_left=True)
 
     def _tag(self, p: QPainter, field: QRectF, centre: QPointF, text: str) -> None:
         """A small label pill centred at `centre`, kept inside the field ($...$ allowed)."""
-        w = self._pill_width(p, text, 12)
+        w = self._pill_width(p, text, TAG_PX)
         x = min(max(centre.x() - w / 2, field.left() + 6), field.right() - w - 6)
         y = min(max(centre.y() - 13, field.top() + 6), field.bottom() - 26 - 9)
-        self._math_pill(p, QPointF(x, y), text, 12, 26, align_left=True)
+        self._math_pill(p, QPointF(x, y), text, TAG_PX, 26, align_left=True)
 
     # --- pills with LaTeX parts (images prepared outside paintEvent: AGENTS.md gotchas) ------
-    def _pieces(self, text: str):
+    def _pieces(self, text: str, font_px: int):
         """[('text', str) | ('math', image, depth)] for a pill text with $...$ parts."""
         out = []
         for i, part in enumerate(MATH.split(text)):
             if i % 2 == 0:
                 if part:
                     out.append(("text", part))
-            elif part in self._math:
-                out.append(("math", *self._math[part]))
+            elif (part, font_px) in self._math:
+                out.append(("math", *self._math[(part, font_px)]))
             else:  # not prepared (yet): readable Unicode instead, never render while painting
                 out.append(("text", to_plain(f"${part}$")))
         return out
@@ -383,7 +392,7 @@ class MapView(QWidget):
         p.setFont(theme.font(font_px, QFont.Weight.ExtraBold))
         fm = p.fontMetrics()
         w = 0.0
-        for piece in self._pieces(text):
+        for piece in self._pieces(text, font_px):
             w += (fm.horizontalAdvance(piece[1]) if piece[0] == "text"
                   else piece[1].width() / piece[1].devicePixelRatio())
         return w + 22
@@ -398,7 +407,7 @@ class MapView(QWidget):
         fm = p.fontMetrics()
         baseline = rect.center().y() + (fm.ascent() - fm.descent()) / 2
         x = rect.left() + 11
-        for piece in self._pieces(text):
+        for piece in self._pieces(text, font_px):
             if piece[0] == "text":
                 p.drawText(QPointF(x, baseline), piece[1])
                 x += fm.horizontalAdvance(piece[1])
@@ -409,17 +418,18 @@ class MapView(QWidget):
                 x += img.width() / dpr
 
     def _prepare_math(self) -> None:
-        """Typeset the formulas the map's pills use, for this display's pixel ratio."""
+        """Typeset the formulas the map's pills use, for this display's pixel ratio, at the size
+        of the pill's text and bold like it (ExtraBold)."""
         dpr = self.devicePixelRatioF() or 1.0
         self._math_dpr = dpr
-        wanted = {HUD_SPEED_TEX, r"\hat{x}", "u_0"}
+        wanted = {(HUD_SPEED_TEX, SPEED_PX), (r"\hat{x}", TAG_PX), ("u_0", TAG_PX)}
         if self._traj is not None and self._traj.plans:
-            wanted.add(f"x_{{{len(self._traj.plans[0]) - 1}}}")
+            wanted.add((f"x_{{{len(self._traj.plans[0]) - 1}}}", TAG_PX))
         self._math = {}
-        for tex in wanted:
-            got = inline_image(tex, 13 * MATH_SCALE, theme.INK, dpr)
+        for tex, px in wanted:
+            got = inline_image(tex, px * MATH_SCALE, theme.INK, dpr, weight=PILL_WEIGHT)
             if got is not None:
-                self._math[tex] = got
+                self._math[(tex, px)] = got
 
     def event(self, e) -> bool:
         if e.type() in _DPR_EVENTS and abs(self.devicePixelRatioF() - self._math_dpr) > 1e-6:

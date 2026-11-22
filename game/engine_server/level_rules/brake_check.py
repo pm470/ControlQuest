@@ -104,7 +104,7 @@ def explain(level, sim, m, stars) -> list[str]:
     if sim.outcome in ("controller_failure", "crash_wall"):
         if pnr is not None:
             v, stop_s = pnr["speed"], pnr["speed"] / a_max
-            msgs.append(f"At $t = {pnr['t']:.1f}$ s the ball was {pnr['wall_ahead']:.1f} m from the wall at "
+            msgs.append(f"At $t = {pnr['t']:.1f}\\ \\mathrm{{s}}$ the ball was {pnr['wall_ahead']:.1f} m from the wall at "
                         f"{v:.1f} m/s; braking needs {pnr['braking']:.1f} m and {stop_s:.1f} s.")
             if pnr["reach"] < pnr["braking"] - 0.05:
                 msgs.append(f"Your horizon covered {T:g} s (≈ {pnr['reach']:.1f} m), less than the braking "
@@ -115,7 +115,7 @@ def explain(level, sim, m, stars) -> list[str]:
                             f"no margin. A {T:g} s plan cannot even contain a full stop from {v:.1f} m/s.")
         msgs.append(("From then on no input sequence could stop the ball before the wall, so the "
                      "OCP was bound to become infeasible. At "
-                     f"$t = {m['time']:.1f}$ s the solver found no valid plan and reported {sim.detail}: the "
+                     f"$t = {m['time']:.1f}\\ \\mathrm{{s}}$ the solver found no valid plan and reported {sim.detail}: the "
                      "controller lost recursive feasibility."
                      if sim.outcome == "controller_failure" else "The ball hit the wall."))
         msgs.append("Look further ahead (a longer $N$), or require every plan to end at rest "
@@ -123,7 +123,7 @@ def explain(level, sim, m, stars) -> list[str]:
     elif sim.outcome == "time_out":
         if stop:
             msgs.append(f"Time is up: with the terminal stop every plan must end at rest within {T:g} s, "
-                        f"so the ball may drive at most ≈ {v_cap:.1f} m/s ($a_{{\\max}}\\, N\\, \\Delta t$). Safe, but "
+                        f"so the ball may drive at most ≈ {v_cap:.1f} m/s ($a_{{\\max}} N \\Delta t$). Safe, but "
                         f"too slow with $N = {N}$.")
         else:
             msgs.append(f"Time is up after {m['time']:.0f} s: the ball is still "

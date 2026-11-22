@@ -35,7 +35,7 @@ from ..ui.widgets import label
 LEGEND_SIZE_PX = 13.5
 # the symbols every OCP uses (legend entries)
 STATE_LEGEND = [(r"x = (p,\, v)", "position, velocity"), (r"u = a", "acceleration"),
-                (r"p_{\star}", "target")]
+                (r"p_{\star}", "target position")]
 
 
 @dataclass

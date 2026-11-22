@@ -77,7 +77,7 @@ def standard_ocp(data: LevelData) -> OcpSpec:
             rf"|v_x|,\ |v_y| \leq {d.v_max:g}",
             rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
         ],
-        notes=(rf"Re-solved every $\Delta t = {d.dt:g}$ s from the measured state $\hat{{x}}$, "
+        notes=(rf"Re-solved every $\Delta t = {d.dt:g}\ \mathrm{{s}}$ from the measured state $\hat{{x}}$, "
                rf"$N = {n}$ steps ({n * d.dt:g} s) ahead; only $u_0$ is applied."),
         legend=STATE_LEGEND,
     )

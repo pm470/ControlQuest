@@ -80,7 +80,7 @@ class BrakeCheckWidget(LevelPlayWidget):
         pnr = m.get("point_of_no_return")
         if pnr:
             t, wall, brake, reach = pnr["t"], pnr["wall_ahead"], pnr["braking"], pnr["reach"]
-            caption = rf"At $t = {t:.1f}$ s: the point of no return (braking needs more room than is left)."
+            caption = rf"At $t = {t:.1f}\ \mathrm{{s}}$: the point of no return (braking needs more room than is left)."
         else:  # the sample with the least spare room (wall ahead minus braking distance)
             best = None
             for k, x in enumerate(result.trajectory.x):
@@ -94,7 +94,7 @@ class BrakeCheckWidget(LevelPlayWidget):
                 return None
             _, k, wall, brake, reach = best
             t = result.trajectory.t[k]
-            caption = (rf"At $t = {t:.1f}$ s: the least room to spare in this run "
+            caption = (rf"At $t = {t:.1f}\ \mathrm{{s}}$: the least room to spare in this run "
                        f"({wall - brake:.1f} m more than braking needs).")
         box = QWidget()
         lay = QVBoxLayout(box)
@@ -129,11 +129,11 @@ class BrakeCheckWidget(LevelPlayWidget):
                              r"(about $a_{\max} N \Delta t$): every plan must end at rest."),
                 y_label=r"velocity $v_x$ [m/s]", t_end=tr.duration,
                 series=(Series(t, vx, r"$v_x$", theme.PLOT_1),),
-                ref_lines=(RefLine(d.v_max, rf"limit $v_{{\max}} = {d.v_max:g}$ m/s (per axis)",
+                ref_lines=(RefLine(d.v_max, rf"limit $v_{{\max}} = {d.v_max:g}\ \mathrm{{m/s}}$ (per axis)",
                                    theme.PLOT_LIMIT),)),
             PlotSpec(
                 title="Room to the wall and stopping distance",
-                description=(rf"Full braking ($a_{{\max}} = {a:g}$ m/s²), nominal model. Shaded: the "
+                description=(rf"Full braking ($a_{{\max}} = {a:g}\ \mathrm{{m/s^2}}$), nominal model. Shaded: the "
                              r"stopping distance exceeds the room left, so no input can stop the ball "
                              r"before the wall (a physical argument, not a solver certificate)."),
                 y_label="distance [m]", t_end=tr.duration,
@@ -178,7 +178,7 @@ def ocp(d, n: int, stop: bool, intro: bool = False) -> OcpSpec:
             rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad \mathrm{{horizon}}\ {knob}{{N}}{{N = {n}}}",
         ],
         constraints=constraints,
-        notes=(rf"Re-solved every $\Delta t = {d.dt:g}$ s, $N = {n}$ steps ({n * d.dt:g} s) ahead"
+        notes=(rf"Re-solved every $\Delta t = {d.dt:g}\ \mathrm{{s}}$, $N = {n}$ steps ({n * d.dt:g} s) ahead"
                + ("; every plan must end at rest." if stop else ".")),
         legend=STATE_LEGEND,
     )

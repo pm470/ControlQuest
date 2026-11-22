@@ -136,7 +136,7 @@ def explain(level, knobs, sim, m, stars) -> list[str]:
     elif sim.outcome == "controller_failure":
         ell = level_ellipses(level, knobs)
         inside = [j for j, e in enumerate(ell) if e.h(p_end) < 1.0]
-        msgs.append(f"The solver found no valid plan at $t = {m['time']:.1f}$ s ({sim.detail}).")
+        msgs.append(f"The solver found no valid plan at $t = {m['time']:.1f}\\ \\mathrm{{s}}$ ({sim.detail}).")
         speed = float(np.linalg.norm(sim.x[-1][2:]))
         brake = speed**2 / (2 * level["limits"]["a_max"])
         gap = min(e.distance(p_end) for e in ell)

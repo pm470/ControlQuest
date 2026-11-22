@@ -34,7 +34,7 @@
   ],
   "knobs": [
     {"name": "N", "label": "Horizon", "symbol": "N", "fix": "horizon",
-     "help": "Steps the MPC plans ahead ($\\Delta t = 0.1$ s each). Type any whole number from 5 to 300; a new $N$ builds its solver once (a few seconds), then it is cached.",
+     "help": "Steps the MPC plans ahead ($\\Delta t = 0.1\\ \\mathrm{s}$ each). Type any whole number from 5 to 300; a new $N$ builds its solver once (a few seconds), then it is cached.",
      "default": 30, "min": 5, "max": 300, "scale": "int"}
   ],
 
