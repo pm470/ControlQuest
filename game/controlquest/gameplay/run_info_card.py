@@ -37,7 +37,7 @@ class _Stat(QWidget):
         col.setSpacing(0)
         self.value = label("–", "stat", wrap=True)
         self.caption = label(caption, "caption")
-        self.caption.setStyleSheet("font-size: 12px; font-weight: 700;")
+        self.caption.setStyleSheet(f"font-size: {theme.FS_SMALL}px; font-weight: 700;")
         col.addWidget(self.value)
         col.addWidget(self.caption)
         self.setToolTip(star_subscript(tooltip))  # rich text: x★ with a subscript star

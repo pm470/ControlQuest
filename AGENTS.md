@@ -572,6 +572,25 @@ below stay as background (they may be mentioned in the research texts):
     ① "Measure"): fixed for **all** inline math (`ui/math_text.py`, see the gotcha in section 9).
   - (2026-11-22) The "Tour complete" text is **two paragraphs**: "From Level 1 on …" starts a new one
     (`<br><br>`; a `\n` does nothing in rich text).
+- (2026-11-22) **Type scale for readability (presentation on a projector)**: the user found the
+  font sizes inconsistent and too small in places (the OCP and its notes), while the map was very
+  big; asked for one consistent, readable set of sizes with the layout staying responsive. Built:
+  the type scale of design rule 11 (`theme.FS_*`, used by the stylesheet, `math_text` roles,
+  painted widgets, formulas and plots; body 15 → 16, captions 13 → 14, section titles 18 → 20,
+  OCP 15 (often shrunk to ~13) → 16.5-18, nothing under 13); the caption grey `MUTED` darkened
+  #9A9FB5 → #6F7489 (2.6:1 → 4.6:1 on white; the only colour changed); play-screen columns
+  350/330 → 370/330 so the OCP keeps its size and the map gets smaller; one size per OCP
+  (`FitGroup`), long OCP lines as `\quad` continuation lines (joined again in the intro, whose
+  standard legend shares one line); intro tile padding 24 → 20 like the play tiles; large
+  buttons 32 → 24 px side padding; the result card's title and How to play's outcome texts wrap.
+  Measured at 1280×800: title, level select, how to play, settings, every intro, and the play
+  screens of Levels 0-2 need no scrolling; Dead End and Crosswind scroll their OCP column by
+  ~70-130 px to show the "Whole run" numbers (they already did by 20-90 px before).
+- (2026-11-22) **The OCP legend (grey notes) keeps its size and wraps** (the user: they shrank with
+  the window and became too small). Each entry is caption-size text in which every word is its
+  own LaTeX formula, so it wraps between words with a hanging indent under the words; the
+  intro's shared line of $x$, $u$, $p_\star$ wraps between its entries. The ("", words) legend
+  continuations of the type-scale change are gone (not needed any more).
 - (2026-11-22) **Consistency check: bold, baselines, symbols** (the user: "$N = 30$ also bold"; check
   every bold text, the heights in each line and the symbols in the whole game). Rules, keep them:
   - **A formula has the weight of the text around it**: `MathText` thickens it (stroked glyph
@@ -705,6 +724,20 @@ below stay as background (they may be mentioned in the research texts):
   centres them vertically (the bigger one sits low). Use `math_text.align_baselines(grid)` after
   filling the grid (top-aligns the cells and pads them via the document's root frame top margin;
   never `setContentsMargins` on a MathText).
+- (2026-11-22) `WIDE_MIN_WIDTH` in `level_play_widget.py` is compared with the **play widget's**
+  width (window minus the screen margins, 1216 at a 1280 window), not the window's: 1220 silently
+  put 1280×800 into the narrow layout. A vertical scrollbar takes 10 px from a scroll area's
+  content: a column sized exactly for its content overflows sideways once it scrolls.
+- (2026-11-22) A MathLabel shrinks to fit its width; lines that shrink on their own give one OCP
+  several sizes. The OCP card puts its lines in a `math_render.FitGroup` (one size, the largest
+  that fits all); keep lines short and break long ones into a `\quad` continuation line
+  (`OcpCard(join=True)` joins them again in wide tiles). Text-like lines (the legend) should wrap,
+  not shrink: render them with `math_text`, one formula per word.
+- (2026-11-22) Formulas placed side by side (one per word) jumped up and down by 1 px: mathtext's
+  `to_raster` puts the baseline at a fractional row that differs per formula and rounds each glyph
+  with `int()`. `math_text._rasterise` lays the formula out like `to_raster` but shifted by a
+  fraction of a pixel so the baseline is a whole pixel row; keep that when touching it. Qt rich
+  text collapses `&emsp;`: use `&nbsp;` for a fixed gap.
 - Generated code (`engine_server/build/`), `.venv/`, `__pycache__/` are gitignored.
 - Obstacles in acados (2026-10-26, Level 3 calibration): with **hard** ellipse constraints
   HPIPM failed (MINSTEP) whenever an ellipse and the input bounds were active together
@@ -765,6 +798,17 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
     switch, `widgets.SegmentedControl`); scale large / tall / compact.
 11. Fonts: Nunito → Segoe UI → Helvetica Neue → Arial. Outcome colours: success green,
     crash/battery red, controller failure orange, time out grey.
+    **Type scale** (2026-11-22, `theme.FS_*`; never write a pixel size anywhere else): display 50
+    (title logo) · H1 28 (screen/level titles) · stat 22 · H2 20 (tile and section titles,
+    tour steps, result-card values, level tile titles, the quote) · body 16 (text, goals,
+    buttons, inputs, knob names, painted panel titles, the coral eyebrow titles: 2026-11-22, the
+    user wanted them at least as big as the text under them) · small 14 (captions, notes,
+    links, chips, switches, small painted labels, plot labels) · micro 13 (the minimum: tags,
+    tooltips, map axis numbers, map pills, plot ticks/legends) · math 18 (OCP lines; Computer
+    Modern looks ~12 % smaller, `MATH_SCALE`) · math small 15.5 · chip 17 (knob
+    symbols). Same importance = same size on every screen. Captions use `MUTED` #6F7489 (4.6:1).
+    **Captions never shrink, they wrap**: the OCP legend is caption-size text (every word its own
+    formula, so it stays in the LaTeX font) that wraps with a hanging indent (`ocp_card.legend_text`).
 12. Window fits the screen (default 1280×800 logical), works down to 900×560; Esc = back.
     Check new UI at both sizes (no scroll area content wider than its viewport).
 
@@ -851,8 +895,11 @@ when a new widget needs a look, reuse a token/role below instead of inventing on
      ms per solve, stars; this visit only; a section of the tile, not a card); the OCP
      follows the chosen fix; at the bottom **Stuck?** with a "Show hint k/3" link, hints
      revealed one at a time (3 per level, the last almost the answer).
-   - Narrow windows (< 1150 px): the OCP tile moves into the right column, under the
-     controls tile; both columns scroll.
+   - Columns (2026-11-22): OCP tile 370 px, controls tile 330 px, the map tile takes the rest
+     (~480 px at 1280×800; it needs >= ~460 for the replay well and the result card).
+     Narrow windows (play widget < 1195 px, i.e. window < ~1260 px): the OCP tile moves into the
+     right column, under the controls tile; both columns scroll (the right one 10 px wider then,
+     for its scrollbar).
    - At the end of a replay a **result card** appears over the map: outcome title with
      colour dot, stars, metric rows (e.g. time vs limit and ★★ par, energy vs battery and
      ★★★ par, peak acceleration), 1–3 "what happened" sentences from the engine (the text

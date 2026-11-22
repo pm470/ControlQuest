@@ -88,7 +88,7 @@ def intro(d) -> LevelIntro:
         goal=(f"Bring the ball to the star and stop there within {d.t_limit:g} s, using at most "
               f"{d.budget['energy']:g} units of energy " r"($\sum \Delta t\,\|u\|^2$)."),
         stars=("reach the target", f"within {d.pars['time']:g} s",
-               f"also energy ≤ {d.pars['energy']:g}"),
+               f"energy usage ≤ {d.pars['energy']:g}"),
         ocp=standard_ocp(d),
         fixed=rf"$N = {d.N}$, $P = {d.raw.get('terminal_factor', 10):g}\,Q$",
     )

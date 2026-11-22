@@ -25,7 +25,7 @@ STEPS = [  # (title, subtitle)
     ("Optimise", "pick the best plan"),
     ("Apply", "only the first input"),
 ]
-CHIP_H, GAP_X, GAP_Y = 54, 56, 34  # chip height, room for the arrows between the chips
+CHIP_H, GAP_X, GAP_Y = 62, 56, 38  # chip height, room for the arrows between the chips
 
 
 class LoopDiagram(QWidget):
@@ -72,7 +72,7 @@ class LoopDiagram(QWidget):
 
         # in the middle: how often the loop runs ("repeat every Δt = 0.1 s", Δt in the LaTeX font)
         p.setPen(QColor(theme.INK_SOFT))
-        p.setFont(theme.font(11, QFont.Weight.Bold))
+        p.setFont(theme.font(theme.FS_SMALL, QFont.Weight.Bold))
         fm = p.fontMetrics()
         mid = QRectF(a.left(), a.bottom(), c.right() - a.left(), GAP_Y)
         before, after = "repeat every ", " s"
@@ -94,7 +94,7 @@ class LoopDiagram(QWidget):
         words around it (2026-11-22), with the OCP's letters: inline_image(weight=700)."""
         self._dpr = self.devicePixelRatioF() or 1.0
         self._math = inline_image(rf"\Delta t = {self._dt:g}", 11 * MATH_SCALE, theme.INK_SOFT,
-                                  self._dpr, weight=700)  # the words: theme.font(11, Bold)
+                                  self._dpr, weight=700)  # the words: theme.font(FS_SMALL, Bold)
 
     def event(self, e) -> bool:
         if e.type() in _DPR_EVENTS and abs(self.devicePixelRatioF() - self._dpr) > 1e-6:
@@ -114,15 +114,15 @@ class LoopDiagram(QWidget):
         p.setBrush(QColor(kc.main))
         p.drawEllipse(c, r, r)
         p.setPen(QColor("white"))
-        p.setFont(theme.font(13, QFont.Weight.Black))
+        p.setFont(theme.font(theme.FS_SMALL, QFont.Weight.Black))
         p.drawText(QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r), Qt.AlignmentFlag.AlignCenter, str(i + 1))
         # title + subtitle
         text = QRectF(c.x() + r + 9, rect.top() + 8, rect.right() - c.x() - r - 15, rect.height() - 16)
         p.setPen(QColor(kc.ink))
-        p.setFont(theme.font(14, QFont.Weight.ExtraBold))
+        p.setFont(theme.font(theme.FS_BODY, QFont.Weight.ExtraBold))
         p.drawText(text, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, title)
         p.setPen(QColor(theme.INK_SOFT))
-        p.setFont(theme.font(11, QFont.Weight.DemiBold))
+        p.setFont(theme.font(theme.FS_MICRO, QFont.Weight.DemiBold))
         p.drawText(text, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
                    p.fontMetrics().elidedText(sub, Qt.TextElideMode.ElideRight, int(text.width())))
 

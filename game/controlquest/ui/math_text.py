@@ -32,15 +32,15 @@ from .math_render import _DPR_EVENTS, _backend
 
 MATH = re.compile(r"\$(.+?)\$")
 _BOLD_TAG = re.compile(r"<(/?)(?:b|strong)\b[^>]*>", re.IGNORECASE)
-MATH_SCALE = 1.12  # Computer Modern looks smaller than the game font at the same pixel size
+MATH_SCALE = theme.MATH_SCALE  # Computer Modern looks smaller than the game font at the same size
 
-# text roles (same sizes/colours as the QSS label roles in theme.stylesheet)
+# text roles (same sizes/colours as the QSS label roles in theme.stylesheet: the type scale)
 ROLES = {
-    "body": (15, 400, theme.INK_SOFT, False),
-    "caption": (13, 400, theme.MUTED, False),
-    "goal": (15, 600, theme.INK, False),
-    "subheading": (18, 800, theme.INK, False),
-    "quote": (20, 400, theme.INK, True),
+    "body": (theme.FS_BODY, 400, theme.INK_SOFT, False),
+    "caption": (theme.FS_SMALL, 400, theme.MUTED, False),
+    "goal": (theme.FS_BODY, 600, theme.INK, False),
+    "subheading": (theme.FS_H2, 800, theme.INK, False),
+    "quote": (theme.FS_H2, 400, theme.INK, True),
 }
 
 _cache: dict[tuple, tuple[QImage, float]] = {}
@@ -157,14 +157,34 @@ def _rasterise(tex: str, size_px: float, dpr: float):
 
         fontset = MathTextParser._font_type_mapping[prop.get_math_fontfamily()](
             prop, backend_agg.get_hinting_flag())
+        import numpy as np
+
         box = _mathtext.Parser().parse(s, fontset, prop.get_size_in_points(), 72 * dpr)
         out = _mathtext.ship(box)
+        xmin = min([*[ox + info.metrics.xmin for ox, _oy, info in out.glyphs],
+                    *[x for x, _y, _w, _h in out.rects], 0]) - 1
         ymin = min([*[oy - info.metrics.ymax for _ox, oy, info in out.glyphs],
                     *[y for _x, y, _w, _h in out.rects], 0]) - 1
-        image = out.to_raster(antialiased=True).image
-        # to_raster draws each glyph at a whole row (int(...)), so a fractional baseline row
-        # is drawn at its floor
-        return image, image.shape[0] - math.floor(box.height - ymin + 1e-6)
+        xmax = max([*[ox + info.metrics.xmax for ox, _oy, info in out.glyphs],
+                    *[x + w for x, _y, w, _h in out.rects], 0]) + 1
+        ymax = max([*[oy - info.metrics.ymin for _ox, oy, info in out.glyphs],
+                    *[y + h for _x, y, _w, h in out.rects], 0]) + 1
+        # Like Output.to_raster, but shifted down by a fraction of a pixel so the baseline falls
+        # exactly on a pixel row. to_raster puts it at a fractional row that differs from formula
+        # to formula, and its int() rounding moved neighbouring formulas (e.g. the legend's words,
+        # one formula each) up or down by a pixel (2026-11-22).
+        base = box.height - ymin
+        lift = math.ceil(base - 1e-6) - base
+        image = np.zeros((math.ceil(ymax - ymin + lift), math.ceil(xmax - xmin)), np.uint8)
+        shifted = _mathtext.ship(box, (-xmin, -ymin + lift))
+        for ox, oy, info in shifted.glyphs:
+            info.font.draw_glyph_to_bitmap(image, int(ox), int(oy - info.metrics.iceberg),
+                                           info.glyph, antialiased=True)
+        for x, y, bw, bh in shifted.rects:  # rules (fraction bars, ...), as in to_raster
+            height = max(int(bh) - 1, 0)
+            y = int(y + bh / 2 - (height + 1) / 2) if height == 0 else int(y)
+            image[y:y + height + 1, math.floor(x):math.ceil(x + bw) + 1] = 0xFF
+        return image, image.shape[0] - round(base + lift)
     except Exception:  # invalid math raises again below (the caller shows the plain text)
         pass
     if _parser is None:

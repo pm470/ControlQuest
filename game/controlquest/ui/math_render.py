@@ -23,7 +23,7 @@ from __future__ import annotations
 import io
 import math
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -119,7 +119,7 @@ def _backend():
     return _mathtext
 
 
-def render_tex(tex: str, size_px: float = 15, color: str = theme.INK, dpr: float = 1.0,
+def render_tex(tex: str, size_px: float = theme.FS_MATH, color: str = theme.INK, dpr: float = 1.0,
                knob_colors: dict | None = None) -> QPixmap | None:
     """Render one line of math (without $...$) to a transparent QPixmap; None if impossible.
     knob_colors: {knob name: theme.KnobColor} for the \\knob{name}{...} parts."""
@@ -196,9 +196,9 @@ class MathLabel(QWidget):
     (Windows access violation) when the window moved to a monitor with other scaling.
     """
 
-    MIN_SIZE_PX = 9.0
+    MIN_SIZE_PX = 12.0  # shrink-to-fit floor (a formula wider than its column)
 
-    def __init__(self, tex: str = "", size_px: float = 15, color: str = theme.INK,
+    def __init__(self, tex: str = "", size_px: float = theme.FS_MATH, color: str = theme.INK,
                  parent: QWidget | None = None, knob_colors: dict | None = None):
         super().__init__(parent)
         self._tex, self._size, self._color = tex, size_px, color
@@ -259,18 +259,27 @@ class MathLabel(QWidget):
             self.updateGeometry()
             self.update()
 
-    def _fit(self) -> None:
-        """Choose the largest font size (<= size_px) at which the line fits the width."""
+    def _own_fit(self) -> float:
+        """The largest font size (<= size_px) at which this line fits its width."""
         if self._natural is None or self.width() <= 0:
-            return
+            return self._size
         nat_w = self._natural.deviceIndependentSize().width()
-        size = self._size
-        if nat_w > self.width():
-            size = max(self.MIN_SIZE_PX, math.floor(2 * self._size * self.width() / nat_w) / 2)
-        if size != self._fit_size:
+        if nat_w <= self.width():
+            return self._size
+        return max(self.MIN_SIZE_PX, math.floor(2 * self._size * self.width() / nat_w) / 2)
+
+    def _set_fit(self, size: float) -> None:
+        if self._natural is not None and size != self._fit_size:
             self._fit_size = size
             self._render()
             self.update()
+
+    def _fit(self) -> None:
+        group = getattr(self, "_group", None)
+        if group is not None:
+            group.refit()  # one size for all lines of the group (an OCP), set by the group
+        elif self._natural is not None and self.width() > 0:
+            self._set_fit(self._own_fit())
 
     # --- painting ------------------------------------------------------------------------
     def paintEvent(self, _event) -> None:
@@ -296,13 +305,44 @@ class MathLabel(QWidget):
         p.drawPixmap(QPointF(x, y), pm)
 
 
+class FitGroup(QObject):
+    """MathLabels that share one font size: the largest at which every member fits its width.
+    The lines of one OCP use one group, so a long line makes all of them a little smaller
+    instead of being the only small one (consistent sizes, 2026-11-22). The size is applied
+    right after the resize that triggered it (all members then have their new widths)."""
+
+    def __init__(self, parent: QObject):
+        super().__init__(parent)  # lives (and dies) with the widget that holds the labels
+        self._members: list[MathLabel] = []
+        self._pending = False
+
+    def add(self, label: "MathLabel") -> "MathLabel":
+        self._members.append(label)
+        label._group = self
+        return label
+
+    def refit(self) -> None:
+        if not self._pending:
+            self._pending = True
+            QTimer.singleShot(0, self, self._apply)
+
+    def _apply(self) -> None:
+        self._pending = False
+        sized = [m for m in self._members if m.width() > 0 and m._natural is not None]
+        if not sized:
+            return
+        size = min(m._own_fit() for m in sized)
+        for m in sized:
+            m._set_fit(size)
+
+
 class MathChip(QWidget):
     """A knob's symbol (math) on a tinted rounded chip, in the knob's colour. The same
     colours mark the knob's part of the OCP (knob markup), so the two are easy to match."""
 
     PAD_X, PAD_Y, RADIUS = 6, 2, 8
 
-    def __init__(self, tex: str, knob_color, size_px: float = 16, parent: QWidget | None = None):
+    def __init__(self, tex: str, knob_color, size_px: float = theme.FS_CHIP, parent: QWidget | None = None):
         super().__init__(parent)
         self._tex, self._kc, self._size = tex, knob_color, size_px
         self._pm: QPixmap | None = None

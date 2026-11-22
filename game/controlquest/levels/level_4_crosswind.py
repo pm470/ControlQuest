@@ -178,11 +178,13 @@ def ocp(d, k: int, m: float, intro: bool = False) -> OcpSpec:
         ],
         constraints=[
             r"x_0 = \hat{x}",
-            rf"x_{{k+1}} = f(x_k,\,u_k)\quad {no_wind}",
+            # long lines continue on a \quad line, so the OCP keeps its size (type scale, 2026-11-22)
+            r"x_{k+1} = f(x_k,\,u_k)",
+            rf"\quad {no_wind}",
             rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
             rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
-            rf"(p_k-c_j)^{{T}} E_j(\knob{{margin}}{{m}})\, (p_k-c_j) \geq 1,\quad "
-            rf"\knob{{margin}}{{m = {m:.2g}\ \mathrm{{m}}}}",
+            rf"(p_k-c_j)^{{T}} E_j(\knob{{margin}}{{m}})\, (p_k-c_j) \geq 1,",
+            rf"\quad \knob{{margin}}{{m = {m:.2g}\ \mathrm{{m}}}}",
         ],
         notes=(f"Solved only every $k = {k}$ sample(s) ({k * d.dt:g} s) from the measured state; in "
                r"between the ball gets $u_1, u_2, \ldots$ of the last plan, open-loop. "

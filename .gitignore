@@ -2,3 +2,5 @@
 acados/
 __pycache__/**
 .vscode/
+AGENTS.md
+CLAUDE.md

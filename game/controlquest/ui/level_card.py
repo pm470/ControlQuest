@@ -125,13 +125,13 @@ class LevelCard(QAbstractButton):
         # title, topic (or how to unlock)
         left, width = rect.left() + 18, rect.width() - 36
         p.setPen(QColor(theme.MUTED if locked else theme.INK))
-        p.setFont(theme.font(18, QFont.Weight.ExtraBold))
-        title_rect = QRectF(left, block.bottom() + 14, width, 48)
+        p.setFont(theme.font(theme.FS_H2, QFont.Weight.ExtraBold))
+        title_rect = QRectF(left, block.bottom() + 14, width, 58)  # two lines at FS_H2
         p.drawText(title_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
                    | Qt.TextFlag.TextWordWrap, self.level.title)
         title_h = p.fontMetrics().boundingRect(title_rect.toRect(), Qt.TextFlag.TextWordWrap,
                                                self.level.title).height()
-        p.setFont(theme.font(13, QFont.Weight.Bold))
+        p.setFont(theme.font(theme.FS_SMALL, QFont.Weight.Bold))
         p.setPen(QColor(theme.MUTED if locked else theme.INK_SOFT))
         p.drawText(QRectF(left, block.bottom() + 16 + title_h, width, 40),
                    Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap,
@@ -142,7 +142,7 @@ class LevelCard(QAbstractButton):
         # bottom: a Play pill on the next level, stars otherwise
         bottom = rect.bottom() - 22
         if self.level.tutorial:  # no stars: a tag instead
-            p.setFont(theme.font(12, QFont.Weight.Bold))
+            p.setFont(theme.font(theme.FS_MICRO, QFont.Weight.Bold))
             text = "Tutorial"
             tag = QRectF(left, bottom - 13, p.fontMetrics().horizontalAdvance(text) + 22, 26)
             p.setPen(Qt.PenStyle.NoPen)
@@ -158,7 +158,7 @@ class LevelCard(QAbstractButton):
             p.setBrush(QColor(theme.PRIMARY))
             p.drawRoundedRect(pill, 12, 12)
             p.setPen(QColor("white"))
-            p.setFont(theme.font(15, QFont.Weight.Black))
+            p.setFont(theme.font(theme.FS_BODY, QFont.Weight.Black))
             p.drawText(pill, Qt.AlignmentFlag.AlignCenter, "Play")
         else:
             for i in range(MAX_STARS):

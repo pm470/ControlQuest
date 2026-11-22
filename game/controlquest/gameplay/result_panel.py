@@ -69,7 +69,7 @@ class ResultPanel(Card):
         text.setSpacing(10)
         top = QHBoxLayout()
         self._dot = ColorDot(theme.SUCCESS, 16)
-        self._title = label("", "heading")
+        self._title = label("", "heading", wrap=True)  # wraps on a narrow map ("Controller failure")
         self._stars = StarRow(0, MAX_STARS, star_radius=14)
         top.addWidget(self._dot)
         top.addWidget(self._title, 1)

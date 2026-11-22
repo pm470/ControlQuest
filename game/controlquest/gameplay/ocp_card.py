@@ -17,22 +17,29 @@ Everything math-like is in the LaTeX font (2026-11-19):
 - legend: one entry per line. A tuple (symbol tex, words) is typeset entirely in the LaTeX
   font, "symbol:  words" with the words upright; the words may contain $...$ too. A plain
   string is a remark in the game font ($...$ allowed). Avoid "-" in legend words (mathtext
-  draws it as a minus sign).
+  draws it as a minus sign). The legend keeps the caption size and wraps between words
+  (every word is its own formula, legend_text), indented under the words (2026-11-22).
+
+Sizes (type scale, 2026-11-22): all formula lines of one OCP share one size
+(ui/math_render.FitGroup): the largest that fits the column. Keep lines short enough
+for a ~280 px wide constraint column at FS_MATH: break a long one into a continuation line
+starting with \\quad (e.g. "x_{k+1} = f(x_k, u_k)" and "\\quad (no wind in the model)").
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFontMetricsF
 from PySide6.QtWidgets import QGridLayout, QVBoxLayout, QWidget
 
 from ..ui import theme
-from ..ui.math_render import MathLabel
-from ..ui.math_text import MATH, math_text
+from ..ui.math_render import FitGroup, MathLabel
+from ..ui.math_text import MATH, inline_image, math_text
 from ..ui.widgets import label
 
-LEGEND_SIZE_PX = 13.5
 # the symbols every OCP uses (legend entries)
 STATE_LEGEND = [(r"x = (p,\, v)", "position, velocity"), (r"u = a", "acceleration"),
                 (r"p_{\star}", "target position")]
@@ -47,24 +54,78 @@ class OcpSpec:
     notes: str = ""  # caption under the title ($...$ for symbols)
 
 
-def legend_tex(symbol: str, words: str) -> str:
-    """("x = (p, v)", "position, velocity") -> one mathtext line "x = (p, v):  position, velocity"
-    with the words upright (mathrm); $...$ parts inside the words stay math."""
+def legend_text(symbol: str, words: str) -> str:
+    """("x = (p, v)", "position, velocity") -> text for a wrapping MathText in which every word
+    is its own $...$ formula: "$x = (p, v):\\ $ $\\mathrm{position,}$ $\\mathrm{velocity}$".
+    So the whole entry is in the LaTeX font (words upright) at one fixed size, and a long entry
+    wraps between words instead of shrinking (the user, 2026-11-22). $...$ parts inside the
+    words stay math."""
     out = []
     for i, part in enumerate(MATH.split(words)):
         if i % 2:
-            out.append(part)
-        elif part:
-            safe = part.replace("{", "").replace("}", "").replace("%", "\\%")
-            out.append("\\mathrm{" + safe.replace(" ", "\\ ") + "}")
-    return symbol + ":\\ \\ " + "".join(out)
+            out.append(f"${part}$")
+            continue
+        for token in re.split(r"( +)", part):
+            if not token:
+                continue
+            if token.isspace():
+                out.append(" ")
+            else:
+                safe = token.replace("{", "").replace("}", "").replace("%", "\\%")
+                out.append("$\\mathrm{" + safe + "}$")
+    return f"${symbol}:\\ $ " + "".join(out)
+
+
+def _symbol_width(symbol: str) -> float:
+    """Width (logical px) of an entry's "symbol: " at the caption size: the hanging indent."""
+    got = inline_image(f"{symbol}:\\ ", theme.FS_SMALL * theme.MATH_SCALE, theme.MUTED, 1.0)
+    space = QFontMetricsF(theme.font(theme.FS_SMALL)).horizontalAdvance(" ")
+    return (got[0].width() if got else 0.0) + space
+
+
+def legend_entries(legend: list) -> list:
+    """The legend with every ("", words) continuation merged into the entry before it (a legend
+    line wraps by itself now)."""
+    out: list = []
+    for entry in legend:
+        if isinstance(entry, tuple) and not entry[0] and out and isinstance(out[-1], tuple):
+            out[-1] = (out[-1][0], out[-1][1] + " " + entry[1])
+        else:
+            out.append(entry)
+    return out
+
+
+CONTINUATION = "\\quad "  # a constraint line that starts with this continues the line before
+
+
+def joined(spec: OcpSpec) -> OcpSpec:
+    """The spec with its continuation lines put back on the line before them (wide tiles)."""
+    constraints: list[str] = []
+    for tex in spec.constraints:
+        if tex.startswith(CONTINUATION) and constraints:
+            constraints[-1] = constraints[-1] + "\\quad " + tex[len(CONTINUATION):]
+        else:
+            constraints.append(tex)
+    legend: list = []
+    for entry in legend_entries(spec.legend):
+        if entry in STATE_LEGEND and legend and isinstance(legend[-1], list):
+            legend[-1].append(entry)  # the standard symbols share one line in a wide tile
+        elif entry in STATE_LEGEND:
+            legend.append([entry])
+        else:
+            legend.append(entry)
+    return replace(spec, constraints=constraints, legend=legend)
 
 
 class OcpCard(QWidget):
     def __init__(self, spec: OcpSpec, title: str | None = "The OCP your MPC solves",
-                 knob_colors: dict | None = None, parent: QWidget | None = None):
+                 knob_colors: dict | None = None, parent: QWidget | None = None,
+                 join: bool = False):
+        """join=True: a wide tile (the level intro) shows continuation lines (r"\\quad ..."
+        constraints, ("", words) legend entries) on the line before them again."""
         super().__init__(parent)
         self._knob_colors = knob_colors or {}
+        self._join = join
         self.body = QVBoxLayout(self)
         self.body.setContentsMargins(0, 0, 0, 0)
         self.body.setSpacing(8)
@@ -76,6 +137,8 @@ class OcpCard(QWidget):
 
     def set_spec(self, spec: OcpSpec) -> None:
         """Show another OCP (e.g. after the player picked a different fix)."""
+        if self._join:
+            spec = joined(spec)
         old = self._content
         self._content = QWidget()
         box = QVBoxLayout(self._content)
@@ -89,31 +152,38 @@ class OcpCard(QWidget):
             box.addWidget(math_text(spec.notes, "caption"))
 
         kc = self._knob_colors
+        lines = FitGroup(self._content)  # all formula lines at one size (the largest that fits)
         grid = QGridLayout()
         grid.setContentsMargins(0, 6, 0, 2)
         grid.setHorizontalSpacing(8)
-        grid.setVerticalSpacing(7)
+        grid.setVerticalSpacing(3)  # the formula images carry their own padding (math_render.PAD_PX)
         row = 0
         for tex in spec.objective:
-            grid.addWidget(MathLabel(tex, size_px=15, knob_colors=kc), row, 0, 1, 2)
+            grid.addWidget(lines.add(MathLabel(tex, size_px=theme.FS_MATH, knob_colors=kc)), row, 0, 1, 2)
             row += 1
         for i, tex in enumerate(spec.constraints):
             if i == 0:
-                grid.addWidget(MathLabel(r"\mathrm{s.t.}", size_px=15), row, 0,
+                grid.addWidget(lines.add(MathLabel(r"\mathrm{s.t.}", size_px=theme.FS_MATH)), row, 0,
                                Qt.AlignmentFlag.AlignTop)
-            grid.addWidget(MathLabel(tex, size_px=15, knob_colors=kc), row, 1)
+            grid.addWidget(lines.add(MathLabel(tex, size_px=theme.FS_MATH, knob_colors=kc)), row, 1)
             row += 1
         grid.setColumnStretch(1, 1)
         box.addLayout(grid)
 
+        # the legend: fixed size (caption), every word in the LaTeX font, long entries wrap
         legend = QVBoxLayout()
         legend.setSpacing(2)
-        for entry in spec.legend:  # symbols in the LaTeX font, one per line
-            if isinstance(entry, tuple):
-                legend.addWidget(MathLabel(legend_tex(*entry), size_px=LEGEND_SIZE_PX,
-                                           color=theme.MUTED))
+        for entry in legend_entries(spec.legend):
+            if isinstance(entry, list):  # several entries in one paragraph (joined(), wide tiles)
+                text = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ".join(legend_text(*e) for e in entry)  # nbsp: no collapse
+            elif isinstance(entry, tuple):
+                # a wrapped line continues under the words, not under the symbol
+                indent = _symbol_width(entry[0])
+                text = (f'<div style="margin-left: {indent:.0f}px; text-indent: -{indent:.0f}px">'
+                        f"{legend_text(*entry)}</div>")
             else:
-                legend.addWidget(math_text(entry, "caption"))
+                text = entry  # a remark in the game font ($...$ allowed)
+            legend.addWidget(math_text(text, "caption"))
         box.addLayout(legend)
         self._content.adjustSize()  # re-layout now (formula sizes changed), not on the next resize
         self.body.activate()

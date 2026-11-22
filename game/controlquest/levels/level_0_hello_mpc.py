@@ -127,8 +127,9 @@ def tour_steps(d, result) -> list[TourStep]:
         TourStep("⑤ Repeat",
                  rf"Every $\Delta t = {dt:g}\ \mathrm{{s}}$ the whole loop runs again from the new measurement: "
                  "a new plan, a new first input."
-                 f"<br><br><b>On the map:</b> {later * dt:g} s ({later} rounds) later. Grey: the "
-                 "first plan, coral: the current one."
+                 f"<br><br><b>On the map:</b> {later * dt:g} s ({later} rounds) later."
+                 "<br>•&nbsp;Grey: the first plan"
+                 "<br>•&nbsp;Coral: the current plan."
                  f"<br><b>Receding horizon:</b> the plan always reaches $N = {n}$ steps ahead, so it "
                  "moves with the ball."
                  "<br><b>Why it matters:</b> re-planning from each new measurement lets the controller "
@@ -228,7 +229,7 @@ class HelloMpcWidget(LevelPlayWidget):
         # like the tour's Back / Next: a tonal button on the left, the main action on the right
         replay_row = QHBoxLayout()
         replay_row.setContentsMargins(0, 8, 0, 0)
-        replay_row.setSpacing(10)
+        replay_row.setSpacing(6)  # both buttons fit the 330 px controls tile at the type scale
         self.replay_tour_button = Button("Replay tour", scale="tall")
         self.replay_tour_button.setToolTip("Walk through the MPC loop again")
         self.next_level_button = Button("Next level  ›", variant="primary", scale="large")

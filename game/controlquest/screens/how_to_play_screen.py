@@ -66,7 +66,7 @@ class HowToPlayScreen(BaseScreen):
         for row, (color, name, text) in enumerate(OUTCOMES):
             grid.addWidget(ColorDot(color, 14), row // 2, (row % 2) * 3)
             grid.addWidget(label(name, "subheading"), row // 2, (row % 2) * 3 + 1)
-            grid.addWidget(label(text, "body"), row // 2, (row % 2) * 3 + 2)
+            grid.addWidget(label(text, "body", wrap=True), row // 2, (row % 2) * 3 + 2)
         grid.setColumnStretch(2, 1)
         grid.setColumnStretch(5, 1)
         ends.body.addLayout(grid)

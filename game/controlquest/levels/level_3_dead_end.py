@@ -220,7 +220,8 @@ def ocp(d, fix: str, n: int, intro: bool = False) -> OcpSpec:
     ]
     if fix == WAYPOINTS:
         objective.append(rf"p_{{\mathrm{{ref}}}} = \mathrm{{next\ waypoint}}\ \mathrm{{(last:}}\ "
-                         rf"p_{{\star}}),\quad P = {d.raw.get('terminal_factor', 10):g}\,Q")
+                         rf"p_{{\star}})")  # own line: the OCP keeps its size (2026-11-22)
+        objective.append(rf"P = {d.raw.get('terminal_factor', 10):g}\,Q")
     elif fix == HORIZON:
         objective.append(rf"P = {d.raw.get('terminal_factor', 10):g}\,Q,\quad "
                          rf"\mathrm{{horizon}}\ \knob{{N}}{{N = {n}}}")
@@ -241,7 +242,9 @@ def ocp(d, fix: str, n: int, intro: bool = False) -> OcpSpec:
             r"x_{k+1} = f(x_k,\,u_k)",
             rf"|a_x|,\ |a_y| \leq {d.a_max:g},\quad |v_x|,\ |v_y| \leq {d.v_max:g}",
             rf"{x0:g} \leq p_x \leq {x1:g},\quad {y0:g} \leq p_y \leq {y1:g}",
-            rf"{ellipses},\quad j = 1,\ldots,{len(d.blocks)}",
+            # long lines continue on a \quad line, so the OCP keeps its size (type scale, 2026-11-22)
+            rf"{ellipses},",
+            rf"\quad j = 1,\ldots,{len(d.blocks)}",
         ],
         notes=(rf"{notes} Re-solved every $\Delta t = {d.dt:g}\ \mathrm{{s}}$, $N = {n}$ steps ({n * d.dt:g} s) "
                "ahead. With obstacles the OCP is nonconvex: SQP, warm-started from the previous plan, "

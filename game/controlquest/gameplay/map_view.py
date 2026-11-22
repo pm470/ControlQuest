@@ -43,7 +43,7 @@ TOUR_FOCUS = ("start", "measure", "predict", "plan", "apply", "repeat")
 # (game font, ExtraBold) by inline_image(weight=PILL_WEIGHT) (2026-11-22); so are the tags' formulas
 HUD_SPEED_TEX = r"|v|\,="
 HUD_SPEED = f"${HUD_SPEED_TEX}$"
-SPEED_PX, TAG_PX, PILL_WEIGHT = 13, 12, 800  # pill text: theme.font(px, ExtraBold)
+SPEED_PX, TAG_PX, PILL_WEIGHT = theme.FS_SMALL, theme.FS_MICRO, 800  # pill text: theme.font(px, ExtraBold)
 
 
 class MapView(QWidget):
@@ -170,7 +170,7 @@ class MapView(QWidget):
             if y0 < gy < y1:
                 p.drawLine(to_px(x0, gy), to_px(x1, gy))
         p.restore()
-        p.setFont(theme.font(11, QFont.Weight.Bold))
+        p.setFont(theme.font(theme.FS_MICRO, QFont.Weight.Bold))
         p.setPen(QColor(theme.MUTED))
         same_origin = x0 == y0
         for gx in range(int(math.ceil(x0)), int(x1) + 1, 10):
@@ -355,8 +355,8 @@ class MapView(QWidget):
                 p.drawLine(a1, a1 - d * 7 + n * 5)
                 p.drawLine(a1, a1 - d * 7 - n * 5)
             p.setPen(QColor(theme.INK_SOFT))
-            p.setFont(theme.font(10, QFont.Weight.Bold))
-            p.drawText(QRectF(c.x() - 34, c.y() + 18, 68, 14), Qt.AlignmentFlag.AlignHCenter,
+            p.setFont(theme.font(theme.FS_MICRO, QFont.Weight.Bold))
+            p.drawText(QRectF(c.x() - 34, c.y() + 15, 68, 18), Qt.AlignmentFlag.AlignHCenter,
                        f"wind {mag:.1f}")
 
         self._speed_pill(p, field, speed)

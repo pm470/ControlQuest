@@ -33,8 +33,8 @@ class SolveSelector(QWidget):
         self.prev_button.setToolTip("Previous MPC solve")
         self.field = QLineEdit("–")
         self.field.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.field.setFixedWidth(48)
-        self.field.setStyleSheet(f"font-size: 13px; font-weight: 800; padding: 2px 5px; "
+        self.field.setFixedWidth(52)
+        self.field.setStyleSheet(f"font-size: {theme.FS_SMALL}px; font-weight: 800; padding: 2px 5px; "
                                  f"border-radius: 10px; background: {theme.SURFACE};")
         self._validator = QIntValidator(1, 1, self)
         self.field.setValidator(self._validator)

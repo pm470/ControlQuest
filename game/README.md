@@ -151,7 +151,9 @@ game/
 - **Screens never talk to each other**; they call `self.go(ScreenId.X, payload)`.
 - **No colours or sizes in screens**: use `ui/theme.py` and the stylesheet roles, and
   follow the **design rules** in AGENTS.md section 10 (borderless tiles on a lip, no card
-  in a card, knob colours in the OCP, few elements).
+  in a card, knob colours in the OCP, few elements). Font sizes come only from the **type
+  scale** `theme.FS_*` (also in painted widgets, formulas and plots); keep OCP lines short
+  (a long one continues on a `\quad` line), so each OCP stays at one readable size.
 - **UI and engine meet only in `engine/protocol.py`** ↔ `level_rules/common.py` /
   `server.py`. Change both sides together.
 - **Level numbers live only in `level_data/*.json`**, never in Python.

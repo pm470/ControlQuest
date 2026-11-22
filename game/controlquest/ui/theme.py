@@ -32,7 +32,7 @@ FOCUS = "#A9CBFF"  # soft ring around a focused input
 
 INK = "#2B2D42"  # main text
 INK_SOFT = "#5C6178"  # secondary text
-MUTED = "#9A9FB5"  # captions
+MUTED = "#6F7489"  # captions (2026-11-22: was #9A9FB5, 2.6:1 on white; now 4.6:1, readable projected)
 
 PRIMARY = "#FF8A65"  # coral: main buttons, the plan line
 PRIMARY_HOVER = "#FF774F"
@@ -120,6 +120,22 @@ RADIUS_BUTTON = 16
 LIP_PX = 5  # height of the lip under a tile (buttons: 3-4)
 FONT_FAMILIES = ["Nunito", "Segoe UI", "Helvetica Neue", "Arial"]
 
+# --- type scale (2026-11-22, AGENTS.md section 10 rule 11) ----------------------
+# One size per level of importance, used by the stylesheet, the painted widgets and the math.
+# Readable on a projector at 1280 x 800 logical pixels; never smaller than FS_MICRO.
+FS_DISPLAY = 50     # the title screen's logo
+FS_H1 = 28          # screen and level titles (the header), screen headings
+FS_STAT = 22        # big numbers (whole-run statistics)
+FS_H2 = 20          # tile and section titles: "The OCP your MPC solves", "Whole run", tour steps,
+                    # result card title rows, level tile titles; the italic quote
+FS_BODY = 18        # running text, goals, buttons, inputs, knob names, painted panel titles, eyebrows
+FS_SMALL = 14       # captions, notes, links, chips, switches, small painted labels
+FS_MICRO = 13       # the minimum: tags, tooltips, map axis numbers, map pills
+MATH_SCALE = 1.12   # Computer Modern looks smaller than the game font at the same pixel size
+FS_MATH = 18        # OCP formulas (MathLabel): about FS_BODY in the game font
+FS_MATH_SMALL = 15.5  # math next to small text (e.g. the intro's "new" key): about FS_SMALL
+FS_CHIP = 17        # knob symbol chips
+
 
 def qcolor(hex_color: str, alpha: int = 255) -> QColor:
     c = QColor(hex_color)
@@ -145,7 +161,7 @@ def font(size_px: float, weight: QFont.Weight = QFont.Weight.Normal) -> QFont:
 
 
 def app_font() -> QFont:
-    return font(14)
+    return font(FS_SMALL)
 
 
 # the dropdown arrow (an image: Qt stylesheets cannot draw one); forward slashes for Qt
@@ -166,24 +182,24 @@ def stylesheet() -> str:
     QMainWindow {{ background: {BACKGROUND}; }}
 
     /* text roles */
-    QLabel[role="title"]    {{ font-size: 50px; font-weight: 800; }}
-    QLabel[role="heading"]  {{ font-size: 28px; font-weight: 800; }}
-    QLabel[role="subheading"] {{ font-size: 18px; font-weight: 800; }}
-    QLabel[role="subtitle"] {{ font-size: 18px; color: {INK_SOFT}; }}
-    QLabel[role="body"]     {{ font-size: 15px; color: {INK_SOFT}; }}
-    QLabel[role="goal"]     {{ font-size: 15px; font-weight: 600; color: {INK}; }}
-    QLabel[role="quote"]    {{ font-size: 20px; font-style: italic; color: {INK}; }}
-    QLabel[role="caption"]  {{ font-size: 13px; color: {MUTED}; }}
-    QLabel[role="eyebrow"]  {{ font-size: 13px; font-weight: 800; color: {PRIMARY_INK}; }}
-    QLabel[role="stat"]     {{ font-size: 21px; font-weight: 800; color: {INK}; }}
+    QLabel[role="title"]    {{ font-size: {FS_DISPLAY}px; font-weight: 800; }}
+    QLabel[role="heading"]  {{ font-size: {FS_H1}px; font-weight: 800; }}
+    QLabel[role="subheading"] {{ font-size: {FS_H2}px; font-weight: 800; }}
+    QLabel[role="subtitle"] {{ font-size: {FS_H2}px; color: {INK_SOFT}; }}
+    QLabel[role="body"]     {{ font-size: {FS_BODY}px; color: {INK_SOFT}; }}
+    QLabel[role="goal"]     {{ font-size: {FS_BODY}px; font-weight: 600; color: {INK}; }}
+    QLabel[role="quote"]    {{ font-size: {FS_H2}px; font-style: italic; color: {INK}; }}
+    QLabel[role="caption"]  {{ font-size: {FS_SMALL}px; color: {MUTED}; }}
+    QLabel[role="eyebrow"]  {{ font-size: {FS_BODY}px; font-weight: 800; color: {PRIMARY_INK}; }}
+    QLabel[role="stat"]     {{ font-size: {FS_STAT}px; font-weight: 800; color: {INK}; }}
     QLabel[role="tag"] {{
-        font-size: 12px; font-weight: 700; color: {INK_SOFT};
+        font-size: {FS_MICRO}px; font-weight: 700; color: {INK_SOFT};
         background: {SURFACE_ALT}; border-radius: 10px; padding: 3px 10px;
     }}
 
     /* buttons: tonal with a lip; primary = coral */
     QPushButton {{
-        font-size: 16px; font-weight: 700; color: {INK};
+        font-size: {FS_BODY}px; font-weight: 700; color: {INK};
         background: {WELL}; border: none; border-bottom: 3px solid {LIP};
         border-radius: {RADIUS_BUTTON}px; padding: 9px 24px;
     }}
@@ -210,7 +226,7 @@ def stylesheet() -> str:
        option is a white chip standing on a lip inside a tonal well, the others are plain text */
     QPushButton[variant="segment"] {{
         background: transparent; border: none; border-bottom: 2px solid transparent;
-        border-radius: 10px; color: {INK_SOFT}; font-size: 13px; font-weight: 800; padding: 5px 14px;
+        border-radius: 10px; color: {INK_SOFT}; font-size: {FS_SMALL}px; font-weight: 800; padding: 5px 14px;
     }}
     QPushButton[variant="segment"]:hover {{ color: {INK}; }}
     QPushButton[variant="segment"]:checked {{
@@ -221,7 +237,7 @@ def stylesheet() -> str:
 
     QPushButton[variant="link"] {{
         background: transparent; border: none; color: {PRIMARY_INK};
-        font-size: 14px; font-weight: 800; padding: 4px 6px;
+        font-size: {FS_SMALL}px; font-weight: 800; padding: 4px 6px;
     }}
     QPushButton[variant="link"]:hover {{ color: {PRIMARY_PRESSED}; }}
     QPushButton[variant="link"]:pressed {{ margin-top: 0px; }}
@@ -229,7 +245,7 @@ def stylesheet() -> str:
 
     QPushButton[variant="chip"] {{
         background: {SURFACE}; border-bottom: 2px solid {LIP}; border-radius: 10px;
-        font-size: 13px; font-weight: 800; padding: 4px 10px;
+        font-size: {FS_SMALL}px; font-weight: 800; padding: 4px 10px;
     }}
     QPushButton[variant="chip"]:hover {{ background: #FFFBF5; }}
     QPushButton[variant="chip"]:disabled {{ background: {SURFACE}; color: {LOCKED}; }}
@@ -237,10 +253,10 @@ def stylesheet() -> str:
     QPushButton[variant="danger"] {{ color: {DANGER}; }}
 
     QPushButton[scale="large"] {{
-        font-size: 20px; padding: 12px 32px; border-radius: 20px;
+        font-size: {FS_H2}px; padding: 12px 24px; border-radius: 20px;
     }}
     QPushButton[scale="tall"] {{
-        font-size: 15px; font-weight: 800; padding: 13px 18px; border-radius: 18px;
+        font-size: {FS_BODY}px; font-weight: 800; padding: 13px 18px; border-radius: 18px;
     }}
     /* same height, narrower sides: four buttons in one row of the result card */
     QPushButton[scale="compact"] {{ padding: 9px 14px; }}
@@ -268,12 +284,12 @@ def stylesheet() -> str:
 
     /* inputs: tonal fills, a soft blue ring when focused */
     QLineEdit {{
-        font-size: 15px; background: {WELL}; border: 2px solid transparent;
+        font-size: {FS_BODY}px; background: {WELL}; border: 2px solid transparent;
         border-radius: 12px; padding: 7px 11px; selection-background-color: {BALL};
     }}
     QLineEdit:focus {{ border-color: {FOCUS}; background: {SURFACE}; }}
     QLineEdit[role="knob_value"] {{
-        font-size: 16px; font-weight: 800; padding: 3px 8px; border-radius: 10px;
+        font-size: {FS_BODY}px; font-weight: 800; padding: 3px 8px; border-radius: 10px;
     }}
     QLineEdit[role="knob_value"]:disabled {{ color: {MUTED}; }}
 
@@ -296,7 +312,7 @@ def stylesheet() -> str:
     QSlider[role="scrubber"]::sub-page:horizontal:disabled {{ background: {LIP}; }}
 
     QComboBox {{
-        font-size: 15px; font-weight: 700; background: {WELL}; border: 2px solid transparent;
+        font-size: {FS_BODY}px; font-weight: 700; background: {WELL}; border: 2px solid transparent;
         border-radius: 12px; padding: 5px 10px; min-width: 56px;
     }}
     QComboBox:hover {{ background: {WELL_HOVER}; }}
@@ -309,7 +325,7 @@ def stylesheet() -> str:
     }}
 
     QSpinBox {{
-        font-size: 13px; font-weight: 800; background: {SURFACE}; border: 2px solid transparent;
+        font-size: {FS_SMALL}px; font-weight: 800; background: {SURFACE}; border: 2px solid transparent;
         border-radius: 10px; padding: 3px 4px; min-width: 36px;
     }}
     QSpinBox:focus {{ border-color: {FOCUS}; }}
@@ -321,9 +337,9 @@ def stylesheet() -> str:
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 
     QToolTip {{
-        color: white; background: {INK}; border: none; padding: 6px 10px; font-size: 13px;
+        color: white; background: {INK}; border: none; padding: 6px 10px; font-size: {FS_MICRO}px;
     }}
     QMessageBox {{ background: {SURFACE}; }}
-    QMessageBox QLabel {{ font-size: 15px; }}
+    QMessageBox QLabel {{ font-size: {FS_BODY}px; }}
     QMessageBox QPushButton {{ padding: 8px 20px; min-width: 70px; }}
     """

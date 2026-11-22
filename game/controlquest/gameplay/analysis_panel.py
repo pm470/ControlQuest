@@ -144,11 +144,15 @@ def render_plot(spec: PlotSpec, width: int, height: int, dpr: float) -> Rendered
     rc = {
         # the game's font, falling back per glyph to DejaVu Sans (bundled with matplotlib), e.g.
         # for the rating star "★" that Segoe UI does not have
-        "font.family": [_font_family(), "DejaVu Sans"], "font.size": 9.0, "mathtext.fontset": "cm",
+        # sizes from the type scale (px at dpi 100: pt = px * 0.72): labels FS_SMALL, ticks and
+        # legend FS_MICRO, like the captions and small labels around the plots (2026-11-22)
+        "font.family": [_font_family(), "DejaVu Sans"], "font.size": theme.FS_SMALL * 0.72,
+        "mathtext.fontset": "cm",
         "axes.edgecolor": theme.PLOT_GRID, "axes.labelcolor": theme.INK_SOFT,
         "xtick.color": theme.INK_SOFT, "ytick.color": theme.INK_SOFT,
-        "xtick.labelsize": 8.5, "ytick.labelsize": 8.5, "axes.labelsize": 9.5,
-        "legend.fontsize": 8.0, "lines.solid_capstyle": "round",
+        "xtick.labelsize": theme.FS_MICRO * 0.72, "ytick.labelsize": theme.FS_MICRO * 0.72,
+        "axes.labelsize": theme.FS_SMALL * 0.72, "legend.fontsize": theme.FS_MICRO * 0.72,
+        "lines.solid_capstyle": "round",
     }
     with matplotlib.rc_context(rc):
         fig = Figure(figsize=(width / 100, height / 100), dpi=100 * dpr, facecolor=theme.SURFACE)

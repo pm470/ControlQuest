@@ -51,9 +51,13 @@ from .run_info_card import RunInfoCard
 from .solve_selector import SolveSelector
 
 SIDE_WIDTH = 330
-MIDDLE_WIDTH = 350
-WIDE_MIN_WIDTH = 1150  # below this the OCP column moves into the right column
+# 2026-11-22 (type scale): 350 -> 370, so the OCP shrinks less; the map tile keeps >= ~460 px at
+# 1280 x 800, the width the replay well (424) and the result card (~430) need
+MIDDLE_WIDTH = 370
+WIDE_MIN_WIDTH = 1195  # this widget (window minus margins): below, the OCP moves into the right
+# column; at 1195 the map tile is still >= 460 px (1280 x 800 window: 1216)
 TILE_PADDING = 20
+SCROLLBAR_WIDTH = 10  # QScrollBar:vertical width in theme.stylesheet
 
 
 def standard_ocp(data: LevelData) -> OcpSpec:
@@ -206,7 +210,7 @@ class LevelPlayWidget(QWidget):
         col.addWidget(controls, 1)
         self._middle_slot = col.count()  # where the middle column goes when narrow
 
-        side_scroll = scrollable(side)
+        side_scroll = self._side_scroll = scrollable(side)
         side_scroll.setFixedWidth(SIDE_WIDTH)
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -237,6 +241,9 @@ class LevelPlayWidget(QWidget):
         if wide == self._wide:
             return
         self._wide = wide
+        # narrow: the right column also holds the OCP and scrolls, so it gets the scrollbar's
+        # width extra (else the bar covers 10 px of content that was sized for the full width)
+        self._side_scroll.setFixedWidth(SIDE_WIDTH + (0 if wide else SCROLLBAR_WIDTH))
         if wide:
             self._side_col.removeWidget(self._middle)
             self._middle_scroll.setWidget(self._middle)

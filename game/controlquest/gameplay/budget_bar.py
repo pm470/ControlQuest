@@ -15,7 +15,7 @@ from ..ui import theme
 
 
 class BudgetBar(QWidget):
-    HEIGHT = 30
+    HEIGHT = 32
 
     def __init__(self, title: str, budget: float, par: float | None = None, unit: str = "",
                  parent: QWidget | None = None):
@@ -36,7 +36,7 @@ class BudgetBar(QWidget):
         frac = max(0.0, min(1.0, self._used / self._budget)) if self._budget > 0 else 0.0
 
         # name (left) and "used / budget" (right)
-        name_font = theme.font(14, QFont.Weight.Black)
+        name_font = theme.font(theme.FS_BODY, QFont.Weight.Black)
         p.setFont(name_font)
         p.setPen(QColor(theme.INK))
         name_w = QFontMetricsF(name_font).horizontalAdvance(self._title) + 14
@@ -45,7 +45,7 @@ class BudgetBar(QWidget):
         used = f"{self._used:.0f}" if float(self._used).is_integer() else f"{self._used:.1f}"
         value = f"{used}"
         rest = f" / {self._budget:g}{self._unit}"
-        value_font, rest_font = theme.font(14, QFont.Weight.Black), theme.font(14, QFont.Weight.Bold)
+        value_font, rest_font = theme.font(theme.FS_BODY, QFont.Weight.Black), theme.font(theme.FS_BODY, QFont.Weight.Bold)
         vw = QFontMetricsF(value_font).horizontalAdvance(value)
         rw = QFontMetricsF(rest_font).horizontalAdvance(rest)
         x_text = w - 4 - rw - vw

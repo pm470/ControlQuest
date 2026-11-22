@@ -25,6 +25,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from ..levels.base import LevelInfo
+from ..ui import theme
 from ..ui.math_render import MathLabel
 from ..ui.math_text import math_text
 from ..ui.widgets import Button, Card, StarRow, label, scrollable
@@ -32,7 +33,7 @@ from .knob_panel import knob_colors, name_row
 from .level_data import LevelData
 from .ocp_card import OcpCard, OcpSpec
 
-TILE_PADDING = 24
+TILE_PADDING = 20  # like the play screen tiles (2026-11-22; was 24)
 SECTION_GAP = 14  # extra space between the sections of a tile
 MAX_WIDTH = 1240  # content width on very wide windows (lines stay readable)
 
@@ -130,7 +131,8 @@ class LevelIntroWidget(QWidget):
             heading.addLayout(self._new_legend())
         play.body.addLayout(heading)
         # without the play screen's caption ("re-solved every ..."): the knob lines say it
-        play.body.addWidget(OcpCard(replace(intro.ocp, notes=""), title=None, knob_colors=colors))
+        play.body.addWidget(OcpCard(replace(intro.ocp, notes=""), title=None, knob_colors=colors,
+                                    join=True))  # a wide tile: continuation lines joined
         play.body.addStretch(1)
         self.start_button = Button("Start level  ▶", variant="primary", scale="large")
         self.start_button.setToolTip("Tune the controller and run it")
@@ -171,7 +173,7 @@ class LevelIntroWidget(QWidget):
         """One line under the OCP: the highlight means 'new in this level'."""
         row = QHBoxLayout()
         row.setSpacing(6)
-        sample = MathLabel(r"\new{\mathrm{new}}", size_px=13)
+        sample = MathLabel(r"\new{\mathrm{new}}", size_px=theme.FS_MATH_SMALL)  # like the caption
         sample.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         sample.setFixedWidth(sample.sizeHint().width())
         row.addWidget(sample)

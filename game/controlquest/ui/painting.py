@@ -222,7 +222,7 @@ def draw_plan(p: QPainter, points: list[QPointF], color: str = theme.PRIMARY, wi
     p.restore()
 
 
-def draw_pill(p: QPainter, rect: QRectF, text: str, font_px: float = 13) -> None:
+def draw_pill(p: QPainter, rect: QRectF, text: str, font_px: float = theme.FS_MICRO) -> None:
     """A small white HUD pill with a lip (e.g. '|v| = 2.00 m/s' on the map)."""
     p.save()
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
